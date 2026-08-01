@@ -1,0 +1,128 @@
+{
+  "contract_version": "1.0.0",
+  "derived_from": "source-code",
+  "repo": "ericrosenberg1/OWDB",
+  "commit_or_date": "e53596e67f245b6a89c6cfa05ccb88c792b18dc6 (main, 2026-07-25; audited 2026-07-31)",
+  "api_root": null,
+  "api_root_note": "NO API is mounted. README documents /api/token/ and /api/wrestlers/ but owdb_django/urls.py contains zero API routes; 'rest_framework' appears only in settings.py; no serializers/views/routers exist. Live probe GET https://wrestlingdb.org/api/wrestlers/ on 2026-07-31 returned 404 (Django default HTML page, behind Cloudflare).",
+  "auth": {
+    "mode": "none-mounted; dormant DRF config = TokenAuthentication + SessionAuthentication (NOT JWT despite README)",
+    "header": "Authorization",
+    "prefix": "Token",
+    "token_endpoint": null,
+    "token_endpoint_note": "README claims POST /api/token/ (JWT); route does not exist and no JWT package is in requirements.txt. rest_framework.authtoken is installed but has no obtain-token route. Separate custom APIKey model (40-hex keys, max 5/user, managed at /account/) is consumed by nothing in any request path.",
+    "default_permission": "rest_framework.permissions.IsAuthenticated"
+  },
+  "pagination": {
+    "class": "rest_framework.pagination.PageNumberPagination",
+    "page_param": "page",
+    "page_size": 100,
+    "page_size_param": null,
+    "max_page_size": null,
+    "note": "Dormant config (settings.py REST_FRAMEWORK); no endpoint serves it today."
+  },
+  "rate_limits": {
+    "settings_throttles": {
+      "classes": ["rest_framework.throttling.AnonRateThrottle", "rest_framework.throttling.UserRateThrottle"],
+      "anon": "100/hour",
+      "user": "10000/hour"
+    },
+    "readme_claims": { "free": "100/hour", "authenticated": "1000/hour", "paid": "10000/hour" },
+    "apikey_model_claims": {
+      "check_rate_limit": "free 1000/day, paid unlimited",
+      "rate_limit_property": "free 100, paid 1000 (units ambiguous)",
+      "note": "internally contradictory and enforced nowhere"
+    },
+    "rate_limit_headers": "none emitted (stock DRF; only Retry-After on 429 would appear); confirmed absent on live probe",
+    "cloudflare": "site is behind Cloudflare (cf-ray/cf-cache-status observed)"
+  },
+  "resources": [
+    {
+      "name": "wrestler",
+      "path": null,
+      "html_path": "/wrestlers/ and /wrestlers/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": ["id", "name", "slug", "real_name", "aliases", "debut_year", "retirement_year", "hometown", "nationality", "finishers", "about", "birth_date", "death_date", "height", "weight", "trained_by", "signature_moves", "roles", "wikipedia_url", "cagematch_url", "profightdb_url", "verified", "verification_source", "last_verified", "last_enriched", "verification_state", "image_url", "image_source_url", "image_original_url", "image_license", "image_credit", "image_fetched_at", "created_at", "updated_at"],
+      "source_link_fields": ["wikipedia_url", "cagematch_url", "profightdb_url", "verification_source", "image_source_url"]
+    },
+    {
+      "name": "promotion",
+      "path": null,
+      "html_path": "/promotions/ and /promotions/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": ["id", "name", "slug", "abbreviation", "nicknames", "founded_year", "closed_year", "website", "about", "headquarters", "founder", "wikipedia_url", "cagematch_url", "profightdb_url", "verified", "verification_source", "last_verified", "last_enriched", "verification_state", "image_url", "image_source_url", "image_original_url", "image_license", "image_credit", "image_fetched_at", "created_at", "updated_at"],
+      "source_link_fields": ["wikipedia_url", "cagematch_url", "profightdb_url", "verification_source", "image_source_url"]
+    },
+    {
+      "name": "event",
+      "path": null,
+      "html_path": "/events/ and /events/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": ["id", "name", "slug", "promotion", "venue", "date", "attendance", "about", "tv_show", "episode_number", "season_number", "event_type", "tmdb_episode_id", "cagematch_event_id", "verified", "verification_source", "last_verified", "verification_state", "image_url", "image_source_url", "image_original_url", "image_license", "image_credit", "image_fetched_at", "created_at", "updated_at"],
+      "source_link_fields": ["cagematch_event_id", "tmdb_episode_id", "verification_source", "image_source_url"],
+      "enums": { "event_type": ["tv_episode", "ppv", "house_show", "special", "other"] }
+    },
+    {
+      "name": "match",
+      "path": null,
+      "html_path": "/matches/ and /matches/<int:pk>/ (no slug field on Match)",
+      "id_field": "id",
+      "slug_field": null,
+      "updated_field": "updated_at",
+      "fields": ["id", "event", "wrestlers", "match_text", "result", "winner", "winning_side", "match_type", "outcome_type", "duration_seconds", "title", "title_changed", "match_order", "about", "cagematch_rating", "cagematch_rating_count", "observer_stars", "verified", "verification_source", "last_verified", "cagematch_match_id", "profightdb_match_id", "verification_state", "created_at", "updated_at"],
+      "source_link_fields": ["cagematch_match_id", "profightdb_match_id", "verification_source"],
+      "enums": { "outcome_type": ["pinfall", "submission", "dq", "count_out", "knockout", "no_contest", "draw", "forfeit", "other"] }
+    },
+    {
+      "name": "championship",
+      "model": "Title",
+      "path": null,
+      "html_path": "/titles/ and /titles/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": ["id", "name", "slug", "promotion", "debut_year", "retirement_year", "about", "title_type", "wikipedia_url", "last_enriched", "verified", "verification_source", "last_verified", "verification_state", "image_url", "image_source_url", "image_original_url", "image_license", "image_credit", "image_fetched_at", "created_at", "updated_at"],
+      "source_link_fields": ["wikipedia_url", "verification_source", "image_source_url"]
+    },
+    {
+      "name": "venue",
+      "path": null,
+      "html_path": "/venues/ and /venues/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": "see owdb_django/owdbapp/models.py Venue (line 238); not extracted in this audit"
+    },
+    {
+      "name": "stable",
+      "path": null,
+      "html_path": "/stables/ and /stables/<pk|slug>/",
+      "id_field": "id",
+      "slug_field": "slug",
+      "updated_field": "updated_at",
+      "fields": "see owdb_django/owdbapp/models.py Stable (line 494); not extracted in this audit"
+    }
+  ],
+  "serializers": "none exist in repo; API field names undetermined — fields above are Django model fields",
+  "openapi_schema_endpoint": null,
+  "error_shapes": {
+    "unknown_path_observed_live": { "status": 404, "content_type": "text/html; charset=utf-8", "body": "Django default '<h1>Not Found</h1>' HTML page" },
+    "drf_if_ever_mounted": { "401_403_404_429": "{\"detail\": \"...\"} JSON (stock DRF, no custom exception handler)", "429_header": "Retry-After" }
+  },
+  "license": "GPL-3.0 (LICENSE file is verbatim GNU GPL v3; README badge/text claim MIT — CONFLICT; treat code as GPL-3.0)",
+  "data_provenance": "wikipedia-factual",
+  "attribution": "Images restricted to CC0/CC-BY/CC-BY-SA/PD with per-image image_license + image_credit fields; carry attribution through if reusing images or prose. No explicit attribution requirement stated for factual data.",
+  "observed_dataset_size": { "as_of": "2026-07-31", "wrestlers": 346, "matches": 376, "events": 2186, "note": "homepage counts; dataset very small — supplementary source only" },
+  "live_probe": { "count": 1, "request": "GET https://wrestlingdb.org/api/wrestlers/", "date": "2026-07-31", "result": "404 HTML via Cloudflare, no rate-limit headers" },
+  "blocked": {
+    "authenticated_test": "WRESTLINGDB_API_KEY missing",
+    "unblock": "Sign up at https://wrestlingdb.org/account/, set WRESTLINGDB_API_KEY in .env",
+    "caveat": "As of commit e53596e no endpoint accepts any key; authenticated test only becomes meaningful once upstream mounts API routes"
+  }
+}

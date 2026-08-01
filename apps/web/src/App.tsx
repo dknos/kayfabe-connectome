@@ -1,0 +1,133 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConnectomeRenderer } from "@kayfabe/renderer";
+import { useStore } from "./state/store";
+import { TimelineEngine } from "./timeline/TimelineEngine";
+import { LeftPanel } from "./ui/LeftPanel";
+import { RightPanel } from "./ui/RightPanel";
+import { StageCanvas } from "./ui/StageCanvas";
+import { TableView } from "./ui/TableView";
+import { TimelineBar } from "./ui/TimelineBar";
+import { TopBar } from "./ui/TopBar";
+
+export function App() {
+  const bootError = useStore((s) => s.bootError);
+  const bootProgress = useStore((s) => s.bootProgress);
+  const bootWhat = useStore((s) => s.bootWhat);
+  const model = useStore((s) => s.model);
+  const lens = useStore((s) => s.lens);
+  const announcement = useStore((s) => s.announcement);
+  const engineRef = useRef(new TimelineEngine());
+  const rendererRef = useRef<ConnectomeRenderer | null>(null);
+  const [edgeStats, setEdgeStats] = useState({ dropped: 0, shown: 0 });
+  const [tier, setTier] = useState("high");
+
+  useEffect(() => {
+    void useStore.getState().boot();
+  }, []);
+
+  // global keyboard map
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "textarea") return;
+      const st = useStore.getState();
+      if (e.key === " ") {
+        e.preventDefault();
+        document.querySelector<HTMLButtonElement>('[aria-label="Play"], [aria-label="Pause"]')?.click();
+      } else if (e.key === "Escape") {
+        if (st.selection) st.select(null);
+        else if (st.focusId) st.focus(null);
+      } else if (e.key === "f" && st.selection?.kind === "node") {
+        st.focus(st.selection.id);
+      } else if (e.key === "r") {
+        rendererRef.current?.fitAll();
+      } else if (e.key === "[") {
+        document.querySelector<HTMLButtonElement>('[aria-label="Previous record"]')?.click();
+      } else if (e.key === "]") {
+        document.querySelector<HTMLButtonElement>('[aria-label="Next record"]')?.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const onRenderer = useCallback((r: ConnectomeRenderer) => {
+    rendererRef.current = r;
+    r.onTierChange = (t) => setTier(t);
+  }, []);
+  const onDropChange = useCallback((dropped: number, shown: number) => {
+    setEdgeStats({ dropped, shown });
+  }, []);
+
+  const screenshot = useCallback(() => {
+    const r = rendererRef.current;
+    const st = useStore.getState();
+    if (!r || !st.core) return;
+    const src = new Image();
+    src.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = src.width;
+      c.height = src.height + 44;
+      const ctx = c.getContext("2d")!;
+      ctx.fillStyle = "#04060b";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(src, 0, 0);
+      ctx.fillStyle = "#8494ab";
+      ctx.font = "12px ui-monospace, monospace";
+      const yr = (d: number) => new Date(Date.UTC(1950, 0, 1) + d * 86400000).getUTCFullYear();
+      ctx.fillText(
+        `KAYFABE CONNECTOME · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ` +
+          `${st.view?.visibleNodeCount ?? 0} entities / ${st.view?.visible.length ?? 0} relationships · ` +
+          `opposed=ember same-side=cyan title=gold · source: local corpus`,
+        12,
+        src.height + 27,
+      );
+      const a = document.createElement("a");
+      a.download = "kayfabe-connectome.png";
+      a.href = c.toDataURL("image/png");
+      a.click();
+      st.announce("Screenshot downloaded.");
+    };
+    src.src = r.screenshot();
+  }, []);
+
+  if (bootError) {
+    return (
+      <div className="boot">
+        <div className="inner">
+          <div className="brand"><b>KAYFABE CONNECTOME</b></div>
+          <p className="error-note" role="alert">{bootError}</p>
+          <p className="micro">
+            run `pnpm data:materialize` to build the graph, then reload. The renderer refuses
+            fabricated placeholder data by design.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <TopBar onScreenshot={screenshot} />
+      <main className="stage">
+        {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
+        {model && lens === "connectome" && (
+          <LeftPanel shownEdges={edgeStats.shown} droppedEdges={edgeStats.dropped} tier={tier} />
+        )}
+        {model && lens === "connectome" && <RightPanel />}
+        {model && lens === "table" && <TableView />}
+        {!model && (
+          <div className="boot">
+            <div className="inner">
+              <div className="brand"><b>KAYFABE CONNECTOME</b> <span className="micro">loading archive</span></div>
+              <div className="bar"><i style={{ width: `${bootProgress * 100}%` }} /></div>
+              <div className="micro">{bootWhat}</div>
+            </div>
+          </div>
+        )}
+      </main>
+      {model && <TimelineBar engine={engineRef.current} />}
+      <div aria-live="polite" className="visually-hidden">{announcement}</div>
+    </div>
+  );
+}
