@@ -94,9 +94,33 @@ async function tableFlow() {
   await ctx.close();
 }
 
+async function globalCorpusFlow() {
+  // v2: the csv merge made the atlas global — verify the NJPW region and
+  // Meltzer-starred evidence rows on a rated rivalry
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const page = await ctx.newPage();
+  page.on("console", (m) => m.type() === "error" && errors.push(`[global] ${m.text()}`));
+  await page.goto(BASE);
+  await page.waitForSelector("canvas.gl", { timeout: 30000 });
+  await page.waitForTimeout(4000);
+  await page.getByRole("combobox", { name: /Search/ }).fill("Kazuchika Okada");
+  await page.waitForTimeout(600);
+  await page.getByRole("option").first().click({ force: true });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${OUT}/10-okada-focus.png` });
+  const ev = page.getByText("open evidence").first();
+  if (await ev.isVisible().catch(() => false)) {
+    await ev.click();
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${OUT}/11-okada-evidence.png` });
+  }
+  await ctx.close();
+}
+
 await desktopFlow();
 await mobileFlow();
 await reducedFlow();
 await tableFlow();
+await globalCorpusFlow();
 await browser.close();
 console.log(errors.length ? `CONSOLE ERRORS (${errors.length}):\n` + errors.slice(0, 20).join("\n") : "NO CONSOLE ERRORS");

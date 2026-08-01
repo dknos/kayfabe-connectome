@@ -266,13 +266,15 @@ export function StageCanvas({
       st.pathResult?.nodes.forEach((id) => push(id, ""));
       st.pinned.forEach((id) => push(id, ""));
       if (st.currentEvent) [...st.currentEvent.w, ...st.currentEvent.l].forEach((id) => push(id, ""));
-      // promotion anchors then top-degree people
+      // top promotion anchors (by corpus weight — 165 anchors would eat the
+      // whole label budget), then top-degree people
       const order: number[] = [];
       for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 1) order.push(i);
+      order.sort((a, b) => m.nodes.matches[b]! - m.nodes.matches[a]!);
       const people: number[] = [];
       for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 0) people.push(i);
       people.sort((a, b) => m.nodes.degree[b]! - m.nodes.degree[a]!);
-      for (const i of [...order, ...people.slice(0, 60)]) {
+      for (const i of [...order.slice(0, 12), ...people.slice(0, 60)]) {
         if (wanted.length >= cap) break;
         if (!seen.has(i)) {
           seen.add(i);

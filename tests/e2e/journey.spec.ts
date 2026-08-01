@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("vertical slice journey", () => {
+  // merged corpus (365k matches, ~28MB core data) served to three parallel
+  // browser projects from one dev server — the v1 60s budget starves boots
+  test.slow();
+
   test.beforeEach(async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {
@@ -78,7 +82,8 @@ test.describe("vertical slice journey", () => {
     const y1 = page.getByLabel("End year", { exact: true });
     await y1.fill("1992");
     await expect(page.getByText("record-accurate range")).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText(/\d+ entities · \d+ relationships/)).toBeVisible();
+    // counts carry locale separators at merged-corpus scale ("2,600 relationships")
+    await expect(page.getByText(/[\d,]+ entities · [\d,]+ relationships/)).toBeVisible();
   });
 
   test("timeline playback fires and pauses", async ({ page }) => {
