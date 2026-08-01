@@ -37,6 +37,13 @@ def _relax(points: list[list[float]], center: tuple[float, float, float], radius
     n = len(points)
     if n < 2:
         return
+    if n * n > _RELAX_BUDGET:
+        # Oversized community: the golden-angle shell seeding is already
+        # uniform; a single O(n^2) pass would cost minutes in pure Python
+        # for no visible gain. Keep only the z-jitter below.
+        for p in points:
+            p[2] += (rng.random() - 0.5) * 0.5 * radius
+        return
     iters = max(1, min(40, _RELAX_BUDGET // (n * n)))
     min_sep = radius * 1.6 / math.sqrt(n)
     for _ in range(iters):

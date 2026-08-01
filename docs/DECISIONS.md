@@ -38,3 +38,31 @@ needs is missing.
 The source database is opened with SQLite URI `mode=ro&immutable=1` on a private
 copy in `data/private/`. No writes, no migrations, no repair statements ever
 target the source. All project-owned state lives in separate files.
+
+## D-007 — CSV corpus integration policy (crosswalk@1) (2026-08-01)
+
+`InitialWrestingMatchesFinal.csv` (363,728 rows, 571 promotions, 1947-2024)
+joins as a second source. Policy: **local_sql stays canonical for its six
+family promotions** (ECW/NXT/WCW/WWE/WWWF/WWF); family csv rows must crosswalk
+on (date, promotion, normalized participant-name set) and contribute
+enrichment only (venue, city, card placement, ppv flag; Meltzer rating only on
+unambiguous keys). Unmatched family rows are EXCLUDED and ledgered — 919 of
+them are date-shifted twins of matches local_sql already has, so admitting
+them would double-count encounters between headliners. All non-family rows are
+csv-canonical. Identity: exact-name resolution against the local_sql space
+first (cross-source confirmation), then a deterministic csv registry
+(`p:c<fnv1a32>`); csv matches never produce title changes or reigns (the csv
+has no title-change flag — never invented). Thresholds: csv promotions need
+>= 100 kept matches for a graph anchor node, csv championships >= 10 title
+matches; everything below stays record/filter-level (graph/promotions.json
+and entities/championships.json still carry them all).
+
+## D-008 — Epoch re-based to 1900, wire schema v2 (2026-08-01)
+
+The csv corpus reaches 1947; the v1 day encoding (days since 1950-01-01)
+cannot express it. Epoch moved to 1900-01-01 in both the Python materializer
+and the TS graph-contract; materialization schema bumped to 2.0.0 and the URL
+codec to v2 (stale v1 fragments are ignored safely, never restored wrong).
+Promotion bitmask widened: family bits 0-5 fixed, top-24 csv promotions get
+bits 6-29 by kept-match count, everything else shares other-bit 30 (bit 31
+left unused so JS int32 bitwise stays positive).

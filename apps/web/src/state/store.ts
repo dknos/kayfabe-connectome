@@ -68,6 +68,10 @@ interface AppState {
 const prefersReduced =
   typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** all promotion bits set (named bits 0-29 + other bit 30; bit 31 unused to
+ * stay positive in JS int32 bitwise ops) */
+export const PROMO_ALL = 0x7fffffff;
+
 let recomputeToken = 0;
 
 export const useStore = create<AppState>((set, get) => ({
@@ -81,7 +85,7 @@ export const useStore = create<AppState>((set, get) => ({
   filters: {
     dayMin: 0,
     dayMax: 0,
-    promoMask: 0xff,
+    promoMask: PROMO_ALL,
     formMask: 0xff,
     showSame: true,
     showOpposed: true,
@@ -243,7 +247,9 @@ export const useStore = create<AppState>((set, get) => ({
 
 /* ---------- URL state (versioned, stable IDs) ---------- */
 
-const URL_VERSION = "1";
+// v2: day numbers re-based to the 1900 epoch, promo bits widened — old
+// v1 fragments are ignored safely rather than restored wrong.
+const URL_VERSION = "2";
 let urlWriteTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function writeUrl(): void {
@@ -265,7 +271,7 @@ export function writeUrl(): void {
     const [d0, d1] = s.model.fullDayRange;
     if (s.filters.dayMin !== d0) push("dmin", s.filters.dayMin);
     if (s.filters.dayMax !== d1) push("dmax", s.filters.dayMax);
-    if (s.filters.promoMask !== 0xff) push("pr", s.filters.promoMask);
+    if (s.filters.promoMask !== PROMO_ALL) push("pr", s.filters.promoMask);
     if (s.filters.formMask !== 0xff) push("fm", s.filters.formMask);
     const rel = (s.filters.showSame ? 1 : 0) | (s.filters.showOpposed ? 2 : 0) | (s.filters.showBr ? 4 : 0);
     if (rel !== 7) push("rel", rel);

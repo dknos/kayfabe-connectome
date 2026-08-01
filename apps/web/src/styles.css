@@ -149,6 +149,7 @@ label { color: var(--text-dim); }
 .collapse-btn { padding: 2px 7px; font-size: 11px; }
 
 .checks { display: flex; flex-wrap: wrap; gap: 4px; }
+.checks.scrollable { max-height: 168px; overflow-y: auto; padding-right: 2px; }
 .chip {
   padding: 2px 8px; border-radius: 999px; font-size: 11px;
   border: 1px solid var(--stroke); background: transparent; cursor: pointer;

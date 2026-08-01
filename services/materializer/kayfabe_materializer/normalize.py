@@ -2,10 +2,10 @@
 
 Versioned algorithms implemented here (names are contract-level):
   - result/finish parse  (win_type)
-  - form-classify@1      (docs/CANONICAL-MODEL.md "Match-form classification")
+  - form-classify@2      (docs/CANONICAL-MODEL.md "Match-form classification")
   - exact-name-split@1   (side-row splitter + resolution)
   - belt-split@1         (concat-artifact championship splitting)
-  - day encoding         (days since 1950-01-01)
+  - day encoding         (days since 1900-01-01)
   - fnv1a32              (bucketing/slug hash, byte-wise over UTF-8)
 
 Everything is deterministic and stdlib-only.
@@ -43,16 +43,17 @@ def pair_key(a: str, b: str) -> str:
     return f"{a}|{b}" if a < b else f"{b}|{a}"
 
 
-EPOCH_ORDINAL = date(1950, 1, 1).toordinal()
+# Epoch v2: 1900 (was 1950) — the CSV corpus reaches back to 1947.
+EPOCH_ORDINAL = date(1900, 1, 1).toordinal()
 
 
 def iso_to_day(iso: str) -> int:
-    """ISO YYYY-MM-DD -> days since 1950-01-01."""
+    """ISO YYYY-MM-DD -> days since 1900-01-01."""
     return date(int(iso[0:4]), int(iso[5:7]), int(iso[8:10])).toordinal() - EPOCH_ORDINAL
 
 
 def day_to_iso(day: int) -> str:
-    """Days since 1950-01-01 -> ISO YYYY-MM-DD."""
+    """Days since 1900-01-01 -> ISO YYYY-MM-DD."""
     return date.fromordinal(EPOCH_ORDINAL + day).isoformat()
 
 
@@ -101,7 +102,7 @@ def parse_win_type(raw: str | None) -> tuple[str, str, str | None]:
     return kind, res, fin
 
 
-# ----------------------------------------------------------- form-classify@1
+# ----------------------------------------------------------- form-classify@2
 
 # Multi-way markers. Matching happens against the lowercased stipulation with
 # hyphens normalized to spaces, so 'three-way', 'triple-threat', '3-way',
@@ -118,6 +119,9 @@ _MULTI_WORDS = re.compile(r"\b(?:fatal|gauntlet|dance)\b")
 _N_WAY = re.compile(r"\b\d+ way\b")
 _RUMBLE = re.compile(r"\brumble\b")
 _BATTLE_ROYAL = "battle royal"
+# Team-elimination formats: named team matches whose stipulations carry none of
+# the tag/multi markers (Torneo Cibernetico, Survivor Series, WarGames, …).
+_TEAM_ELIM = re.compile(r"cibernetico|survivor series|war ?games|team war|\b\d+ on \d+\b")
 _TAG = re.compile(r"\btag\b")
 _N_MAN_PERSON = re.compile(r"\b\d+ (?:man|person)\b")
 _HANDICAP = "handicap"
@@ -133,25 +137,41 @@ FORM_BITS = {
 }
 
 
-def classify_form(stipulation: str | None, side_sizes: list[int] | tuple[int, ...]) -> str:
-    """form-classify@1 — first matching rule wins (CANONICAL-MODEL.md)."""
+def classify_form(
+    stipulation: str | None,
+    side_sizes: list[int] | tuple[int, ...],
+    units_total: int = 2,
+) -> str:
+    """form-classify@2 — first matching rule wins (CANONICAL-MODEL.md).
+
+    units_total: number of explicit competitive units across both sides (comma
+    grammar of csv-source@1). Sources without unit grammar pass 2, which makes
+    @2 reduce exactly to @1 for them (plus the team-elimination marker rule,
+    which maps into the same derivation class as the shape rule it refines).
+    """
     s = (stipulation or "").lower()
     s2 = s.replace("-", " ")
     # 1. battle royal
     if _BATTLE_ROYAL in s2 or _RUMBLE.search(s2):
         return "battle_royal"
-    # 2. multi-way
+    # 2. three or more explicit competitive units -> multi-way
+    if units_total >= 3:
+        return "multi_way"
+    # 3. multi-way markers
     if any(t in s2 for t in _MULTI_SUBSTRINGS) or _N_WAY.search(s2) or _MULTI_WORDS.search(s2):
         return "multi_way"
-    # 3. tag team
+    # 4. team-elimination formats (two named teams)
+    if _TEAM_ELIM.search(s2):
+        return "tag_team"
+    # 5. tag team
     if _TAG.search(s2) or _N_MAN_PERSON.search(s2) or _HANDICAP in s2:
         return "tag_team"
-    # 4/5. by side shape
+    # 6/7. by side shape
     if side_sizes and all(n == 1 for n in side_sizes):
         return "singles"
     if side_sizes and any(n > 1 for n in side_sizes):
         return "team_implied"
-    # 6. otherwise
+    # 8. otherwise
     return "unknown"
 
 

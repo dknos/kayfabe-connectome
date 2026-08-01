@@ -36,8 +36,10 @@ export class TimelineEngine {
     const batches = await Promise.all(missing.map((y) => loadYear(y)));
     missing.forEach((y) => this.loadedYears.add(y));
     this.events = this.events.concat(batches.flat());
+    // mirror the materializer's (date, card, match) string ordering exactly —
+    // ids are NOT all numeric ('c:c45' is a csv card), so no Number() here
     this.events.sort((a, b) =>
-      a.d < b.d ? -1 : a.d > b.d ? 1 : numId(a.c) - numId(b.c) || numId(a.m) - numId(b.m),
+      a.d < b.d ? -1 : a.d > b.d ? 1 : a.c < b.c ? -1 : a.c > b.c ? 1 : a.m < b.m ? -1 : a.m > b.m ? 1 : 0,
     );
     this.resyncCursor(useStore.getState().timeline.day);
   }
@@ -58,29 +60,36 @@ export class TimelineEngine {
     return this.events[this.cursor + offset] ?? null;
   }
 
-  /** Derive pulse set for one match event — mirrors docs/CANONICAL-MODEL.md. */
+  /** Derive pulse set for one match event — mirrors encounters@2
+   * (docs/CANONICAL-MODEL.md), bounded for visual legibility. */
   static derive(ev: TimelineEvent): FiredEvent {
     const pulses: FiredEvent["pulses"] = [];
     const decisive = ev.res.startsWith("def");
     const cap = 8; // bounded per-event fan-out; battle royals stay legible
-    for (const a of ev.w)
-      for (const b of ev.l) {
-        if (pulses.length >= cap) break;
-        pulses.push({ a, b, kind: ev.form === "battle_royal" ? "br" : "opposed" });
-      }
-    const teamForm = ev.form === "tag_team" || ev.form === "team_implied";
-    const sameWithin = (side: string[]) => {
-      for (let i = 0; i < side.length; i++)
-        for (let j = i + 1; j < side.length; j++) {
-          if (pulses.length >= cap) return;
-          pulses.push({ a: side[i]!, b: side[j]!, kind: "same" });
-        }
+    const push = (a: string, b: string, kind: "same" | "opposed" | "br") => {
+      if (pulses.length < cap) pulses.push({ a, b, kind });
     };
-    if (teamForm) {
-      sameWithin(ev.w);
-      sameWithin(ev.l);
-    } else if (ev.form === "multi_way" && decisive) {
-      sameWithin(ev.w);
+    const sameWithin = (unit: string[]) => {
+      for (let i = 0; i < unit.length; i++)
+        for (let j = i + 1; j < unit.length; j++) push(unit[i]!, unit[j]!, "same");
+    };
+    if (ev.form === "battle_royal") {
+      for (const a of ev.w) for (const b of ev.l) push(a, b, "br");
+    } else if (ev.form === "multi_way") {
+      const all = [...(ev.wu ?? [ev.w]), ...(ev.lu ?? [ev.l])];
+      for (let i = 0; i < all.length; i++)
+        for (let j = i + 1; j < all.length; j++)
+          for (const a of all[i]!) for (const b of all[j]!) push(a, b, "opposed");
+      const explicitW = (ev.wu ?? [ev.w]).length >= 2;
+      const explicitL = (ev.lu ?? [ev.l]).length >= 2;
+      for (const u of ev.wu ?? [ev.w]) if (explicitW || decisive) sameWithin(u);
+      for (const u of ev.lu ?? [ev.l]) if (explicitL) sameWithin(u);
+    } else {
+      for (const a of ev.w) for (const b of ev.l) push(a, b, "opposed");
+      if (ev.form === "tag_team" || ev.form === "team_implied") {
+        for (const u of ev.wu ?? [ev.w]) sameWithin(u);
+        for (const u of ev.lu ?? [ev.l]) sameWithin(u);
+      }
     }
     if (ev.tc === 1) {
       for (const winner of ev.w.slice(0, 4)) {
@@ -155,5 +164,3 @@ export class TimelineEngine {
     useStore.getState().setCurrentEvent(this.eventAtCursor(-1));
   }
 }
-
-const numId = (id: string): number => Number(id.slice(id.indexOf(":") + 1));

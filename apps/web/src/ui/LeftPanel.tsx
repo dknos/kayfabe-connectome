@@ -17,6 +17,7 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
   tier: string;
 }) {
   const model = useStore((s) => s.model);
+  const core = useStore((s) => s.core);
   const filters = useStore((s) => s.filters);
   const setFilters = useStore((s) => s.setFilters);
   const view = useStore((s) => s.view);
@@ -34,16 +35,31 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
 
   const promotions = useMemo(() => {
     if (!model) return [];
-    const out: { bit: number; name: string }[] = [];
-    for (let i = 0; i < model.nodes.count; i++) {
-      if (model.nodes.type[i] === 1) {
-        const srcId = model.nodes.id[i]!.slice(3);
-        const bit = model.manifest.promo_bits[srcId];
-        if (bit !== undefined) out.push({ bit, name: model.nodes.name[i]! });
+    const out: { bit: number; name: string; m: number }[] = [];
+    const seen = new Set<number>();
+    const add = (bit: number, name: string, m: number) => {
+      if (!seen.has(bit)) {
+        seen.add(bit);
+        out.push({ bit, name, m });
+      }
+    };
+    if (core) {
+      for (const [, info] of Object.entries(core.promotions)) {
+        if (info.bit !== undefined) add(info.bit, info.n, info.m);
+      }
+    } else {
+      for (let i = 0; i < model.nodes.count; i++) {
+        if (model.nodes.type[i] === 1) {
+          const bit = model.manifest.promo_bits[model.nodes.id[i]!.slice(3)];
+          if (bit !== undefined) add(bit, model.nodes.name[i]!, model.nodes.matches[i]!);
+        }
       }
     }
-    return out.sort((a, b) => a.bit - b.bit);
-  }, [model]);
+    out.sort((a, b) => b.m - a.m || a.bit - b.bit);
+    const otherBit = model.manifest.promo_other_bit;
+    if (otherBit !== undefined) out.push({ bit: otherBit, name: "Other promotions", m: 0 });
+    return out;
+  }, [model, core]);
 
   if (!model) return null;
   const [d0, d1] = model.fullDayRange;
@@ -65,10 +81,12 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
           <>
             <div className="row">
               <label htmlFor="f-y0">Years</label>
-              <input id="f-y0" type="number" min={1963} max={2026} value={y0} style={{ width: 64 }}
+              <input id="f-y0" type="number" min={dayToDate(d0).getUTCFullYear()} max={dayToDate(d1).getUTCFullYear()}
+                value={y0} style={{ width: 64 }}
                 onChange={(e) => setFilters({ dayMin: Math.max(d0, isoToDay(`${e.target.value}-01-01`)) })} />
               <span>–</span>
-              <input aria-label="End year" type="number" min={1963} max={2026} value={y1} style={{ width: 64 }}
+              <input aria-label="End year" type="number" min={dayToDate(d0).getUTCFullYear()} max={dayToDate(d1).getUTCFullYear()}
+                value={y1} style={{ width: 64 }}
                 onChange={(e) => setFilters({ dayMax: Math.min(d1, isoToDay(`${e.target.value}-12-31`)) })} />
             </div>
             <div className="row">
@@ -85,11 +103,12 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
             )}
 
             <h2 style={{ marginTop: 10 }}>Promotions <span className="line" /></h2>
-            <div className="checks" role="group" aria-label="Promotion filter">
+            <div className="checks scrollable" role="group" aria-label="Promotion filter">
               {promotions.map((p) => (
                 <button key={p.bit}
                   className={`chip ${filters.promoMask & (1 << p.bit) ? "on" : ""}`}
                   aria-pressed={!!(filters.promoMask & (1 << p.bit))}
+                  title={p.m > 0 ? `${p.m.toLocaleString()} matches` : "every promotion without its own filter bit"}
                   onClick={() => setFilters({ promoMask: filters.promoMask ^ (1 << p.bit) })}>
                   {p.name}
                 </button>

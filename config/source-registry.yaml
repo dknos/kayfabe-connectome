@@ -32,6 +32,28 @@ sources:
     raw_payload_retention: yes (private cache)
     raw_payload_publication: never
 
+  - id: csv_initial_matches
+    display_name: "InitialWrestingMatchesFinal.csv (global match corpus)"
+    access: "cp1252 csv, read-only, private copy in data/private/incoming-csv/"
+    authority_class: "canonical outside the six family promotions; enrichment-only inside them"
+    retrieved: "2026-08-01 (user-supplied zip from Downloads)"
+    license_status: "user-supplied private corpus; profightdb-style lineage (same result/side grammar as local_sql)"
+    redistribution: private — raw rows never published
+    attribution: none required internally
+    refresh: manual (user supplies new snapshot)
+    trust_notes: >
+      363,728 rows, 571 promotions, 1947-2024. cp1252 encoded. ', ' separates
+      competitive units, ' & ' members within a unit (richer than local_sql's
+      collapsed sides). Champion '(c)' markers stripped from names. 'Name, Jr.'
+      rejoined to the local_sql 'Name Jr.' convention. No stable row ids: match
+      identity is (date, promotion, participant set). No title-change flag:
+      csv matches never produce reigns. Family rows crosswalk to local_sql
+      (98.7% hit) and contribute venue/city/placement/ppv/meltzer enrichment;
+      the 1,638 unmatched family rows are excluded and ledgered (919 measured
+      as date-shifted twins of matches local_sql already records).
+    raw_payload_retention: yes (private)
+    raw_payload_publication: never
+
   - id: authored_correction
     display_name: "Manually authored corrections"
     access: "config/corrections/ files, reviewed"

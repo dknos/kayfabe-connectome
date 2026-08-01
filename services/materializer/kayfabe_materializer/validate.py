@@ -32,8 +32,18 @@ def _load(path: Path):
         return json.loads(f.read().decode("utf-8"))
 
 
-def run_checks(out: Path, promo_bits: dict[str, int]) -> tuple[bool, dict]:
+def run_checks(
+    out: Path, promo_bits: dict[str, int], promo_other_bit: int | None = None
+) -> tuple[bool, dict]:
     checks: dict[str, dict] = {}
+
+    def bit_of(promo_id: str) -> int:
+        b = promo_bits.get(promo_id)
+        if b is None:
+            if promo_other_bit is None:
+                raise KeyError(f"promotion {promo_id!r} has no bit and no other-bit is set")
+            return promo_other_bit
+        return b
 
     # ---- nodes
     nodes = _load(out / "graph" / "nodes.json")
@@ -121,7 +131,7 @@ def run_checks(out: Path, promo_bits: dict[str, int]) -> tuple[bool, dict]:
             pmask = 0
             fmask = 0
             for e in entries:
-                pmask |= 1 << promo_bits[e["pr"][3:]]
+                pmask |= 1 << bit_of(e["pr"][3:])
                 fmask |= 1 << FORM_BITS[e["form"]]
             expect = (a, b, same, opp, br, tmatches, min(days), max(days), pmask, fmask)
             if rec != expect:
@@ -226,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest = _load(manifest_path)
 
     cs_ok, cs = verify_checksums(out, manifest)
-    passed, checks = run_checks(out, manifest["promo_bits"])
+    passed, checks = run_checks(out, manifest["promo_bits"], manifest.get("promo_other_bit"))
     checks["checksums"] = cs
 
     edges_count_ok = manifest["edges_bin"]["count"] == checks["edges_bin"]["count"]

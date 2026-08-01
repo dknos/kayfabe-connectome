@@ -33,9 +33,17 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
       </div>
       <div className="spacer" />
       {core && (
-        <div className="coverage micro" title="Corpus coverage — local SQL source">
-          <b className="num">{core.manifest.counts.people?.toLocaleString()}</b> people ·{" "}
+        <div className="coverage micro" title="Corpus coverage — local SQL + csv sources">
+          <b className="num">
+            {(
+              (core.manifest.counts.people ?? 0) +
+              (core.manifest.counts.derived_people ?? 0) +
+              (core.manifest.counts.csv_people ?? 0)
+            ).toLocaleString()}
+          </b>{" "}
+          people ·{" "}
           <b className="num">{core.manifest.counts.matches?.toLocaleString()}</b> matches ·{" "}
+          <b className="num">{core.manifest.counts.promotions?.toLocaleString()}</b> promotions ·{" "}
           <b className="num">{core.manifest.date_range[0].slice(0, 4)}–{core.manifest.date_range[1].slice(0, 4)}</b>
         </div>
       )}

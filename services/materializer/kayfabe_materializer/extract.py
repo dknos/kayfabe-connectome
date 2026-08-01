@@ -95,11 +95,13 @@ def build_canonical_matches(src: dict, resolver: Resolver, belt_map: dict[int, d
         l_members, l_unknown, l_size = resolver.resolve(m["loser_row"])
         form = classify_form(stip, (w_size, l_size))
 
-        title_components: list[int] = []
+        # Title ids are strings in the merged namespace ('123' sqlite belt,
+        # 'c<n>' csv title); promotion ids likewise ('4140' / 'c<n>').
+        title_components: list[str] = []
         if m["title_id"] != NO_TITLE_BELT_ID:
             entry = belt_map.get(m["title_id"])
             if entry is not None:
-                title_components = list(entry["components"])
+                title_components = [str(c) for c in entry["components"]]
         role_w, role_l = ROLE_BY_KIND[kind]
 
         out.append(
@@ -108,7 +110,7 @@ def build_canonical_matches(src: dict, resolver: Resolver, belt_map: dict[int, d
                 "card_id": m["card_id"],
                 "date": card["date"],
                 "day": iso_to_day(card["date"]),
-                "promotion_id": card["promotion_id"],
+                "promotion_id": str(card["promotion_id"]),
                 "event_name": events.get(card["event_id"], ""),
                 "location": locations.get(card["location_id"], ""),
                 "form": form,
@@ -119,10 +121,12 @@ def build_canonical_matches(src: dict, resolver: Resolver, belt_map: dict[int, d
                 "dur": parse_duration(m["duration"]),
                 "title_components": title_components,
                 "title_change": m["title_change"],
+                "apx": 0,
                 "sides": [
                     {
                         "role": role_w,
                         "members": list(w_members),
+                        "units": [list(w_members)] if w_members else [],
                         "has_unknown": w_unknown,
                         "size_raw": w_size,
                         "row": m["winner_row"],
@@ -130,6 +134,7 @@ def build_canonical_matches(src: dict, resolver: Resolver, belt_map: dict[int, d
                     {
                         "role": role_l,
                         "members": list(l_members),
+                        "units": [list(l_members)] if l_members else [],
                         "has_unknown": l_unknown,
                         "size_raw": l_size,
                         "row": m["loser_row"],

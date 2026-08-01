@@ -16,7 +16,7 @@ def rels(obs, rel):
 
 def test_multiway_loser_group_yields_nothing_within():
     # three-way dance, collapsed loser row 'A & B': winner p:9 over p:1 & p:2
-    obs, sup = derive_observations("multi_way", "decisive", ["p:9"], ["p:1", "p:2"])
+    obs, sup = derive_observations("multi_way", "decisive", [["p:9"]], [["p:1", "p:2"]])
     assert rels(obs, "same") == []  # no fabricated tag team
     assert rels(obs, "opposed") == [("p:1", "p:9"), ("p:2", "p:9")]
     assert ("p:1", "p:2") not in rels(obs, "opposed")  # no within-loser opposed
@@ -26,7 +26,7 @@ def test_multiway_loser_group_yields_nothing_within():
 def test_multiway_winner_team_yields_partner_obs():
     # 'three-way dance tag': winning TEAM is genuine; losers stay collapsed
     obs, _ = derive_observations(
-        "multi_way", "decisive", ["p:1", "p:2"], ["p:3", "p:4", "p:5", "p:6"]
+        "multi_way", "decisive", [["p:1", "p:2"]], [["p:3", "p:4", "p:5", "p:6"]]
     )
     assert rels(obs, "same") == [("p:1", "p:2")]
     assert len(rels(obs, "opposed")) == 8  # 2 winners x 4 losers
@@ -37,7 +37,7 @@ def test_multiway_winner_team_yields_partner_obs():
 
 
 def test_multiway_draw_no_partner_obs_anywhere():
-    obs, sup = derive_observations("multi_way", "draw", ["p:1", "p:2"], ["p:3", "p:4"])
+    obs, sup = derive_observations("multi_way", "draw", [["p:1", "p:2"]], [["p:3", "p:4"]])
     assert rels(obs, "same") == []
     assert sup["multiway_draw_pairs_suppressed"] == 2
     assert len(rels(obs, "opposed")) == 4  # cross-side opposition is still factual
@@ -47,13 +47,13 @@ def test_multiway_draw_no_partner_obs_anywhere():
 
 
 def test_tag_team_both_sides_yield_partner_obs():
-    obs, _ = derive_observations("tag_team", "decisive", ["p:1", "p:2"], ["p:3", "p:4"])
+    obs, _ = derive_observations("tag_team", "decisive", [["p:1", "p:2"]], [["p:3", "p:4"]])
     assert rels(obs, "same") == [("p:1", "p:2"), ("p:3", "p:4")]
     assert len(rels(obs, "opposed")) == 4
 
 
 def test_team_implied_both_sides_yield_partner_obs():
-    obs, _ = derive_observations("team_implied", "draw", ["p:1", "p:2"], ["p:3"])
+    obs, _ = derive_observations("team_implied", "draw", [["p:1", "p:2"]], [["p:3"]])
     assert rels(obs, "same") == [("p:1", "p:2")]
 
 
@@ -62,7 +62,7 @@ def test_team_implied_both_sides_yield_partner_obs():
 
 def test_battle_royal_br_opposed_only_no_partners():
     obs, sup = derive_observations(
-        "battle_royal", "decisive", ["p:9"], ["p:1", "p:2", "p:3"]
+        "battle_royal", "decisive", [["p:9"]], [["p:1", "p:2", "p:3"]]
     )
     assert rels(obs, "same") == []
     assert rels(obs, "opposed") == []
@@ -77,12 +77,12 @@ def test_battle_royal_br_opposed_only_no_partners():
 
 def test_unknown_members_produce_nothing():
     # resolver strips x:unknown from member lists; an unknown-only side is empty
-    obs, _ = derive_observations("singles", "decisive", ["p:1"], [])
+    obs, _ = derive_observations("singles", "decisive", [["p:1"]], [])
     assert obs == []
 
 
 def test_self_pairs_skipped():
-    obs, _ = derive_observations("singles", "decisive", ["p:1"], ["p:1"])
+    obs, _ = derive_observations("singles", "decisive", [["p:1"]], [["p:1"]])
     assert obs == []
 
 
@@ -104,8 +104,8 @@ def _rec(mid, date, form, kind, w, l, title=None, tc=0, promo=1):
         "title_change": tc,
         "_promo_bit": 1,
         "sides": [
-            {"members": w, "has_unknown": False, "size_raw": len(w), "row": 0},
-            {"members": l, "has_unknown": False, "size_raw": len(l), "row": 0},
+            {"members": w, "units": [w] if w else [], "has_unknown": False, "size_raw": len(w), "row": 0},
+            {"members": l, "units": [l] if l else [], "has_unknown": False, "size_raw": len(l), "row": 0},
         ],
     }
 
@@ -122,7 +122,7 @@ def test_aggregator_edge_weights_equal_evidence_counts():
     assert len(p12["evidence"]) == p12["same"] + p12["opposed"] + p12["br"] == 3
     assert p12["titleMatches"] == 1
     # evidence is sorted by (date, match id)
-    assert [e[1] for e in p12["evidence"]] == [1, 2, 3]
+    assert [e[1] for e in p12["evidence"]] == ["1", "2", "3"]
     assert p12["firstDay"] == p12["lastDay"] == 0
 
 
@@ -141,7 +141,7 @@ def test_aggregator_title_counts_and_dual_side_quality_ledger():
     # match 9 collapses to p:1 vs p:3 after suppressing p:2
     p13 = pairs["p:1|p:3"]
     assert p13["opposed"] == 2 and p13["titleMatches"] == 2
-    assert agg.dual_side_match_ids == [9]
+    assert agg.dual_side_match_ids == ["9"]
     assert agg.counters["dual_side_members_suppressed"] == 1
 
 
@@ -184,8 +184,60 @@ def test_reign_derive_orders_by_date_card_match():
 
 def test_dual_side_member_suppressed_entirely():
     # Source corruption: p:2 listed on both sides — nothing may be derived for them.
-    obs, sup = derive_observations("tag_team", "decisive", ["p:1", "p:2"], ["p:2", "p:3"])
+    obs, sup = derive_observations("tag_team", "decisive", [["p:1", "p:2"]], [["p:2", "p:3"]])
     assert sup["dual_side_members_suppressed"] == 1
     flat = {x for (_, a, b) in obs for x in (a, b)}
     assert "p:2" not in flat
     assert obs == [("opposed", "p:1", "p:3")]
+
+
+# ------------------------------------------------- encounters@2 unit grammar
+
+
+def test_multiway_explicit_units_oppose_each_other():
+    # csv triple threat: 'A' def. 'B, C' — B and C genuinely opposed each other
+    obs, sup = derive_observations("multi_way", "decisive", [["p:1"]], [["p:2"], ["p:3"]])
+    assert rels(obs, "opposed") == [("p:1", "p:2"), ("p:1", "p:3"), ("p:2", "p:3")]
+    assert rels(obs, "same") == []
+    assert sup["multiway_loser_pairs_suppressed"] == 0
+
+
+def test_multiway_explicit_team_units_get_partner_obs():
+    # csv three-way tag: 'A & B' def. 'C & D, E & F' — every comma team genuine
+    obs, sup = derive_observations(
+        "multi_way", "decisive", [["p:1", "p:2"]], [["p:3", "p:4"], ["p:5", "p:6"]]
+    )
+    assert rels(obs, "same") == [("p:1", "p:2"), ("p:3", "p:4"), ("p:5", "p:6")]
+    # opposed: all cross-unit pairs (3 units of 2 -> 3*4 = 12)
+    assert len(rels(obs, "opposed")) == 12
+    assert ("p:3", "p:5") in rels(obs, "opposed")  # loser teams opposed each other
+    assert ("p:3", "p:4") not in rels(obs, "opposed")
+    assert sup["multiway_loser_pairs_suppressed"] == 0
+
+
+def test_multiway_collapsed_blob_still_suppressed_with_units():
+    # sqlite-style collapsed loser blob (single unit) stays suppressed
+    obs, sup = derive_observations(
+        "multi_way", "decisive", [["p:1"]], [["p:2", "p:3", "p:4"]]
+    )
+    assert rels(obs, "same") == []
+    assert ("p:2", "p:3") not in rels(obs, "opposed")
+    assert sup["multiway_loser_pairs_suppressed"] == 3
+
+
+def test_multiway_draw_with_explicit_units_keeps_team_obs():
+    # grammar proves the teams even without a winner
+    obs, sup = derive_observations(
+        "multi_way", "draw", [["p:1", "p:2"], ["p:3", "p:4"]], [["p:5", "p:6"]]
+    )
+    # winner-side units explicit -> genuine; single-unit loser side -> collapsed
+    assert rels(obs, "same") == [("p:1", "p:2"), ("p:3", "p:4")]
+    assert sup["multiway_draw_pairs_suppressed"] == 1  # within p:5|p:6 only
+
+
+def test_battle_royal_with_explicit_units_unchanged():
+    obs, _ = derive_observations(
+        "battle_royal", "decisive", [["p:9"]], [["p:1"], ["p:2"], ["p:3"]]
+    )
+    assert rels(obs, "br") == [("p:1", "p:9"), ("p:2", "p:9"), ("p:3", "p:9")]
+    assert rels(obs, "same") == [] and rels(obs, "opposed") == []

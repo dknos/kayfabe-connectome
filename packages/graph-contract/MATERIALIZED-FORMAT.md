@@ -1,10 +1,16 @@
-# Materialized Format — v1.0.0
+# Materialized Format — v2.0.0
 
 Contract between `services/materializer` (producer, Python stdlib only) and
 `apps/web` (consumer). Everything lives under `data/materialized/`. All JSON is
 UTF-8, no NaN/Infinity. All binary is little-endian. Determinism: two runs over
 the same source must produce byte-identical files (fixed seeds, sorted keys,
 no timestamps outside `manifest.json`).
+
+## Day encoding (v2)
+
+Days since **1900-01-01** (v1 used 1950; the csv corpus reaches 1947).
+`isoToDay`/`dayToDate` in graph-contract and `iso_to_day`/`day_to_iso` in the
+materializer are the only implementations.
 
 ## Day encoding
 `day = (date - 1950-01-01) in days`, integer. ISO dates only in dossier/
@@ -144,3 +150,24 @@ orphan checks, determinism hash of a canary subset, rule counters (partner obs
 by form, multiway_loser_pairs_suppressed count, battle royal edges), and the
 top-level `passed` boolean mirrored into manifest.validation.
 ```
+
+## v2 additions
+
+- `manifest.sources` — sha256 per source (`local_sql`, `csv_initial_matches`);
+  `manifest.epoch` = "1900-01-01"; `manifest.promo_other_bit` = 30.
+- `promo_bits`: family promotions keep bits 0-5; top-24 csv promotions (by
+  kept matches) take bits 6-29; every other promotion shares bit 30. Bit 31
+  unused (JS int32 sign safety).
+- **graph/promotions.json** — `{"pr:<id>": {n, m, src, bit?}}` for ALL 571
+  promotions, node or not (name/bit lookup for dossiers and filters).
+- id classes: `p:c<fnv1a32-hex>` csv person (nodes.resolution = 2),
+  `pr:c<n>` csv promotion, `t:c<n>` csv title, `m:c<n>`/`c:c<n>`/`en:c<n>`
+  csv match/card/event. Mixed with v1 numeric ids; always treated as opaque
+  strings on the wire.
+- timeline events gain optional `wu`/`lu` (unit partitions, present when a
+  side has >= 2 units), `mr` (Meltzer), `ppv`, `apx` (approximate date).
+- evidence entries gain optional `mr`.
+- by-year ordering is now the string tuple (d, c, m) — ids are not all
+  numeric; clients must not Number() them.
+- entities/championships.json entries gain `src`; csv titles always have
+  `reigns: []` and `changes: 0` (no title-change data in that source).

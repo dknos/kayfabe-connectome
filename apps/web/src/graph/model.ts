@@ -143,10 +143,12 @@ export class GraphModel {
     const pairEdge = new Map<string, number>();
     for (let e = 0; e < this.edgeCount; e++) pairEdge.set(this.edgePairKey(e), e);
 
+    const otherBit = this.manifest.promo_other_bit;
     for (const ev of events) {
       const day = isoToDay(ev.d);
       if (day < f.dayMin || day > f.dayMax) continue;
-      const pb = promoBit[ev.pr.slice(3)];
+      let pb = promoBit[ev.pr.slice(3)];
+      if (pb === undefined) pb = otherBit;
       if (pb === undefined || !((1 << pb) & f.promoMask)) continue;
       const fb = formBit[ev.form];
       if (fb === undefined || !((1 << fb) & f.formMask)) continue;
@@ -161,21 +163,39 @@ export class GraphModel {
         w[rel]++;
         if (isTitle) w.title++;
       };
-
-      // opposed: winners × losers (battle royal → br class)
-      for (const a of ev.w)
-        for (const b of ev.l) bump(a, b, ev.form === "battle_royal" ? "br" : "opposed");
-      // partners: genuine team sides only; multi_way only the decisive winner side
-      const teamForm = ev.form === "tag_team" || ev.form === "team_implied";
-      const sameWithin = (side: string[]) => {
-        for (let i = 0; i < side.length; i++)
-          for (let j = i + 1; j < side.length; j++) bump(side[i]!, side[j]!, "same");
+      const sameWithin = (unit: string[]) => {
+        for (let i = 0; i < unit.length; i++)
+          for (let j = i + 1; j < unit.length; j++) bump(unit[i]!, unit[j]!, "same");
       };
-      if (teamForm) {
-        sameWithin(ev.w);
-        sameWithin(ev.l);
-      } else if (ev.form === "multi_way" && decisive) {
-        sameWithin(ev.w);
+
+      if (ev.form === "battle_royal") {
+        for (const a of ev.w) for (const b of ev.l) bump(a, b, "br");
+        continue;
+      }
+      // encounters@2 — mirrors kayfabe_materializer/project.py exactly
+      if (ev.form === "multi_way") {
+        const unitsW = ev.wu ?? [ev.w];
+        const unitsL = ev.lu ?? [ev.l];
+        const all = [...unitsW, ...unitsL];
+        for (let i = 0; i < all.length; i++)
+          for (let j = i + 1; j < all.length; j++)
+            for (const a of all[i]!) for (const b of all[j]!) bump(a, b, "opposed");
+        for (const [units, isWinner] of [
+          [unitsW, true],
+          [unitsL, false],
+        ] as const) {
+          const explicit = units.length >= 2;
+          for (const u of units) {
+            if (explicit || (isWinner && decisive)) sameWithin(u);
+          }
+        }
+        continue;
+      }
+      // singles / tag / team_implied / unknown
+      for (const a of ev.w) for (const b of ev.l) bump(a, b, "opposed");
+      if (ev.form === "tag_team" || ev.form === "team_implied") {
+        for (const u of ev.wu ?? [ev.w]) sameWithin(u);
+        for (const u of ev.lu ?? [ev.l]) sameWithin(u);
       }
     }
 

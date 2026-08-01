@@ -6,14 +6,18 @@ history, rendered as a living biological connectome.
 Clean-room fresh build. This repository does not reuse, copy, or extend any prior
 visualization project.
 
-## Data sources (v1)
+## Data sources (v2)
 
 | Source | Role | Access |
 |---|---|---|
-| Local SQL database (SQLite) | Authoritative bulk corpus | Read-only, path via `WRESTLING_DB_PATH` |
-| wrestlingdb.org API | Enrichment / cross-reference | Server-side key via `WRESTLINGDB_API_KEY` |
+| Local SQL database (SQLite) | Canonical for the six WWE-family promotions | Read-only, path via `WRESTLING_DB_PATH` |
+| InitialWrestingMatchesFinal.csv | Canonical for 565 further promotions (NJPW, AJPW, NOAH, Dragon Gate, CMLL, ROH, …); enrichment (venue, Meltzer, PPV, card placement) inside family territory | Read-only cp1252 csv, path via `CSV_MATCHES_PATH` |
+| wrestlingdb.org API | Enrichment / cross-reference (dormant upstream) | Server-side key via `WRESTLINGDB_API_KEY` |
 
-No scraping. No other sources. Missing fields stay missing.
+Merged corpus: **365,485 matches · 30,291 people · 571 promotions ·
+1947–2026**. Family csv rows crosswalk against the sqlite (98.7% hit) instead
+of duplicating it; misses are ledgered, never guessed (docs/DECISIONS.md
+D-007). No scraping. No other sources. Missing fields stay missing.
 
 ## Layout
 
@@ -43,8 +47,10 @@ node tests/qa-capture.mjs Headless screenshot sweep (dev server must be running)
 
 ## Opening the connectome
 
-1. Place the corpus at `data/private/wwe_db_2026-01-18.sqlite` (or set `WRESTLING_DB_PATH`)
-2. `pnpm install && pnpm data:materialize`
+1. Place the corpora at `data/private/wwe_db_2026-01-18.sqlite` and
+   `data/private/incoming-csv/InitialWrestingMatchesFinal.csv`
+   (or set `WRESTLING_DB_PATH` / `CSV_MATCHES_PATH`)
+2. `pnpm install && pnpm data:materialize` (~60s, deterministic)
 3. `pnpm dev` → open http://127.0.0.1:9460, press `/` and search anyone.
 
 ## Configuration

@@ -76,8 +76,25 @@ def test_form_classify_priority_and_variants():
     assert classify_form("8-person tag", (4, 4)) == "tag_team"
     # 'tag' must match as a word, not inside 'stages'
     assert classify_form('"3 stages of hell"', (1, 1)) == "singles"
-    # unmarked team side
-    assert classify_form("street fight (4 on 4)", (4, 4)) == "team_implied"
+    # @2: 'N on N' is a team marker now (same derivation class as team_implied)
+    assert classify_form("street fight (4 on 4)", (4, 4)) == "tag_team"
+
+
+def test_form_classify_v2_rules():
+    # team-elimination formats -> tag_team (genuine teams, both sides)
+    assert classify_form("Torneo Cibernetico", (8, 8)) == "tag_team"
+    assert classify_form('"Survivor Series"', (4, 4)) == "tag_team"
+    assert classify_form("WarGames", (4, 4)) == "tag_team"
+    assert classify_form("Team War", (3, 3)) == "tag_team"
+    # >= 3 explicit units (csv comma grammar) -> multi_way even with no marker
+    assert classify_form("", (1, 2), units_total=3) == "multi_way"
+    assert classify_form(None, (2, 4), units_total=3) == "multi_way"
+    # battle royal still wins over unit count
+    assert classify_form("Battle Royal", (1, 19), units_total=20) == "battle_royal"
+    # a 3-unit Survivor-Series-style match is multi_way (units beat markers)
+    assert classify_form('"Survivor Series" (5 vs. 5 vs. 5)', (5, 10), units_total=3) == "multi_way"
+    # sources without unit grammar (units_total=2) are unchanged
+    assert classify_form("three-way dance", (1, 2)) == "multi_way"
 
 
 # ---------------------------------------------------------------- durations
@@ -106,11 +123,13 @@ def test_fnv1a32_reference_vectors():
 
 
 def test_day_encoding():
-    assert iso_to_day("1950-01-01") == 0
-    assert day_to_iso(0) == "1950-01-01"
-    for iso in ("1963-01-25", "2000-02-29", "2026-01-16"):
+    # epoch v2: 1900-01-01 (csv corpus reaches 1947)
+    assert iso_to_day("1900-01-01") == 0
+    assert day_to_iso(0) == "1900-01-01"
+    assert iso_to_day("1950-01-01") == 18262
+    for iso in ("1947-11-27", "1963-01-25", "2000-02-29", "2026-01-16"):
         assert day_to_iso(iso_to_day(iso)) == iso
-    assert iso_to_day("1950-01-02") == 1
+    assert iso_to_day("1900-01-02") == 1
 
 
 # ------------------------------------------------- placeholders + resolution

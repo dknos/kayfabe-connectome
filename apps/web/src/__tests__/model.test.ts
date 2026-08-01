@@ -73,9 +73,11 @@ describe("contract primitives", () => {
     expect(bucketOf("p:1|p:2")).toBe(bucketOf(pairKey("p:1", "p:2")));
     expect(bucketOf("p:1|p:2")).toMatch(/^[0-9a-f]{2}$/);
   });
-  it("day encoding round-trips", () => {
-    expect(isoToDay("1950-01-01")).toBe(0);
-    expect(isoToDay("1963-01-25")).toBe(4772);
+  it("day encoding round-trips (1900 epoch, matches the Python side)", () => {
+    expect(isoToDay("1900-01-01")).toBe(0);
+    expect(isoToDay("1950-01-01")).toBe(18262);
+    expect(isoToDay("1963-01-25")).toBe(4772 + 18262);
+    expect(isoToDay("1947-12-14")).toBeGreaterThan(0);
   });
 });
 
@@ -132,5 +134,43 @@ describe("record-level derivation (CANONICAL-MODEL rules)", () => {
     const ev = mkEvent({ form: "multi_way", res: "draw (NC)", w: ["p:1", "p:2"], l: ["p:3"] });
     const f = TimelineEngine.derive(ev);
     expect(f.pulses.filter((p) => p.kind === "same")).toHaveLength(0);
+  });
+
+  it("explicit units (csv grammar): loser units oppose each other", () => {
+    // triple threat 'p:1' def. 'p:2, p:3' — p:2 × p:3 is genuine opposition
+    const ev = mkEvent({ form: "multi_way", w: ["p:1"], l: ["p:2", "p:3"], lu: [["p:2"], ["p:3"]] });
+    const v = model.filterFromRecords(baseFilters, [ev]);
+    expect([...v.visible]).toContain(1); // p:2|p:3 edge receives an opposed obs
+    const f = TimelineEngine.derive(ev);
+    const opposedPairs = f.pulses.filter((p) => p.kind === "opposed").map((p) => `${p.a}|${p.b}`);
+    expect(opposedPairs).toContain("p:2|p:3");
+  });
+
+  it("explicit team units in multi-ways get partner obs; collapsed blobs never do", () => {
+    const explicit = mkEvent({
+      form: "multi_way",
+      w: ["p:1", "p:2"],
+      l: ["p:3", "p:4"],
+      lu: [["p:3"], ["p:4"]],
+    });
+    const fExplicit = TimelineEngine.derive(explicit);
+    // winner side is a decisive single unit -> partners; loser singleton units -> none
+    expect(fExplicit.pulses.filter((p) => p.kind === "same")).toHaveLength(1);
+    const collapsed = mkEvent({ form: "multi_way", w: ["p:1"], l: ["p:2", "p:3"] });
+    const fCollapsed = TimelineEngine.derive(collapsed);
+    expect(fCollapsed.pulses.filter((p) => p.kind === "same")).toHaveLength(0);
+  });
+
+  it("promotions without a named bit fall back to the manifest other-bit", () => {
+    const m2 = { ...manifest, promo_other_bit: 30 } as typeof manifest;
+    const model2 = new GraphModel(nodes, edges, m2);
+    const ev = mkEvent({ pr: "pr:c400" }); // unknown promotion
+    const withOther = model2.filterFromRecords({ ...baseFilters, promoMask: 0x7fffffff }, [ev]);
+    expect([...withOther.visible]).toContain(0);
+    const withoutOther = model2.filterFromRecords(
+      { ...baseFilters, promoMask: 0x7fffffff & ~(1 << 30) },
+      [ev],
+    );
+    expect([...withoutOther.visible]).not.toContain(0);
   });
 });

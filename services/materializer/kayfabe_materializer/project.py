@@ -1,16 +1,25 @@
-"""Projection B — person encounters (encounters@1).
+"""Projection B — person encounters (encounters@2).
 
-Derivation rules (docs/CANONICAL-MODEL.md, correctness-critical):
-  * Opposed: winner-side members x loser-side members — always derived,
-    EXCEPT battle_royal which yields brOpposed ('br') instead.
-  * Same-side (partner): within a side ONLY when the side is a genuine team:
-      - tag_team / team_implied: both sides;
-      - multi_way: ONLY the winner side, and only when the result is decisive
-        (a real team that won together). NEVER within the collapsed loser
-        group — neither partner nor opposed pairs are derived there.
-      - battle_royal: no partner observations at all.
-  * x:unknown members never produce observations (they are absent from the
-    resolved member lists; has_unknown flags the side).
+Derivation rules (docs/CANONICAL-MODEL.md, correctness-critical). A side is a
+list of UNITS (each unit a list of member ids). Sources without unit grammar
+(the sqlite corpus: '&'-collapsed side rows) contribute exactly one unit per
+side, for which @2 reduces to the @1 rules verbatim.
+
+  * battle_royal: brOpposed ('br') winner-side x loser-side only. No partner
+    observations, no within-side opposition (quadratic blowup is documented
+    as a low-weight class, never a rivalry claim).
+  * multi_way: opposed between every pair of DISTINCT units, including units
+    on the same listed side (a triple threat's two listed losers opposed each
+    other too). Partners within a unit only when the unit is genuine:
+      - its side carries >= 2 explicit units (comma grammar proved the
+        separation), or
+      - it is the whole winner side of a decisive result (@1 rule: the team
+        that genuinely won together).
+    A single-unit multi-way loser side is a COLLAPSED group: nothing is
+    derived within it (neither partner nor opposed pairs).
+  * tag_team / team_implied: opposed across sides, partners within each unit.
+  * x:unknown members never produce observations; a person listed on both
+    sides (source corruption) is dropped from the match and ledgered.
 Every observation carries its match id; aggregated pair edges carry the full
 supporting evidence list.
 """
@@ -30,10 +39,16 @@ def _within_pairs(n: int) -> int:
     return n * (n - 1) // 2
 
 
-def derive_observations(form: str, kind: str, side_w: list[str], side_l: list[str]):
-    """Derive pair observations for one canonical match.
+def derive_observations(
+    form: str,
+    kind: str,
+    units_w: list[list[str]],
+    units_l: list[list[str]],
+):
+    """Derive pair observations for one canonical match (encounters@2).
 
-    side_w / side_l: resolved member id lists (x:unknown already excluded).
+    units_w / units_l: per side, lists of units of resolved member ids
+    (x:unknown already excluded). Single-unit sides reproduce encounters@1.
     Returns (obs, suppressed):
       obs        : list of (rel, a, b) with a < b lexicographically
       suppressed : dict of suppression counters
@@ -46,42 +61,72 @@ def derive_observations(form: str, kind: str, side_w: list[str], side_l: list[st
         "dual_side_members_suppressed": 0,
     }
 
-    # Source corruption: the same person listed on both sides (15 matches in the
-    # audited corpus). Deriving anything for them would assert same-side AND
-    # opposed in one match — drop the person from this match entirely instead.
+    side_w = [m for u in units_w for m in u]
+    side_l = [m for u in units_l for m in u]
+
+    # Source corruption: the same person listed on both sides. Deriving
+    # anything for them would assert same-side AND opposed in one match —
+    # drop the person from this match entirely instead.
     dual = set(side_w) & set(side_l)
     if dual:
         sup["dual_side_members_suppressed"] = len(dual)
-        side_w = [m for m in side_w if m not in dual]
-        side_l = [m for m in side_l if m not in dual]
+        units_w = [[m for m in u if m not in dual] for u in units_w]
+        units_l = [[m for m in u if m not in dual] for u in units_l]
+        units_w = [u for u in units_w if u]
+        units_l = [u for u in units_l if u]
+        side_w = [m for u in units_w for m in u]
+        side_l = [m for u in units_l for m in u]
 
-    cross_rel = REL_BR if form == "battle_royal" else REL_OPPOSED
-    for a in side_w:
-        for b in side_l:
-            obs.append((cross_rel, a, b) if a < b else (cross_rel, b, a))
+    def emit(rel: str, a: str, b: str) -> None:
+        if a != b:
+            obs.append((rel, a, b) if a < b else (rel, b, a))
 
-    def partners(side: list[str]) -> None:
-        for i in range(len(side)):
-            for j in range(i + 1, len(side)):
-                a, b = side[i], side[j]
-                obs.append((REL_SAME, a, b) if a < b else (REL_SAME, b, a))
+    def partners(unit: list[str]) -> None:
+        for i in range(len(unit)):
+            for j in range(i + 1, len(unit)):
+                emit(REL_SAME, unit[i], unit[j])
 
-    if form in _TEAM_FORMS:
-        partners(side_w)
-        partners(side_l)
-    elif form == "multi_way":
-        if kind == "decisive":
-            partners(side_w)  # the side that genuinely won together
-            sup["multiway_loser_pairs_suppressed"] += _within_pairs(len(side_l))
-        else:
-            # no winner side exists: both rows may be collapsed groups
-            sup["multiway_draw_pairs_suppressed"] += _within_pairs(len(side_w))
-            sup["multiway_draw_pairs_suppressed"] += _within_pairs(len(side_l))
-    elif form == "battle_royal":
+    if form == "battle_royal":
+        for a in side_w:
+            for b in side_l:
+                emit(REL_BR, a, b)
         sup["battle_royal_partner_pairs_suppressed"] += _within_pairs(len(side_w))
         sup["battle_royal_partner_pairs_suppressed"] += _within_pairs(len(side_l))
-    # singles / unknown: sides are size-1 -> nothing to derive within sides
+        return obs, sup
 
+    if form == "multi_way":
+        # opposed between every pair of distinct units, both across and
+        # within listed sides (all units competed against each other)
+        units_all = units_w + units_l
+        for i in range(len(units_all)):
+            for j in range(i + 1, len(units_all)):
+                for a in units_all[i]:
+                    for b in units_all[j]:
+                        emit(REL_OPPOSED, a, b)
+        counter = (
+            "multiway_loser_pairs_suppressed"
+            if kind == "decisive"
+            else "multiway_draw_pairs_suppressed"
+        )
+        for side_units, is_winner in ((units_w, True), (units_l, False)):
+            explicit = len(side_units) >= 2
+            for u in side_units:
+                if explicit or (is_winner and kind == "decisive"):
+                    partners(u)
+                else:
+                    sup[counter] += _within_pairs(len(u))
+        return obs, sup
+
+    # singles / tag_team / team_implied / unknown: opposed across sides,
+    # partners within each unit of a genuine team form
+    for a in side_w:
+        for b in side_l:
+            emit(REL_OPPOSED, a, b)
+    if form in _TEAM_FORMS:
+        for u in units_w:
+            partners(u)
+        for u in units_l:
+            partners(u)
     return obs, sup
 
 
@@ -107,13 +152,13 @@ class PairAggregator:
 
     def add_match(self, rec: dict) -> None:
         """Derive + fold in all observations for one canonical match record."""
-        side_w = rec["sides"][0]["members"]
-        side_l = rec["sides"][1]["members"]
-        obs, sup = derive_observations(rec["form"], rec["kind"], side_w, side_l)
+        units_w = rec["sides"][0]["units"]
+        units_l = rec["sides"][1]["units"]
+        obs, sup = derive_observations(rec["form"], rec["kind"], units_w, units_l)
         for k, v in sup.items():
             self.counters[k] += v
         if sup["dual_side_members_suppressed"]:
-            self.dual_side_match_ids.append(rec["id"])
+            self.dual_side_match_ids.append(str(rec["id"]))
         if not obs:
             return
 
@@ -121,7 +166,8 @@ class PairAggregator:
         form_bit = 1 << FORM_BITS[form]
         title_first = rec["title_components"][0] if rec["title_components"] else None
         day = rec["day"]
-        mid = rec["id"]
+        mid = str(rec["id"])
+        mr = rec.get("_mr")
         c = self.counters
         for rel, a, b in obs:
             c["observations_total"] += 1
@@ -170,14 +216,15 @@ class PairAggregator:
                 (
                     rec["date"],
                     mid,
-                    rec["card_id"],
-                    rec["promotion_id"],
+                    str(rec["card_id"]),
+                    str(rec["promotion_id"]),
                     rel,
                     form,
                     rec["res"],
                     rec["fin"],
                     title_first,
                     rec["title_change"],
+                    mr,
                 )
             )
 

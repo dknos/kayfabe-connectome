@@ -30,3 +30,29 @@ Honest boundaries of what is built. None are silent; the UI states them where re
   arbitrary background fibers are selected via dossier link lists instead.
 - **Quality cap** may hide thinnest fibers on weak hardware — always disclosed
   in the filter panel with the exact hidden count.
+
+## CSV corpus (csv_initial_matches) limitations
+
+- **No title-change data.** The csv records that a match was for a
+  championship but not whether it changed hands. Reigns, lineages, and gold
+  pulses therefore exist only for the six local_sql promotions. Championship
+  dossiers for csv titles say so explicitly instead of guessing.
+- **Cross-promotion identity is exact-name.** A ring name shared by different
+  humans across 571 promotions (masked lucha lineages especially) will merge
+  into one node; a person billed under different spellings splits. Same rule
+  as v1, wider blast radius. Every csv-only person carries resolution class 2
+  and its exact source name in the dossier.
+- **1,638 family csv rows excluded** (crosswalk misses; ledgered in
+  reconciliation/decisions.json). 919 are date-shifted twins; ~231 appear to
+  be house-show cards local_sql genuinely lacks — those are real matches the
+  atlas currently omits rather than risk double-counting.
+- **Small promotions share one filter bit.** Only the six family promotions
+  plus the top-24 csv promotions have individual filter bits; the remaining
+  541 share "Other promotions". Their records, evidence and dossiers are
+  complete — only one-click mask filtering is coarse.
+- **csv ends 2024-09; local_sql continues to 2026-01.** Global (non-WWE)
+  coverage stops at the csv boundary; the atlas shows this honestly in the
+  density histogram rather than padding.
+- **~84 csv matches list a person on both sides** (source corruption): the
+  person is dropped from that match and the match id ledgered, mirroring the
+  9 local_sql cases.

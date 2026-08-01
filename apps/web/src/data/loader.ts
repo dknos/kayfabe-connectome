@@ -7,6 +7,7 @@ import type {
   Manifest,
   NodesColumnar,
   PeopleBucket,
+  PromotionsFile,
   SearchEntity,
   TimelineEvent,
 } from "@kayfabe/graph-contract";
@@ -43,6 +44,7 @@ export interface CoreData {
   communities: CommunitiesFile;
   density: DensityFile;
   search: SearchEntity[];
+  promotions: PromotionsFile;
 }
 
 export async function loadCore(onProgress: (frac: number, what: string) => void): Promise<CoreData> {
@@ -73,12 +75,16 @@ export async function loadCore(onProgress: (frac: number, what: string) => void)
 
   onProgress(0.7, "communities");
   const communities = await getJSON<CommunitiesFile>("graph/communities.json");
+  onProgress(0.75, "promotions");
+  const promotions = await getJSON<PromotionsFile>("graph/promotions.json").catch(
+    () => ({}) as PromotionsFile,
+  );
   onProgress(0.8, "timeline density");
   const density = await getJSON<DensityFile>("timeline/density.json");
   onProgress(0.9, "search index");
   const search = await getJSON<SearchEntity[]>("search/entities.json");
   onProgress(1, "ready");
-  return { manifest, nodes, edges, communities, density, search };
+  return { manifest, nodes, edges, communities, density, search, promotions };
 }
 
 /* ---------- lazy caches ---------- */

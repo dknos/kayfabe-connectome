@@ -1,3 +1,4 @@
+import { dayToDate } from "@kayfabe/graph-contract";
 import { useMemo, useState } from "react";
 import { useStore } from "../state/store";
 
@@ -38,7 +39,7 @@ export function TableView() {
 
   if (!model) return null;
   const fmt = (day: number) =>
-    day < 0 ? "—" : new Date(Date.UTC(1950, 0, 1) + day * 86400000).toISOString().slice(0, 4);
+    day < 0 ? "—" : dayToDate(day).toISOString().slice(0, 4);
   const header = (key: SortKey, label: string) => (
     <th
       scope="col"

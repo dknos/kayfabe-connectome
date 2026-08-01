@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ChampionshipsFile, EvidenceEntry, PersonDossier } from "@kayfabe/graph-contract";
-import { pairKey } from "@kayfabe/graph-contract";
+import { dayToDate, pairKey } from "@kayfabe/graph-contract";
 import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
 import { EF } from "../graph/model";
 import { isoToDay, useStore } from "../state/store";
@@ -28,6 +28,7 @@ function useActions() {
 
 function NodeDossier({ id }: { id: string }) {
   const model = useStore((s) => s.model)!;
+  const core = useStore((s) => s.core);
   const select = useStore((s) => s.select);
   const { focus, togglePin, pinned, setPathEndpoint } = useActions();
   const i = model.indexOfId.get(id);
@@ -47,7 +48,8 @@ function NodeDossier({ id }: { id: string }) {
   if (i === undefined) return <div className="error-note">Unknown entity {id}.</div>;
   const name = model.nodes.name[i]!;
   const resolution = model.nodes.resolution[i]!;
-  const promoName = (pid: string) => model.nodes.name[model.indexOfId.get(pid) ?? -1] ?? pid;
+  const promoName = (pid: string) =>
+    model.nodes.name[model.indexOfId.get(pid) ?? -1] ?? core?.promotions[pid]?.n ?? pid;
 
   const openPair = (otherId: string) => {
     const other = model.indexOfId.get(otherId);
@@ -149,7 +151,7 @@ function NodeDossier({ id }: { id: string }) {
             </div>
           )}
           <div className="micro" style={{ marginTop: 8 }}>
-            source: local SQL corpus · record {JSON.stringify(dossier.src)}
+            source record: {JSON.stringify(dossier.src)}
           </div>
         </>
       )}
@@ -164,6 +166,12 @@ function NodeDossier({ id }: { id: string }) {
               <span className="micro">{r.e ?? "open"}</span>
             </div>
           ))}
+          {champs[id]!.reigns.length === 0 && (
+            <div className="derivation-note">
+              The csv source records title matches but carries no title-change flag — reigns are
+              not derived for this championship rather than guessed.
+            </div>
+          )}
           {champs[id]!.artifact && (
             <div className="derivation-note">
               This belt name is a concatenation artifact in the source; records kept unsplit rather than guessed.
@@ -242,15 +250,19 @@ function EdgeDossier({ edge }: { edge: number }) {
               </span>{" "}
               {e.form.replace("_", " ")} · {e.res}
               {e.t && <span className="gold-tag"> · title{e.tc ? " CHANGE" : ""}</span>}
+              {e.mr !== undefined && (
+                <span className="gold-tag" title={`Meltzer rating ${e.mr}`}> · {stars(e.mr)}</span>
+              )}
             </span>
             <span className="micro">{e.m}</span>
           </button>
         ))}
       </div>
       <div className="derivation-note">
-        Derived per encounters@1: opposed = across sides; same-side only within genuine team
-        sides (never within multi-way loser groups); battle-royal opposition tracked separately
-        and never presented as rivalry. Every row above is a source match record.
+        Derived per encounters@2: opposed = across competitive units; same-side only within
+        genuine teams (never within multi-way loser groups collapsed by the source); battle-royal
+        opposition tracked separately and never presented as rivalry. Every row above is a source
+        match record.
       </div>
     </>
   );
@@ -258,6 +270,14 @@ function EdgeDossier({ edge }: { edge: number }) {
 
 const fmt = (day: number): string => {
   if (day < 0) return "—";
-  const d = new Date(Date.UTC(1950, 0, 1) + day * 86400000);
-  return d.toISOString().slice(0, 10);
+  return dayToDate(day).toISOString().slice(0, 10);
+};
+
+/** Meltzer star rating: 4.75 -> '★★★★¾' */
+export const stars = (mr: number): string => {
+  if (mr < 0) return `−★`;
+  const whole = Math.floor(mr);
+  const frac = mr - whole;
+  const q = frac >= 0.75 ? "¾" : frac >= 0.5 ? "½" : frac >= 0.25 ? "¼" : "";
+  return "★".repeat(whole) + q || "0★";
 };
