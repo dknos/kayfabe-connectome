@@ -267,20 +267,6 @@ y + 4, Z.ruler, `Championships`, PRIORITY.header + 10, "gold", {
         });
       }
       if (t.lineage === "derived") derivable++;
-      // Reign boundaries, where the source records them at all.
-      if (t.changes > 0) {
-        quads.push({
-          key: `tchg:${t.t}`,
-          x: axis.x((t.firstDay + t.lastDay) / 2),
-          y: cy + TITLE_PITCH * 0.3,
-          z: Z.reign,
-          w: 0,
-          h: 0,
-          color: rgb(A.gold),
-          alpha: 0,
-          kind: QK.TICK,
-        });
-      }
       const caveats: string[] = [];
       if (t.lineage === "no-changes") caveats.push("no title-change records in this source");
       else caveats.push(`${t.reigns} documented reigns · ${t.holders} holders`);

@@ -23,7 +23,11 @@ export function AtlasCanvas({ engine }: { engine: TimelineEngine }) {
   const controls = useAtlas((s) => s.controls);
   const fitToken = useAtlas((s) => s.fitToken);
   const flashId = useAtlas((s) => s.flashId);
+  const sheet = useAtlas((s) => s.sheet);
   const reducedMotion = useStore((s) => s.reducedMotion);
+  /** Re-applies the chrome insets; owned by the create effect, called by the
+   *  sheet effect below so opening a panel reframes the board. */
+  const insetRef = useRef<(() => void) | null>(null);
 
   /* ---------- create / destroy ---------- */
   useEffect(() => {
@@ -70,12 +74,19 @@ export function AtlasCanvas({ engine }: { engine: TimelineEngine }) {
     };
     r.start();
 
-    // Pinned lane names have to clear the floating controls rail. On a narrow
-    // viewport that rail is a bottom sheet, so the board owns the left edge.
+    // Chrome insets. Pinned lane names have to clear the floating controls
+    // rail on a desktop; on a phone that rail is a bottom sheet, so the board
+    // owns the left edge but loses the bottom of the canvas instead — and the
+    // camera has to frame into what is left rather than behind the sheet.
     const setInset = () => {
-      r.labels.setPinInset(window.innerWidth > 820 ? 316 : 8);
+      const narrow = window.innerWidth <= 820;
+      r.labels.setPinInset(narrow ? 8 : 316);
+      const sheet = useAtlas.getState().sheet;
+      const host = canvas.clientHeight;
+      r.cam.setBottomInset(narrow && sheet !== "hidden" ? host * 0.5 : narrow ? host * 0.06 : 0);
     };
     setInset();
+    insetRef.current = setInset;
 
     const onResize = () => {
       r.resize();
@@ -165,6 +176,16 @@ export function AtlasCanvas({ engine }: { engine: TimelineEngine }) {
       markCameraTouched(false);
     }
   }, [fitToken]);
+  // Opening or closing a bottom sheet changes how much board is visible, so
+  // the framing has to follow it.
+  useEffect(() => {
+    insetRef.current?.();
+    const r = rendererRef.current;
+    if (r && window.innerWidth <= 820) {
+      r.fitScene(useStore.getState().reducedMotion ? 0 : 0.45);
+      markCameraTouched(false);
+    }
+  }, [sheet]);
   useEffect(() => {
     if (!flashId) return;
     const r = rendererRef.current;

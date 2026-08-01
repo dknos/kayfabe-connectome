@@ -679,13 +679,29 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   background: var(--panel-bg); border: 1px solid var(--stroke); border-radius: var(--radius);
 }
 
+.atlas-sheet-tabs {
+  /* Desktop shows both rails at once; the tab bar is a narrow-viewport
+     affordance and the media query below switches it on. */
+  display: none;
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 26;
+  gap: 6px; padding: 6px 10px;
+  background: var(--surface); border-top: 1px solid var(--stroke);
+}
+.atlas-sheet-tabs button { flex: 1; }
+
 /* Mobile: the board is the point, so the rails become one bottom sheet at a
    time and the controls collapse. Hover is never required — every affordance
    here is reachable by tap. */
 @media (max-width: 820px) {
+  /* The connectome hides its left rail outright below 900px. ATLAS needs it
+     back — grouping, sorting and the thresholds are how the board is read at
+     all — so it is restored here and the sheet rules below decide which single
+     rail is up. Without this the Controls tab switched state and revealed
+     nothing, because a rule 400 lines earlier was still hiding the rail. */
+  .app[data-lens="atlas"] .rail.left { display: flex; }
   .app[data-lens="atlas"] .atlas-rail {
-    position: absolute; left: 0; right: 0; bottom: 0; top: auto;
-    width: 100%; max-height: 46vh; overflow-y: auto;
+    position: absolute; left: 0; right: 0; bottom: 38px; top: auto;
+    width: 100%; max-height: 44vh; overflow-y: auto;
     border-top: 1px solid var(--stroke-bright);
     background: var(--panel-bg); backdrop-filter: var(--panel-blur);
   }
@@ -699,10 +715,3 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   .atlas-minimap canvas { height: 120px; }
   .atlas-sheet-tabs { display: flex; }
 }
-.atlas-sheet-tabs {
-  display: none;
-  position: absolute; bottom: 0; left: 0; right: 0; z-index: 26;
-  gap: 6px; padding: 6px 10px;
-  background: var(--surface); border-top: 1px solid var(--stroke);
-}
-.atlas-sheet-tabs button { flex: 1; }

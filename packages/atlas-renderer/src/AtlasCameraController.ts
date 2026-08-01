@@ -245,6 +245,19 @@ export class AtlasCameraController {
     }
   }
 
+  /**
+   * Pixels of the canvas hidden behind chrome at the bottom.
+   *
+   * On a phone the bottom sheet covers half the canvas, and a fit that centres
+   * content in the CANVAS centres it behind the sheet. The camera has to know
+   * which part of its own viewport the reader can actually see.
+   */
+  private bottomInsetPx = 0;
+
+  setBottomInset(px: number): void {
+    this.bottomInsetPx = Math.max(0, Math.min(px, this.pxH * 0.8));
+  }
+
   /** Frame a world rectangle with padding, as a fraction of the shorter side. */
   fit(
     b: { minX: number; maxX: number; minY: number; maxY: number },
@@ -253,12 +266,19 @@ export class AtlasCameraController {
   ): void {
     const w = Math.max(1e-3, b.maxX - b.minX);
     const h = Math.max(1e-3, b.maxY - b.minY);
-    const half = Math.max(h / 2, w / 2 / Math.max(0.2, this.aspect)) * (1 + pad * 2);
+    // Grow the frame so the content fits the UNOCCLUDED band, not the canvas.
+    const visible = Math.max(0.2, (this.pxH - this.bottomInsetPx) / this.pxH);
+    const half =
+      Math.max(h / 2 / visible, w / 2 / Math.max(0.2, this.aspect)) * (1 + pad * 2);
+    const clamped = THREE.MathUtils.clamp(half, this.minHalf, this.maxHalf);
+    // …then push the centre down by half the occluded height, so the content
+    // lands in the middle of what can be seen.
+    const worldPerPx = (clamped * 2) / this.pxH;
     this.flyTo(
       {
         cx: (b.minX + b.maxX) / 2,
-        cy: (b.minY + b.maxY) / 2,
-        half: THREE.MathUtils.clamp(half, this.minHalf, this.maxHalf),
+        cy: (b.minY + b.maxY) / 2 - (this.bottomInsetPx / 2) * worldPerPx,
+        half: clamped,
       },
       durationS,
     );

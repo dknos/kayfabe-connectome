@@ -9,6 +9,37 @@ import { useAtlas, semanticStateOf } from "./atlasStore";
 import { applyPendingAtlasUrl } from "./atlasUrl";
 
 /**
+ * Bottom-sheet switcher for narrow viewports.
+ *
+ * Only one rail at a time on a phone: two stacked sheets bury the board and
+ * each other. Hidden is a real option, because the whole point of the lens is
+ * the board.
+ */
+function AtlasSheetTabs() {
+  const sheet = useAtlas((s) => s.sheet);
+  const setSheet = useAtlas((s) => s.setSheet);
+  const options = [
+    { id: "controls", label: "Controls" },
+    { id: "inspector", label: "Details" },
+    { id: "hidden", label: "Board only" },
+  ] as const;
+  return (
+    <div className="atlas-sheet-tabs" role="group" aria-label="Atlas panels">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          className={sheet === o.id ? "active" : ""}
+          aria-pressed={sheet === o.id}
+          onClick={() => setSheet(o.id)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * The ATLAS lens.
  *
  * Mounted only while the lens is active; the renderer it owns is created on
@@ -122,6 +153,7 @@ export function AtlasLens({ engine }: { engine: TimelineEngine }) {
       <AtlasBreadcrumbs />
       <AtlasControls />
       <AtlasInspector />
+      <AtlasSheetTabs />
       {(loading || !data) && !error && (
         <div className="atlas-boot micro" role="status">loading the atlas projection…</div>
       )}

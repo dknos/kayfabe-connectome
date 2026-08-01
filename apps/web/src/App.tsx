@@ -17,6 +17,7 @@ import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
 import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
 import { scheduler, useGeo } from "./geo/geoStore";
 import { AtlasLens } from "./atlas/AtlasLens";
+import { useAtlas } from "./atlas/atlasStore";
 import { installAtlasUrl } from "./atlas/atlasUrl";
 
 export function App() {
@@ -52,6 +53,7 @@ export function App() {
   // never opens GEO never pays for 16 MB of geographic data.
   const geoActive = lens === "geo" || lens === "geoTable";
   const geoSheet = useGeo((s) => s.sheet);
+  const atlasSheet = useAtlas((s) => s.sheet);
   useEffect(() => {
     if (!geoActive) return;
     void useGeo.getState().boot().then(() => applyPendingGeoUrl());
@@ -162,7 +164,7 @@ export function App() {
   }
 
   return (
-    <div className="app" data-lens={lens} data-geo-sheet={geoSheet}>
+    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-atlas-sheet={atlasSheet}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}

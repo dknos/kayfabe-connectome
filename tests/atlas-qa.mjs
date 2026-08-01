@@ -64,8 +64,19 @@ await page.waitForTimeout(1400);
 console.log("dense:", JSON.stringify(await probe()));
 await shot("2-dense-group");
 
+// On a narrow viewport the controls live behind a bottom-sheet tab.
+const openControls = async () => {
+  const tab = page.getByRole("button", { name: "Controls", exact: true });
+  if (await tab.isVisible().catch(() => false)) await tab.click();
+};
+await openControls();
 await page.getByRole("button", { name: "Fit view" }).click();
 await page.waitForTimeout(1200);
+if (process.env.QA_MOBILE) {
+  await shot("2b-controls-sheet");
+  await page.getByRole("button", { name: "Details", exact: true }).click();
+  await page.waitForTimeout(400);
+}
 
 // search a promotion -> should centre + flash its lane
 await page.getByRole("combobox", { name: /Search/ }).fill("WWE");

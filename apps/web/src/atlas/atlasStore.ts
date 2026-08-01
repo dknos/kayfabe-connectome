@@ -110,7 +110,9 @@ export const useAtlas = create<AtlasStore>((set, get) => ({
   labelWanted: 0,
   tier: "high",
   camera: null,
-  sheet: "hidden",
+  // Narrow viewports open on the inspector: the mobile flow is search, tap,
+  // read, and the inspector is what answers "what did I just select".
+  sheet: "inspector",
   pendingCamera: null,
   fitToken: 0,
   flashId: null,
