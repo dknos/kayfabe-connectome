@@ -225,7 +225,12 @@ export class CameraController {
     // Normalised: holding W+A must not travel √2 faster than W alone.
     this.vMove.normalize();
 
-    const speed = this.sph.radius * (this.boost ? 2.6 : 0.9);
+    // Speed is capped against the GRAPH's scale, not the orbit radius alone.
+    // Scaling purely with radius meant a single 0.7 s press at the default
+    // framing travelled 1.8 units through a corpus that is 2 units across —
+    // you left the tissue before you saw it. The radius term survives so that
+    // flying stays fine-grained once you are inside a lobe.
+    const speed = Math.min(this.sph.radius, 1.1) * (this.boost ? 1.9 : 0.62);
     this.target.addScaledVector(this.vMove, speed * dt);
     // Stay inside the dolly clamp's world: flying far outside the graph and
     // then scrolling would otherwise strand the reader in empty space.

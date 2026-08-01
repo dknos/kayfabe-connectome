@@ -5,25 +5,29 @@ import { EF, type FilteredView, type GraphModel } from "../graph/model";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
 
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
-
 /**
- * Top promotion anchors by corpus weight, computed once per model.
+ * The map tier: the twelve heaviest promotion anchors then the highest-degree
+ * people, computed ONCE per corpus.
  *
- * All 165 anchors would eat the whole label budget, and the ordering never
+ * All 165 anchors would eat the whole label budget, and neither ranking
  * changes — re-sorting 30,000 nodes on the 140 ms label cadence (which is what
  * this replaced) was pure waste.
  */
-function makeTopPromos(): (m: GraphModel) => number[] {
+function makeAtlasTier(): (m: GraphModel) => number[] {
   let key: GraphModel | null = null;
   let val: number[] = [];
   return (m: GraphModel): number[] => {
     if (m === key) return val;
     const promos: number[] = [];
-    for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 1) promos.push(i);
+    const people: number[] = [];
+    for (let i = 0; i < m.nodes.count; i++) {
+      if (m.nodes.type[i] === 1) promos.push(i);
+      else if (m.nodes.type[i] === 0) people.push(i);
+    }
     promos.sort((a, b) => m.nodes.matches[b]! - m.nodes.matches[a]! || a - b);
+    people.sort((a, b) => m.nodes.degree[b]! - m.nodes.degree[a]! || a - b);
     key = m;
-    val = promos.slice(0, 12);
+    val = [...promos.slice(0, 12), ...people.slice(0, 60)];
     return val;
   };
 }
@@ -335,7 +339,7 @@ export function StageCanvas({
   // strip is re-attached on every rebuild.
   const probeRef = useRef<number | null>(null);
   const labelEls = useRef(new Map<number, HTMLDivElement>());
-  const topPromoRef = useRef(makeTopPromos());
+  const atlasTierRef = useRef(makeAtlasTier());
   useEffect(() => {
     /** The documented relationship between the current selection and one other
      * node, in the fiber palette's own terms. Hovering a name while someone is
@@ -489,30 +493,28 @@ export function StageCanvas({
       } else {
         // Ambient tier, in two parts.
         //
-        // 1. The largest promotion anchors, always. They are what makes the
-        //    fit-all view readable as a map rather than a nebula, and they do
-        //    not change, so the ranking is computed once per corpus instead of
-        //    re-sorting 30,000 nodes seven times a second.
-        for (const i of topPromoRef.current(m)) {
+        // 1. The map tier: the largest promotion anchors and the highest-degree
+        //    people. Fixed, and what makes the fit-all view readable as a map
+        //    rather than a nebula. The ranking never changes, so it is computed
+        //    once per corpus instead of re-sorting 30,000 nodes seven times a
+        //    second, which is what this replaced.
+        for (const i of atlasTierRef.current(m)) {
           if (wanted.length >= cap) break;
           if (seen.has(i)) continue;
           seen.add(i);
-          wanted.push({ i, cls: "dim", t: 0.6 });
+          wanted.push({ i, cls: "dim", t: 1 });
         }
-        // 2. Whatever the camera is currently among. Flying into the tissue
-        //    should resolve the names around you out of it — a fixed global
-        //    top-degree list shows the same sixty people no matter where you
-        //    are, which is the opposite of exploring.
-        const dist = r.cameraDistance;
-        // Shell tracks the framing: at fit-all it spans the corpus and the
-        // collision grid does the thinning; flown in close it tightens to the
-        // neighbourhood you are actually inside.
-        const shell = Math.max(0.16, 0.46 * dist + 0.06);
-        // The budget grows as you descend. 26 labels reads as a constellation
-        // from outside and as a desert once you are standing in a lobe.
-        const zoomIn = clamp01((2.6 - dist) / 2.1);
-        const budget = Math.round(cap * (1 + 2.4 * zoomIn));
-        for (const { i, t } of r.nearestNodes(shell, budget * 3)) {
+        // 2. The proximity tier: whatever the camera is actually among.
+        //
+        //    An ABSOLUTE reveal radius, because "light up as I get closer" is a
+        //    claim about distance, not about rank. At the default framing the
+        //    camera sits 1.8 units off the near surface of a corpus 1 unit in
+        //    radius, so nothing qualifies and the view is exactly the map tier
+        //    it has always been. Fly or zoom in and names resolve out of the
+        //    tissue as they enter the shell, brightest nearest.
+        const reveal = Math.min(1.25, Math.max(0.26, 0.6 * r.cameraDistance));
+        const budget = cap + 60;
+        for (const { i, t } of r.nearestNodes(reveal, 160)) {
           if (wanted.length >= budget) break;
           if (seen.has(i)) continue;
           seen.add(i);

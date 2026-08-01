@@ -165,6 +165,9 @@ export class ConnectomeRenderer {
    */
   private active = true;
   private onVisibility: () => void;
+  /** Scratch for nearestNodes — see the note there. */
+  private nnDist = new Float32Array(0);
+  private nnBins = new Uint32Array(64);
 
   /** edges dropped by the quality cap on the last rebuild — surfaced, never silent */
   droppedEdges = 0;
@@ -567,22 +570,60 @@ export class ConnectomeRenderer {
     limit: number,
     accept?: (i: number) => boolean,
   ): { i: number; t: number }[] {
+    const n = this.g.count;
+    if (this.nnDist.length !== n) this.nnDist = new Float32Array(n);
+    const d = this.nnDist;
+    const bins = this.nnBins;
+    bins.fill(0);
     const cam = this.cameraCtl.camera.position;
     const r2 = radius * radius;
-    const out: { i: number; t: number }[] = [];
     const p = this.posArr;
-    for (let i = 0; i < this.g.count; i++) {
-      if (this.nodes.emphasis[i]! < 0.05) continue; // hidden by isolate/time
+    const em = this.nodes.emphasis;
+    const B = bins.length;
+
+    // Pass 1: squared distances into a reusable buffer plus a coarse histogram.
+    // No allocation, because a shell drawn anywhere inside this corpus holds
+    // tens of thousands of nodes and building an object per candidate every
+    // 140 ms is pure GC churn.
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      d[i] = -1;
+      if (em[i]! < 0.05) continue; // hidden by isolate / time visibility
       if (accept && !accept(i)) continue;
       const dx = p[i * 3]! - cam.x;
       const dy = p[i * 3 + 1]! - cam.y;
       const dz = p[i * 3 + 2]! - cam.z;
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 > r2) continue;
-      out.push({ i, t: 1 - Math.sqrt(d2) / radius });
+      d[i] = d2;
+      let b = ((d2 / r2) * B) | 0;
+      if (b >= B) b = B - 1;
+      bins[b]!++;
+      total++;
+    }
+    if (!total) return [];
+
+    // Pass 2: only the bins that can contain the `limit` nearest are
+    // materialised, so the sort runs over hundreds rather than tens of
+    // thousands and the answer is identical.
+    let cum = 0;
+    let cutoff = B - 1;
+    for (let b = 0; b < B; b++) {
+      cum += bins[b]!;
+      if (cum >= limit) {
+        cutoff = b;
+        break;
+      }
+    }
+    const cutD2 = ((cutoff + 1) / B) * r2;
+    const out: { i: number; t: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      const v = d[i]!;
+      if (v < 0 || v > cutD2) continue;
+      out.push({ i, t: 1 - Math.sqrt(v) / radius });
     }
     // Ties broken by index so the ranking is stable frame to frame — an
-    // unstable sort here makes labels flicker between equidistant nodes.
+    // unstable order makes labels flicker between equidistant nodes.
     out.sort((a, b) => b.t - a.t || a.i - b.i);
     return out.length > limit ? out.slice(0, limit) : out;
   }
