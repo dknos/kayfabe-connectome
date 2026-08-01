@@ -1,0 +1,9 @@
+location_key,resolution,geonames_id,display_name,city,admin1,country,country_code,latitude,longitude,precision,note
+# Reviewed verdicts, highest precedence in the ladder. One row per source
+# location key (see geo_source.sql_location_key / csv_location_key).
+# Either name a geonames_id, or carry latitude+longitude directly for a place
+# below the gazetteer's population floor. resolution=rejected marks a string
+# that names no place at all.
+csv:Unknown Arena|Charlestown,confirmed,4255704,,,,,,,,IWA Mid-South and OVW ran Charlestown, Indiana
+csv:American Legion Post #335|Charlestown,confirmed,4255704,,,,,,,,IWA Mid-South ran Charlestown, Indiana
+csv:Unknown Arena|Princeton,confirmed,4819079,,,,,,,,Smoky Mountain territory; Princeton, West Virginia

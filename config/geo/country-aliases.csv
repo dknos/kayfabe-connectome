@@ -1,0 +1,20 @@
+alias,country_code,note
+# Country names appearing in the region slot of a "City, Region" source string.
+# The gazetteer's own country table is consulted first; this patches spellings
+# and short forms it does not carry.
+USA,US,
+U.S.A.,US,
+United States of America,US,
+UK,GB,
+U.K.,GB,
+Great Britain,GB,
+Holland,NL,
+The Netherlands,NL,
+South Korea,KR,
+North Korea,KP,
+Russia,RU,
+Czech Republic,CZ,
+Czechia,CZ,
+UAE,AE,
+Republic of Ireland,IE,
+Eire,IE,

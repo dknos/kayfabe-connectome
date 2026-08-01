@@ -158,6 +158,15 @@ def merge_csv(src: dict, resolver: Resolver, staged: dict | None = None) -> dict
     )
     card_key = {t: f"c{i}" for i, t in enumerate(card_tuples)}
 
+    # Structured card location, kept apart from the human-readable "venue, city"
+    # join in each match record: venue names contain commas ("2300 Arena (AKA
+    # ECW Arena/Asylum Arena/...), Philadelphia"), so the joined string cannot
+    # be split back into fields. The geo pipeline needs the fields, not the join.
+    cards_csv = {
+        cid: {"date": t[0], "promotion_id": t[1], "event": t[2], "venue": t[3], "city": t[4]}
+        for t, cid in card_key.items()
+    }
+
     # ---- identity ----
     all_names: set[str] = set()
     for r in canonical_rows:
@@ -262,6 +271,7 @@ def merge_csv(src: dict, resolver: Resolver, staged: dict | None = None) -> dict
 
     return {
         "matches_csv": matches_csv,
+        "cards_csv": cards_csv,  # 'c<n>' -> {date, promotion_id, event, venue, city}
         "enrichment": enrichment,
         "registry": registry,
         "promos": {promo_key[n]: n for n in promo_names},  # key -> display name

@@ -1,0 +1,59 @@
+promotion,country_codes,note
+# Promotion -> candidate country codes, most-likely first.
+#
+# This is a PRIOR, not a verdict. It only narrows the candidate set when a bare
+# csv city name is otherwise ambiguous, and any match reached through it is
+# recorded as 'probable', never 'confirmed'. Promotions tour: WWE runs Tokyo,
+# NJPW runs Long Beach, CMLL runs Tokyo. A prior that is too narrow pushes real
+# foreign shows into the review queue (honest); a prior that is too wide only
+# loses disambiguating power (also honest). Neither invents a location.
+#
+# Codes are ISO-3166 alpha-2, pipe-separated. Covers the promotions carrying the
+# most cards; anything absent simply gets no prior and falls to the globally
+# unique / population-dominance rungs.
+WWE,US|CA|GB|JP|MX|SA|AU|DE|IT|AE,tours globally but overwhelmingly US
+WWF,US|CA|GB|JP|DE|IT,1980s-90s house-show circuit plus UK/Japan tours
+WWWF,US|CA,northeastern US territory era
+NXT,US|GB,Florida-based with an NXT UK sibling promotion
+NXT UK,GB|IE,
+WCW,US|CA|GB|JP|DE,
+ECW,US|CA,
+NJPW,JP|US|GB|AU|TW,
+AJPW,JP|US,
+NOAH,JP|US,
+Dragon Gate,JP|US|CN,
+STARDOM,JP|US,
+DDT,JP|US,
+WAR,JP,
+CMLL,MX|JP|US,
+EMLL,MX,CMLL under its historical name
+AAA,MX|US|JP,
+OVW,US,Louisville developmental territory
+FCW,US,Florida developmental territory
+TNA,US|CA|GB|PR|IN,
+NWA TNA,US,
+Impact Wrestling,US|CA|MX,
+ROH,US|CA|GB|JP,
+AEW,US|CA|GB,
+NWA,US|CA,
+SMW,US,Smoky Mountain — Appalachian territory
+AWA,US|CA|JP,
+IWA-MS,US,
+CZW,US,
+CHIKARA,US|GB,
+Beyond,US,
+GCW,US|JP,
+APW,US,
+AAW,US,
+AIW,US,
+PWG,US,
+JAPW,US,
+NEW,US,
+Limitless,US,
+FIP,US,
+JCW,US,
+wXw,DE|GB|NL|AT|US,
+RevPro,GB|IE|US,
+PROGRESS,GB|IE|US,
+OTT,IE|GB,
+WWC,PR|US,World Wrestling Council — Puerto Rico

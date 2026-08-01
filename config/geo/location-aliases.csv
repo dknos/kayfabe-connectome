@@ -1,0 +1,5 @@
+alias,city,note
+# Raw city strings corrected to the name the gazetteer knows. Typos and
+# historical spellings only — never a guess at which of several same-named
+# cities was meant (that is what location-overrides.csv is for).
+Glen Falls,Glens Falls,source drops the s; Glens Falls NY hosted a WWF circuit

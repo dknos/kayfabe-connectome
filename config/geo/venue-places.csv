@@ -1,0 +1,146 @@
+venue,geonames_id,display_name,city,admin1,country,country_code,latitude,longitude,precision,note
+# Reviewed venue -> place. The strongest signal in the csv corpus: a venue name
+# is near-unique to a place, while the csv City column is bare ("Ontario",
+# "Florence", "London") and sometimes names a ward or district the gazetteer
+# does not carry as a city ("Hakata", "Kokura", "Kitazawa").
+#
+# Matching is on the folded venue name with the parenthetical rename history
+# stripped, so "2300 Arena (AKA ECW Arena/...)" matches as "2300 Arena".
+#
+# Every row here was reviewed against the venue name, the promotions that ran
+# it, and the date range — the three columns the review queue prints. Rows are
+# recorded at CITY precision: naming the town a venue sits in is defensible
+# from the venue name alone, pinning the building is not. Supplying
+# latitude+longitude would promote a row to venue precision; none do yet.
+#
+# ---- Japan: the csv City column names a ward, district or prefecture --------
+Hakata Star Lane,1863967,,,,,,,,,Hakata is a ward of Fukuoka; the city column names the ward
+Kitazawa Town Hall,1850147,,,,,,,,,Kitazawa Town Hall sits in Shimokitazawa in Setagaya ward of Tokyo
+Fujisan Messe,1864134,,,,,,,,,Fujisan Messe is the Fuji city exhibition hall in Shizuoka
+Fuji Messe,1864134,,,,,,,,,same Fuji city hall under its short name
+Ishikawa Industrial Exhibition Hall,1860243,,,,,,,,,prefectural exhibition hall in Kanazawa; the city column names the prefecture
+Tsushima Bunka Hall,1849539,,,,,,,,,Tsushima in Aichi near Nagoya on the tour circuit, not the Nagasaki island
+Tsushima City Cultural Center,1849539,,,,,,,,,same Aichi city hall under its English name
+Shimizu Marine Building,1851717,,,,,,,,,Shimizu is a ward of Shizuoka city, not the Hokkaido or Yamagata towns
+Kokura Northern Gymnasium,1859307,,,,,,,,,Kokura is a ward of Kitakyushu
+Kokura-kita Gymnasium,1859307,,,,,,,,,Kokura-kita is a ward of Kitakyushu
+Honkawagoe Pepe Hall Atlas,1859740,,,,,,,,,Hon-Kawagoe is a station district of Kawagoe in Saitama
+Toyonaka Municipal Rose Bunka Hall,1849837,,,,,,,,,Toyonaka in Osaka prefecture
+Green Dome Maebashi Subarena,1857843,,,,,,,,,Green Dome Maebashi is in Maebashi in Gunma; the city column reads Yamada
+Ikosu Ageo,1865714,,,,,,,,,Ikosu Ageo is the Ageo civic hall in Saitama
+Oyama City Cultural Center Small Hall,1853483,,,,,,,,,Oyama in Tochigi, the larger of the same-named places
+Yokkaichi Australia Memorial Hall,1848373,,,,,,,,,Yokkaichi in Mie prefecture
+Yokkaichi City Gymnasium,1848373,,,,,,,,,Yokkaichi in Mie prefecture
+Yokkaichi Kusuryokuchi Gymnasium,1848373,,,,,,,,,Yokkaichi in Mie prefecture
+# ---- United States and UK: same-named towns separated by territory ---------
+House of Hardcore,4255704,,,,,,,,,IWA Mid-South ran its home venue in Charlestown, Indiana
+H2O Wrestling Center,4504871,,,,,,,,,H2O is based in Williamstown, New Jersey
+Palmer Community Center,5188140,,,,,,,,,Palmer Township community centre in Easton, Pennsylvania
+La Boom,5145067,,,,,,,,,La Boom is in Woodside, Queens, New York
+Morristown East High School,4642938,,,,,,,,,Smoky Mountain Wrestling territory; Morristown, Tennessee
+Vaughn Reno Starks Community Center,4290988,,,,,,,,,OVW is a Louisville promotion; Elizabethtown, Kentucky
+Galaxy Theatre,5392900,,,,,,,,,Ultimate Pro Wrestling ran southern California; Santa Ana
+Portsmouth Guildhall,2639996,,,,,,,,,RevPro is a UK promotion; Portsmouth, England
+ACE Arena,5105634,,,,,,,,,WSU is a New Jersey promotion; Union City
+Columbia Club,5105634,,,,,,,,,Pro Wrestling Syndicate is a New Jersey promotion; Union City
+Bowlers Exhibition Centre,2643123,,,,,,,,,Manchester, England
+AO Arena,2643123,,,,,,,,,Manchester Arena, England
+James A. Cawood High School,4294072,,,,,,,,,Smoky Mountain Wrestling territory; Harlan, Kentucky
+Cumberland High School,4289232,,,,,,,,,Smoky Mountain Wrestling territory; Cumberland, Kentucky
+Oxford Billiards Club,4440076,,,,,,,,,a Memphis promotion; Oxford, Mississippi
+Prudential Center,5101798,,,,,,,,,Newark, New Jersey
+The Heart Ballroom,5101798,,,,,,,,,Newark, New Jersey
+Melrose Memorial Hall,4943677,,,,,,,,,Beyond Wrestling is a New England promotion; Melrose, Massachusetts
+Salem National Guard Armory,4264334,,,,,,,,,IWA Mid-South ran Salem, Indiana
+Summit Park District,4912845,,,,,,,,,Summit Park District is in Summit, Illinois
+Gas South Arena,4192289,,,,,,,,,Gas South Arena is in Duluth, Georgia
+Radisson Hotel,5393180,,,,,,,,,Vendetta Pro Wrestling is based in Santa Maria, California
+CZW Arena,4502881,,,,,,,,,CZW is a New Jersey promotion; Mantua
+Queensboro Elk's Lodge,5116495,,,,,,,,,Elmhurst, Queens, New York
+Fairgrounds Arena,5143396,,,,,,,,,Squared Circle Wrestling runs upstate New York; Watertown
+Horizon Events Center,4852065,,,,,,,,,Horizon Events Center is in Clive, Iowa
+Somerville Armory,4951257,,,,,,,,,Beyond Wrestling is a New England promotion; Somerville, Massachusetts
+Westbrook Armory,4982753,,,,,,,,,Limitless Wrestling is a Maine promotion; Westbrook
+Gateway Center,4236191,,,,,,,,,Gateway Center is in Collinsville, Illinois
+# ---- second review pass ----------------------------------------------------
+Ishikawa Industrial Exhibition Hall,1860243,,,,,,,,,hall numbers (#1/#3) are halls of one complex in Kanazawa
+Ohio Expo Center,4509177,,,,,,,,,Ohio Expo Center is the state fairground in Columbus, Ohio
+Washington Avenue Armory,5106834,,,,,,,,,Albany, New York
+Blue Cross Arena,5134086,,,,,,,,,Blue Cross Arena is in Rochester, New York
+MegaCorp Pavilion,4302529,,,,,,,,,MegaCorp Pavilion is in Newport, Kentucky
+Sumter County Fairgrounds,4149433,,,,,,,,,Sumter County fairground at Bushnell, Florida
+St. Gregory's Byzantine Hall,5160315,,,,,,,,,AIW is a Cleveland promotion; Lakewood, Ohio
+The Winchester Music Tavern,5160315,,,,,,,,,the Winchester is in Lakewood, Ohio
+Greater Newark Boys and Girls Club,5101798,,,,,,,,,ECWA is a New Jersey promotion; Newark
+Valor Hall,4302828,,,,,,,,,Valor Hall is in Oak Grove, Kentucky
+The Modern Exchange,5010646,,,,,,,,,JCW is a Detroit promotion; Southgate, Michigan
+Pyramids Centre,2639996,,,,,,,,,Portsmouth, England
+Portsmouth School Of Wrestling,2639996,,,,,,,,,Portsmouth, England
+Buckland Community Centre,2639996,,,,,,,,,Portsmouth, England
+O2 Ritz Manchester,2643123,,,,,,,,,Manchester, England
+The Ritz,2643123,,,,,,,,,the O2 Ritz in Manchester, England
+O2 Academy Birmingham,2655603,,,,,,,,,Birmingham, England
+Durham Armory,4464368,,,,,,,,,Deadlock Pro Wrestling is a North Carolina promotion; Durham
+Elmcor Youth and Adult Activities,5113779,,,,,,,,,Corona, Queens, New York
+New Albany National Guard Armory,4262045,,,,,,,,,IWA Mid-South territory; New Albany, Indiana
+IWA Mid-South Wrestling Center,4262045,,,,,,,,,New Albany, Indiana
+Pride Bar & Lounge,4262045,,,,,,,,,IWA Mid-South territory; New Albany, Indiana
+Whitley County Middle School,4313563,,,,,,,,,Whitley County seat is Williamsburg, Kentucky; SMW territory
+Northwest Ashe High School,4497621,,,,,,,,,Ashe County, North Carolina; SMW territory
+Georgia Mountains Center,4196586,,,,,,,,,Georgia Mountains Center is in Gainesville, Georgia
+Hopkins Eisenhower Community Center,5030670,,,,,,,,,Hopkins, Minnesota
+JCW Arena,5100604,,,,,,,,,JCW (NJ) is based in Lodi, New Jersey
+Eastwood Field,5164582,,,,,,,,,Eastwood Field is in Niles, Ohio
+Bloomington National Guard Armory,4254679,,,,,,,,,IWA Mid-South ran Bloomington, Indiana
+Bethany Town Hall,5282279,,,,,,,,,Northeast Wrestling is a Connecticut promotion; Bethany
+NEW Arena,5282279,,,,,,,,,Northeast Wrestling home venue at Bethany, Connecticut
+Rostraver Ice Garden,5179794,,,,,,,,,Rostraver Ice Garden sits at Belle Vernon in Rostraver Township, Pennsylvania
+Lakeview Jr. High School,5393180,,,,,,,,,Vendetta Pro Wrestling is based in Santa Maria, California
+Komatsu City Suehiro Gymnasium,1858910,,,,,,,,,Komatsu in Ishikawa prefecture
+Kariya Industrial Center AIOI Hall,1860034,,,,,,,,,Kariya in Aichi prefecture
+Kariya Industrial Promotion Center,1860034,,,,,,,,,Kariya in Aichi prefecture
+Omiya Skate Center,6940394,,,,,,,,,Omiya is a ward of Saitama city
+Shimada City Sports Center Sub Arena,1852472,,,,,,,,,Shimada in Shizuoka prefecture
+Hyogo Prefectural Budokan,1862627,,,,,,,,,the Hyogo prefectural budokan is in Himeji; the city column names the prefecture
+Osaka Izumi City Plaza Yayoi no Ma,1861107,,,,,,,,,Izumi in Osaka prefecture
+Chino Cultural Complex Multi-Hall,1864557,,,,,,,,,Chino in Nagano prefecture, not Chino California
+Sanyo Fureai Park General Gymnasium,11612564,,,,,,,,,the former Sanyo town is now part of Akaiwa in Okayama
+Sanyo Heights Gymnasium,11612564,,,,,,,,,the former Sanyo town is now part of Akaiwa in Okayama
+Shinnanyo City Gymnasium,11612583,,,,,,,,,Shin-Nanyo merged into Shunan in Yamaguchi
+Tsuruoka City Gymnasium,1849563,,,,,,,,,Tsuruoka in Yamagata; the city column is misspelled Tsuroka
+Kasumigaora Bunka Gymnasium,6822098,,,,,,,,,Kasumigaura in Ibaraki
+Prince Hotel Event Hall,1848015,,,,,,,,,the Naeba Prince Hotel is in Yuzawa, Niigata
+# ---- third review pass -----------------------------------------------------
+Elmcor Youth and Adult Activities Center,5113779,,,,,,,,,Corona, Queens, New York
+MVP Arena,5106834,,,,,,,,,MVP Arena (fka Times Union Center) is in Albany, New York
+Express Live,4509177,,,,,,,,,Express Live is in Columbus, Ohio
+Duluth Arena Auditorium,5024719,,,,,,,,,the AWA ran the Duluth Arena in Duluth, Minnesota
+Promowest Pavilion at OVATION,4302529,,,,,,,,,Ovation is in Newport, Kentucky
+Santa Clara County Fairgrounds,5392171,,,,,,,,,San Jose, California
+Six Flags Great Adventure,4502434,,,,,,,,,Six Flags Great Adventure is in Jackson Township, New Jersey
+Pickaway County Fairgrounds,4508778,,,,,,,,,Pickaway County fairground at Circleville, Ohio
+Put In Bay,5160315,,,,,,,,,AIW is a Cleveland promotion; the city column reads Lakewood, Ohio
+Rack's Bar & Billiards,4142290,,,,,,,,,CZW ran Dover, Delaware
+Columbus Plaza,4236191,,,,,,,,,Glory Pro runs the St Louis metro; Collinsville, Illinois
+Stadthalle Vennehof,2946228,,,,,,,,,wXw is a German promotion; Borken in North Rhine-Westphalia
+Tochigi City Cultural Center,1850311,,,,,,,,,the venue names Tochigi city; the city column reads Oyama
+Omiya Citizen Gymnasium,6940394,,,,,,,,,Omiya is a ward of Saitama city
+Osaka Izumi City Plaza Yayoi no Kaze Hall,1861107,,,,,,,,,Izumi in Osaka prefecture
+Miyako City Gymnasium,2111884,,,,,,,,,Miyako in Iwate, the larger of the same-named places
+Lake Suwa Sports Center,1851368,,,,,,,,,Lake Suwa is at Suwa in Nagano
+Ceratopia,1850207,,,,,,,,,Ceratopia is the Toki city hall in Gifu
+Memorial Auditorium,4580543,,,,,,,,,Greenville Memorial Auditorium, South Carolina — an NWA circuit venue
+National Guard Armory,4282757,,,,,,,,,Smoky Mountain territory; Ashland, Kentucky
+Garden High School,4776983,,,,,,,,,Smoky Mountain territory; Oakwood in Buchanan County, Virginia
+Ryan Township Fire Hall,5179095,,,,,,,,,Ryan Township is in Schuylkill County; Barnesville, Pennsylvania
+Spark Recreation Center,4912845,,,,,,,,,Freelance Wrestling runs the Chicago area; Summit, Illinois
+Knights of Columbus Hall,4931303,,,,,,,,,Beyond Wrestling is a New England promotion; Bridgewater, Massachusetts
+Our Lady Of Mt. Carmel Society,4834040,,,,,,,,,Blitzkrieg Pro is a New England promotion; Enfield, Connecticut
+# ---- fourth review pass ----------------------------------------------------
+TWE Arena,5103159,,,,,,,,,ICW No Holds Barred is a New Jersey promotion; Red Bank
+Lincoln Center,4921402,,,,,,,,,the Lincoln Center is a community centre in Highland, Indiana; IWA Mid-South territory
+Charlestown Civic Center,4255704,,,,,,,,,Charlestown, Indiana — IWA Mid-South and OVW territory
+American Legion Post #335,5397603,,,,,,,,,RISE ran South Gate, California
+Bristol Central High School,5282835,,,,,,,,,Northeast Wrestling is a Connecticut promotion; Bristol
+Denali Harley-Davidson Showroom,5871146,,,,,,,,,the Denali Harley-Davidson showroom is in Palmer, Alaska
+Charleston Coliseum,4801859,,,,,,,,,the Charleston Coliseum and Convention Center is in Charleston, West Virginia

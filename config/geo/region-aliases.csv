@@ -1,0 +1,23 @@
+alias,country_code,admin1_code,note
+# Region strings the gazetteer's own admin-1 table does not carry, or spells
+# differently. The admin-1 table is consulted FIRST; this file only patches it.
+# admin1_code may be blank to mean "this country, any admin-1".
+DC,US,DC,"Washington, DC" — the source writes the district as the region
+D.C.,US,DC,
+Washington DC,US,DC,
+England,GB,ENG,
+Scotland,GB,SCT,
+Wales,GB,WLS,
+Northern Ireland,GB,NIR,
+Great Britain,GB,,
+United Kingdom,GB,,
+Puerto Rico,PR,,
+Ontario,CA,08,
+Quebec,CA,10,
+Alberta,CA,01,
+British Columbia,CA,02,
+Manitoba,CA,03,
+Saskatchewan,CA,11,
+Nova Scotia,CA,07,
+New Brunswick,CA,04,
+Newfoundland,CA,05,
