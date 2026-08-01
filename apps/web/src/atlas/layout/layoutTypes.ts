@@ -27,16 +27,26 @@ export const GROUP_GAP = 16;
 /** Z layering. The rails material draws in buffer order, so these exist to
  *  make the ordering READABLE, and to give the tilted camera something to
  *  separate — a platform genuinely sits below the rail on it. */
+/**
+ * Z layering.
+ *
+ * Two jobs. It makes the draw ORDER readable, and under the tilted camera it
+ * is the only thing that produces parallax — a pitched orthographic camera
+ * shifts a point's screen Y by z·sin(θ), so with everything within a unit of
+ * z=0 a 24° tilt was a vertical squash and nothing else. The scale here is
+ * chosen against the lane pitch (6–20): a platform 8 units below its rail
+ * separates visibly when tilted and costs nothing when flat.
+ */
 export const Z = {
-  backdrop: -0.6,
-  platform: -0.4,
-  hist: -0.25,
+  backdrop: -12,
+  platform: -8,
+  hist: -5,
   rail: 0,
-  title: 0.25,
-  reign: 0.4,
-  dot: 0.5,
-  ruler: 0.7,
-  playhead: 0.9,
+  title: 5,
+  reign: 8,
+  dot: 10,
+  ruler: 14,
+  playhead: 18,
 } as const;
 
 /** Lane internals as fractions of the lane pitch. */

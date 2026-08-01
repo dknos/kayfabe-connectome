@@ -230,7 +230,7 @@ export function buildOverview(input: OverviewInput): AtlasScene {
           w: barW,
           h,
           color: mix(A.dim, A.same, 0.35),
-          alpha: isSel ? 0.75 : 0.34,
+          alpha: isSel ? 0.6 : 0.22,
           kind: QK.TICK,
         });
       }
