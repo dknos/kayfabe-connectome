@@ -33,10 +33,19 @@ docs/                     Audits, decisions, architecture, boundaries
 ```
 pnpm db:doctor            Read-only audit of the source SQL database
 pnpm wrestlingdb:doctor   WrestlingDB API contract audit (redacted)
-pnpm data:materialize     Full materialization pipeline
-pnpm dev                  Run the web application
-pnpm test                 All tests
+pnpm data:materialize     Full materialization pipeline (~6s, deterministic)
+pnpm data:validate        Re-validate an existing materialized tree
+pnpm dev                  Web app → http://127.0.0.1:9460
+pnpm test                 Vitest + pytest suites
+npx playwright test       Full journey suite (desktop / mobile / reduced-motion)
+node tests/qa-capture.mjs Headless screenshot sweep (dev server must be running)
 ```
+
+## Opening the connectome
+
+1. Place the corpus at `data/private/wwe_db_2026-01-18.sqlite` (or set `WRESTLING_DB_PATH`)
+2. `pnpm install && pnpm data:materialize`
+3. `pnpm dev` → open http://127.0.0.1:9460, press `/` and search anyone.
 
 ## Configuration
 

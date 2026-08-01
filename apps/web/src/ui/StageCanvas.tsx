@@ -45,6 +45,7 @@ export function StageCanvas({
       communitySizes: core.communities.size,
     });
     rendererRef.current = r;
+    (window as { __kayfabeRenderer?: ConnectomeRenderer }).__kayfabeRenderer = r; // QA instrumentation
     r.onDropChange = onDropChange;
     r.setReducedMotion(useStore.getState().reducedMotion);
     r.start();

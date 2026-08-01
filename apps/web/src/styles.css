@@ -249,10 +249,14 @@ label { color: var(--text-dim); }
   :root { --rail-w: 250px; --dossier-w: 100vw; }
   .rail.left { display: none; }
   .rail.right { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 46vh; }
-  .search { width: 46vw; }
+  .search { width: 34vw; min-width: 120px; }
   .coverage { display: none; }
   .pulse-readout { display: none; }
   .pulsebar { grid-template-columns: auto 1fr; gap: 8px; }
+  .brand span { display: none; }
+  .brand b { font-size: 11px; letter-spacing: 0.12em; }
+  .desktop-only { display: none; }
+  .topbar { gap: 8px; overflow-x: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

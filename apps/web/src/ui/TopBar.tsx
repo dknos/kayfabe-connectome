@@ -39,8 +39,8 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
           <b className="num">{core.manifest.date_range[0].slice(0, 4)}–{core.manifest.date_range[1].slice(0, 4)}</b>
         </div>
       )}
-      <button onClick={share}>Share view</button>
-      <button onClick={onScreenshot}>Screenshot</button>
+      <button className="desktop-only" onClick={share}>Share view</button>
+      <button className="desktop-only" onClick={onScreenshot}>Screenshot</button>
     </header>
   );
 }

@@ -13,7 +13,19 @@ test.describe("vertical slice journey", () => {
     await expect(page.locator("canvas.gl")).toBeVisible({ timeout: 30000 });
   });
 
-  test("search → focus → dossier → evidence → path → share → restore", async ({ page }) => {
+  test("mobile: search resolves, dossier bottom-sheet opens, table reachable", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "mobile-specific journey");
+    const search = page.getByRole("combobox", { name: /Search/ });
+    await search.fill("Undertaker");
+    await page.getByRole("option").first().click({ force: true });
+    await expect(page.getByText("Person dossier")).toBeVisible({ timeout: 15000 });
+    await page.getByRole("button", { name: "Close dossier" }).click();
+    await page.getByRole("button", { name: "Table", exact: true }).click();
+    await expect(page.getByRole("region", { name: /People table/ })).toBeVisible();
+  });
+
+  test("search → focus → dossier → evidence → path → share → restore", async ({ page, isMobile }) => {
+    test.skip(isMobile, "desktop affordances (left panel, hover)");
     // 1. alias-aware search resolves a canonical person
     const search = page.getByRole("combobox", { name: /Search/ });
     await search.fill("Undertaker");
@@ -59,7 +71,8 @@ test.describe("vertical slice journey", () => {
     expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
   });
 
-  test("date filter recomputes from records; empty state is honest", async ({ page }) => {
+  test("date filter recomputes from records; empty state is honest", async ({ page, isMobile }) => {
+    test.skip(isMobile, "filter rail is a desktop affordance in v1");
     const y0 = page.getByLabel("Years");
     await y0.fill("1985");
     const y1 = page.getByLabel("End year", { exact: true });
@@ -79,7 +92,8 @@ test.describe("vertical slice journey", () => {
     expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
   });
 
-  test("accessible table lens is keyboard operable", async ({ page }) => {
+  test("accessible table lens is keyboard operable", async ({ page, isMobile }) => {
+    test.skip(isMobile, "keyboard journey runs on desktop projects");
     await page.getByRole("button", { name: "Table", exact: true }).click();
     await expect(page.getByRole("region", { name: /People table/ })).toBeVisible();
     const firstRow = page.locator("tbody tr").first();

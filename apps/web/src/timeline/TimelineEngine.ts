@@ -24,6 +24,12 @@ export class TimelineEngine {
   onFire: ((f: FiredEvent) => void) | null = null;
 
   async ensureRange(y0: number, y1: number): Promise<void> {
+    const range = useStore.getState().core?.manifest.date_range;
+    if (range) {
+      // never request years the corpus does not materialize — a 404 is noise
+      y0 = Math.max(y0, Number(range[0].slice(0, 4)));
+      y1 = Math.min(y1, Number(range[1].slice(0, 4)));
+    }
     const missing: number[] = [];
     for (let y = y0; y <= y1; y++) if (!this.loadedYears.has(y)) missing.push(y);
     if (!missing.length) return;
