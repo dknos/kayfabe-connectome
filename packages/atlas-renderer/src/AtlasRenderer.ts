@@ -158,7 +158,12 @@ export class AtlasRenderer {
   setScene(scene: AtlasScene, immediate = false): void {
     this.current = scene;
     if (immediate) this.transition.setReducedMotion(true);
-    this.transition.setScene(scene, this.rails, this.nodes, this.clock.elapsedTime * 1000);
+    // performance.now(), matching the frame loop's own call to tick(). Stamping
+    // the start from THREE's clock (seconds since the renderer started) while
+    // tick compared against performance.now() (milliseconds since page load)
+    // put the two on different epochs, so every morph measured as finished on
+    // its first frame and the board cut instead of travelling.
+    this.transition.setScene(scene, this.rails, this.nodes, performance.now());
     if (immediate) this.transition.setReducedMotion(this.reducedMotion);
     this.paths.rebuild(scene.paths);
     // Pulse size follows the scene's own scale, so the 571-lane overview and a
@@ -170,6 +175,30 @@ export class AtlasRenderer {
 
   get scene_(): AtlasScene | null {
     return this.current;
+  }
+
+  /**
+   * QA seam: the LIVE interpolated geometry of one quad, by key.
+   *
+   * Reads the GPU-bound buffer rather than the scene, so it is the only way to
+   * observe a morph in flight and prove that a shared entity travels instead
+   * of teleporting. Returns null when the key is not on the board.
+   */
+  debugQuad(key: string): { x: number; y: number; w: number; h: number; a: number } | null {
+    const i = this.transition.quadKeys.indexOf(key);
+    if (i < 0) return null;
+    return {
+      x: this.rails.pos[i * 3]!,
+      y: this.rails.pos[i * 3 + 1]!,
+      w: this.rails.size[i * 2]!,
+      h: this.rails.size[i * 2 + 1]!,
+      a: this.rails.params[i * 4]!,
+    };
+  }
+
+  /** QA seam: is a morph currently running? */
+  get morphing(): boolean {
+    return this.transition.isRunning;
   }
 
   /* ---------- emphasis ---------- */
