@@ -19,18 +19,18 @@ export class CommunityHaze {
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uCamDist: { value: 5 } },
+      uniforms: { uCamDist: { value: 5 }, uMaxPx: { value: 380 } },
       vertexShader: /* glsl */ `
         attribute float aSize;
         attribute vec3 aColor;
         varying vec3 vColor;
         varying float vFade;
-        uniform float uCamDist;
+        uniform float uCamDist, uMaxPx;
         void main() {
           vColor = aColor;
           vFade = smoothstep(1.6, 4.2, uCamDist); // only breathes at observatory range
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * 900.0 / max(1.0, -mv.z);
+          gl_PointSize = min(aSize * 650.0 / max(1.0, -mv.z), uMaxPx);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
@@ -41,7 +41,7 @@ export class CommunityHaze {
           float r = length(uv);
           if (r > 1.0) discard;
           float g = exp(-3.4 * r * r);
-          gl_FragColor = vec4(vColor * g * 0.16, g * 0.13 * vFade);
+          gl_FragColor = vec4(vColor * g * 0.13, g * 0.085 * vFade);
         }`,
     });
     this.points = new THREE.Points(this.geo, mat);
@@ -49,8 +49,10 @@ export class CommunityHaze {
     this.points.renderOrder = -2;
   }
 
-  tick(camDist: number): void {
-    (this.points.material as THREE.ShaderMaterial).uniforms.uCamDist!.value = camDist;
+  tick(camDist: number, maxPx: number): void {
+    const u = (this.points.material as THREE.ShaderMaterial).uniforms;
+    u.uCamDist!.value = camDist;
+    u.uMaxPx!.value = maxPx;
   }
 
   dispose(): void {

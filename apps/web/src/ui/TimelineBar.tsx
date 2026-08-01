@@ -91,12 +91,16 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
     if (timeline.playing) {
       setTimeline({ playing: false });
       engine.stopLoop();
-    } else {
-      const mode = timeline.mode === "off" ? "playback" : timeline.mode;
-      setTimeline({ playing: true, mode });
-      const y = dayToDate(timeline.day).getUTCFullYear();
-      void engine.ensureRange(y - 1, Math.min(2026, y + 3)).then(() => engine.play());
+      return;
     }
+    const mode = timeline.mode === "off" ? "playback" : timeline.mode;
+    // at the end of history there is nothing left to fire — restart from the range start
+    const { filters, model: m } = useStore.getState();
+    const day = timeline.day >= (m?.fullDayRange[1] ?? Infinity) - 1 ? filters.dayMin : timeline.day;
+    setTimeline({ playing: true, mode, day });
+    engine.scrubTo(day);
+    const y = dayToDate(day).getUTCFullYear();
+    void engine.ensureRange(y - 1, Math.min(2026, y + 3)).then(() => engine.play());
   };
 
   const step = (dir: 1 | -1) => {

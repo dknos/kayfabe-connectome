@@ -140,7 +140,7 @@ export class ConnectomeRenderer {
 
     this.composer = new EffectComposer(this.gl);
     this.composer.addPass(new RenderPass(this.scene, this.cameraCtl.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.5, 0.75, 0.62);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.33, 0.5, 0.86);
     this.composer.addPass(this.bloom);
 
     this.governor.onChange = (tier, s) => {
@@ -184,6 +184,13 @@ export class ConnectomeRenderer {
       const cma = new THREE.Vector3().fromArray(this.g.communityCenters, ca * 3);
       const cmb = new THREE.Vector3().fromArray(this.g.communityCenters, cb * 3);
       mid.lerp(cma.lerp(cmb, 0.5), 0.35);
+    } else if (ca >= 0 && ca === cb) {
+      // intra-community fibers wrap the lobe surface instead of skewering its
+      // center — a straight-chord core integrates into a white plateau
+      const cm = new THREE.Vector3().fromArray(this.g.communityCenters, ca * 3);
+      const away = mid.clone().sub(cm);
+      const len = away.length();
+      if (len > 1e-4) mid.addScaledVector(away.normalize(), 0.10 + len * 0.45);
     }
     const j = hash01(e);
     mid.x += (j - 0.5) * 0.05;
@@ -221,7 +228,9 @@ export class ConnectomeRenderer {
       (e) => {
         const w = view.weights(e);
         const total = w.same + w.opposed + w.br;
-        return 0.1 + 0.26 * Math.min(1, total / 12);
+        // additive overlap scales with drawn-fiber count — adapt alpha to density
+        const densityScale = Math.min(1, Math.sqrt(5500 / Math.max(1, shown.length)));
+        return (0.07 + 0.22 * Math.min(1, total / 12)) * densityScale;
       },
     );
     this.applyEmphasis(this.emphasisState);
@@ -296,7 +305,7 @@ export class ConnectomeRenderer {
     this.ribbons.rebuild(fibers);
 
     for (let i = 0; i < this.g.count; i++) {
-      let v = anyFocus ? 0.16 : 1;
+      let v = anyFocus ? 0.24 : 1;
       if (neighbor.has(i)) v = 0.95;
       if (st.pinned.includes(i)) v = Math.max(v, 1.15);
       if (st.pathNodes.includes(i)) v = 1.45;
@@ -305,7 +314,7 @@ export class ConnectomeRenderer {
       em[i] = v * this.visFactor[i]!;
     }
     this.nodes.commitEmphasis();
-    this.edges.setGlobalAlpha(anyFocus ? 0.3 : 1);
+    this.edges.setGlobalAlpha(anyFocus ? 0.16 : 1);
   }
 
   /* ---------- timeline ---------- */
@@ -458,9 +467,14 @@ export class ConnectomeRenderer {
         }
         this.nodes.commitActivity();
       }
+      const dist = this.cameraCtl.distance();
+      this.nodes.setFar(THREE.MathUtils.smoothstep(dist, 1.2, 2.6));
       this.pulses.tick(this.clock.elapsedTime, this.gl.getPixelRatio());
       this.ribbons.tick(this.clock.elapsedTime, this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight));
-      this.haze.tick(this.cameraCtl.distance());
+      this.haze.tick(
+        dist,
+        Math.min(this.canvas.clientWidth, this.canvas.clientHeight) * this.gl.getPixelRatio() * 0.34,
+      );
 
       if (!this.contextLost) this.composer.render();
       this.governor.frame(performance.now() - t0);

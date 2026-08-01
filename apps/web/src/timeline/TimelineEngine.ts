@@ -56,7 +56,7 @@ export class TimelineEngine {
   static derive(ev: TimelineEvent): FiredEvent {
     const pulses: FiredEvent["pulses"] = [];
     const decisive = ev.res.startsWith("def");
-    const cap = 14; // bounded per-event fan-out; battle royals stay legible
+    const cap = 8; // bounded per-event fan-out; battle royals stay legible
     for (const a of ev.w)
       for (const b of ev.l) {
         if (pulses.length >= cap) break;
@@ -86,7 +86,7 @@ export class TimelineEngine {
 
   private fireUpTo(day: number): void {
     let fired = 0;
-    while (this.cursor < this.events.length && fired < 24) {
+    while (this.cursor < this.events.length && fired < 12) {
       const ev = this.events[this.cursor]!;
       if (isoToDay(ev.d) > day) break;
       this.cursor++;

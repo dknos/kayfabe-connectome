@@ -1,0 +1,16 @@
+import { chromium } from "@playwright/test";
+const browser = await chromium.launch();
+const page = await (await browser.newContext({ viewport: { width: 1600, height: 1000 } })).newPage();
+const errs = [];
+page.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+page.on("pageerror", (e) => errs.push("PAGEERROR: " + e.message));
+await page.goto("http://127.0.0.1:9460");
+await page.waitForSelector("canvas.gl", { timeout: 30000 });
+await page.waitForTimeout(2500);
+await page.getByLabel("Years").fill("1997");
+await page.waitForTimeout(8000);
+console.log("end-year count:", await page.getByLabel("End year", { exact: true }).count());
+console.log("panel visible:", await page.locator(".rail.left").isVisible().catch(() => "gone"));
+console.log("body text head:", (await page.locator("body").innerText()).slice(0, 200).replace(/\n/g, " | "));
+console.log("ERRORS:", errs.slice(0, 6).join("\n") || "none");
+await browser.close();

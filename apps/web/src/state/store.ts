@@ -86,7 +86,7 @@ export const useStore = create<AppState>((set, get) => ({
     showSame: true,
     showOpposed: true,
     showBr: true,
-    minEncounters: 2,
+    minEncounters: 5,
   },
   view: null,
   viewPending: false,
@@ -269,7 +269,7 @@ export function writeUrl(): void {
     if (s.filters.formMask !== 0xff) push("fm", s.filters.formMask);
     const rel = (s.filters.showSame ? 1 : 0) | (s.filters.showOpposed ? 2 : 0) | (s.filters.showBr ? 4 : 0);
     if (rel !== 7) push("rel", rel);
-    if (s.filters.minEncounters !== 2) push("minE", s.filters.minEncounters);
+    if (s.filters.minEncounters !== 5) push("minE", s.filters.minEncounters);
     if (s.timeline.mode !== "off") {
       push("tm", s.timeline.mode);
       push("td", s.timeline.day);

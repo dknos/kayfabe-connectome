@@ -625,7 +625,7 @@ def build(out: Path | None = None) -> dict:
         "schema_version": MATERIALIZATION_SCHEMA_VERSION,
         "built_at": datetime.now(timezone.utc).isoformat(),
         "source_fingerprint": _sha256_file(source_db_path()),
-        "layout_version": "global-layout@1",
+        "layout_version": "global-layout@2",
         "projection_version": "encounters@1",
         "algorithms": {
             "communities": "louvain-seeded@1",

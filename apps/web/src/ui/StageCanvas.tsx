@@ -1,8 +1,19 @@
 import { useEffect, useRef } from "react";
 import { ConnectomeRenderer, type ViewEdges } from "@kayfabe/renderer";
-import { EF } from "../graph/model";
+import { EF, type FilteredView, type GraphModel } from "../graph/model";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
+
+function buildAdapter(model: GraphModel, view: FilteredView): ViewEdges {
+  const wIndex = new Map<number, number>();
+  view.visible.forEach((e, i) => wIndex.set(e, i));
+  return {
+    edges: [...view.visible],
+    a: (e) => model.edgeField(e, EF.a),
+    b: (e) => model.edgeField(e, EF.b),
+    weights: (e) => view.weights[wIndex.get(e)!] ?? { same: 0, opposed: 0, br: 0, title: 0 },
+  };
+}
 
 export function StageCanvas({
   engine,
@@ -47,13 +58,45 @@ export function StageCanvas({
         if (i !== undefined) r.igniteNode(i);
       }
       if (!st.reducedMotion) {
-        for (const p of f.pulses) {
-          const ia = idx(p.a);
-          const ib = idx(p.b);
-          if (ia !== undefined && ib !== undefined) r.pulseBetween(ia, ib, p.kind);
+        // At high playback speeds, sample non-title events (deterministically by
+        // match id) so the pulse field stays legible instead of saturating.
+        const mNum = Number(f.ev.m.slice(2));
+        const sampled = st.timeline.speed < 365 || f.ev.tc === 1 || mNum % 3 === 0;
+        if (sampled) {
+          for (const p of f.pulses) {
+            const ia = idx(p.a);
+            const ib = idx(p.b);
+            if (ia !== undefined && ib !== undefined) r.pulseBetween(ia, ib, p.kind);
+          }
         }
       }
     };
+
+    // Push whatever state existed BEFORE this subscription registered — the boot
+    // sequence computes the first view synchronously, so without this the
+    // renderer would wait forever for a change that already happened.
+    const s0 = useStore.getState();
+    if (s0.view) r.setView(buildAdapter(model, s0.view));
+    const idx0 = (id: string | null) => (id ? (model.indexOfId.get(id) ?? null) : null);
+    r.applyEmphasis({
+      selectedNode: s0.selection?.kind === "node" ? idx0(s0.selection.id) : null,
+      selectedEdge: s0.selection?.kind === "edge" ? s0.selection.edge : null,
+      hoverNode: null,
+      pathNodes: (s0.pathResult?.nodes ?? []).map(idx0).filter((v): v is number => v !== null),
+      pathEdges: s0.pathResult?.edges ?? [],
+      pinned: s0.pinned.map(idx0).filter((v): v is number => v !== null),
+    });
+    if (s0.timeline.mode !== "off" && s0.timeline.mode !== "playback") {
+      r.setTimeVisibility({
+        mode: s0.timeline.mode,
+        day: Math.floor(s0.timeline.day),
+        windowDays: s0.timeline.windowDays,
+      });
+    }
+    if (s0.focusId) {
+      const i = model.indexOfId.get(s0.focusId);
+      if (i !== undefined) r.focusNode(i);
+    }
 
     const onResize = () => r.resize();
     window.addEventListener("resize", onResize);
@@ -73,16 +116,7 @@ export function StageCanvas({
         if (!r || !model) return;
 
         if (s.view !== prev.view && s.view) {
-          const view = s.view;
-          const wIndex = new Map<number, number>();
-          view.visible.forEach((e, i) => wIndex.set(e, i));
-          const adapter: ViewEdges = {
-            edges: [...view.visible],
-            a: (e) => model.edgeField(e, EF.a),
-            b: (e) => model.edgeField(e, EF.b),
-            weights: (e) => view.weights[wIndex.get(e)!] ?? { same: 0, opposed: 0, br: 0, title: 0 },
-          };
-          r.setView(adapter);
+          r.setView(buildAdapter(model, s.view));
         }
 
         if (

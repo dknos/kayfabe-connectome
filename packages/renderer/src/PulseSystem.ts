@@ -56,7 +56,7 @@ export class PulseSystem {
           vec3 p = it*it*position + 2.0*it*t*aMid + t*t*aEnd;
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           float fade = sin(t * 3.14159); // swell mid-flight
-          gl_PointSize = vLife * aSize * fade * 220.0 / max(1.0, -mv.z) * uPixelRatio;
+          gl_PointSize = clamp(vLife * aSize * fade * 90.0 / max(0.35, -mv.z), 0.0, 30.0) * uPixelRatio;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
@@ -68,7 +68,8 @@ export class PulseSystem {
           float r = length(uv);
           if (r > 1.0) discard;
           float g = exp(-3.0 * r);
-          gl_FragColor = vec4(vColor * (0.5 + 1.6 * smoothstep(0.5, 0.0, r)), g);
+          vec3 col = min(vColor * (0.5 + 1.4 * smoothstep(0.5, 0.0, r)), vec3(1.25));
+          gl_FragColor = vec4(col, g * 0.8);
         }`,
     });
     this.points = new THREE.Points(this.geo, mat);

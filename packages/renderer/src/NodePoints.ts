@@ -32,23 +32,25 @@ export class NodePoints {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uPixelRatio: { value: 1 } },
+      uniforms: { uPixelRatio: { value: 1 }, uFar: { value: 0 } },
       vertexShader: /* glsl */ `
         attribute vec3 aColor;
         attribute float aSize, aEmphasis, aActivity, aShape;
         varying vec3 vColor;
-        varying float vEmphasis, vActivity, vShape;
-        uniform float uPixelRatio;
+        varying float vEmphasis, vActivity, vShape, vFar;
+        uniform float uPixelRatio, uFar;
         void main() {
           vColor = aColor; vEmphasis = aEmphasis; vActivity = aActivity; vShape = aShape;
+          vFar = uFar;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float size = aSize * (1.0 + aActivity * 0.9) * (0.4 + 0.6 * min(aEmphasis, 1.5));
+          size *= mix(1.0, 0.78, uFar); // somata recede at observatory range
           gl_PointSize = clamp(size * 340.0 / max(1.0, -mv.z) * uPixelRatio, 1.5, 64.0 * uPixelRatio);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
-        varying float vEmphasis, vActivity, vShape;
+        varying float vEmphasis, vActivity, vShape, vFar;
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float r = length(uv);
@@ -64,10 +66,11 @@ export class NodePoints {
             float d = abs(uv.x) + abs(uv.y);
             core = max(core, smoothstep(0.5, 0.1, d) * 0.9);
           }
-          vec3 col = vColor * (0.55 * halo + 1.35 * core);
+          vec3 col = vColor * (0.4 * halo + 1.2 * core);
           col += vec3(1.0) * vActivity * core * 0.9;           // ignition burns white-hot
-          col *= vEmphasis;
-          float alpha = (halo * 0.5 + core) * min(1.0, vEmphasis);
+          col *= vEmphasis * mix(1.0, 0.72, vFar);
+          float alpha = (halo * 0.3 + core * 0.9) * min(1.0, vEmphasis)
+                        * mix(1.0, 0.38, vFar * (1.0 - vActivity));
           gl_FragColor = vec4(col, alpha);
         }`,
     });
@@ -77,6 +80,11 @@ export class NodePoints {
 
   setPixelRatio(pr: number): void {
     (this.points.material as THREE.ShaderMaterial).uniforms.uPixelRatio!.value = pr;
+  }
+
+  /** 0 = close-up detail, 1 = observatory range (dims soma accumulation). */
+  setFar(far: number): void {
+    (this.points.material as THREE.ShaderMaterial).uniforms.uFar!.value = far;
   }
 
   commitEmphasis(): void {

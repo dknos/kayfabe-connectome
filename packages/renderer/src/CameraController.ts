@@ -7,7 +7,7 @@ import * as THREE from "three";
 export class CameraController {
   readonly camera: THREE.PerspectiveCamera;
   target = new THREE.Vector3();
-  private sph = new THREE.Spherical(3.4, Math.PI / 2.3, 0.6);
+  private sph = new THREE.Spherical(2.8, Math.PI / 2.3, 0.6);
   private velYaw = 0;
   private velPitch = 0;
   private flight: {
@@ -141,11 +141,15 @@ export class CameraController {
   }
 
   reset(): void {
-    this.flyTo(new THREE.Vector3(0, 0, 0), 3.4, 0.9);
+    this.flyTo(new THREE.Vector3(0, 0, 0), 2.8, 0.9);
   }
 
   setAspect(aspect: number): void {
+    const wasPortrait = this.camera.aspect < 0.8;
     this.camera.aspect = aspect;
+    // portrait screens: widen the vertical fov so the structure fits horizontally
+    this.camera.fov = aspect < 1 ? Math.min(84, 52 / Math.pow(aspect, 0.6)) : 52;
+    if (aspect < 0.8 && !wasPortrait && this.sph.radius < 3.4) this.sph.radius = 3.8;
     this.camera.updateProjectionMatrix();
   }
 

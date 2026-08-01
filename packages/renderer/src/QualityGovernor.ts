@@ -8,9 +8,9 @@ export interface QualitySettings {
 }
 
 export const TIERS: Record<QualityTier, QualitySettings> = {
-  high: { pixelRatioCap: 2, bloom: true, edgeCap: 60000, labelCap: 26 },
-  medium: { pixelRatioCap: 1.5, bloom: true, edgeCap: 30000, labelCap: 18 },
-  low: { pixelRatioCap: 1, bloom: false, edgeCap: 12000, labelCap: 10 },
+  high: { pixelRatioCap: 2, bloom: true, edgeCap: 24000, labelCap: 26 },
+  medium: { pixelRatioCap: 1.5, bloom: true, edgeCap: 14000, labelCap: 18 },
+  low: { pixelRatioCap: 1, bloom: false, edgeCap: 8000, labelCap: 10 },
 };
 
 /**

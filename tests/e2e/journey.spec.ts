@@ -62,7 +62,7 @@ test.describe("vertical slice journey", () => {
   test("date filter recomputes from records; empty state is honest", async ({ page }) => {
     const y0 = page.getByLabel("Years");
     await y0.fill("1985");
-    const y1 = page.getByLabel("End year");
+    const y1 = page.getByLabel("End year", { exact: true });
     await y1.fill("1992");
     await expect(page.getByText("record-accurate range")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText(/\d+ entities · \d+ relationships/)).toBeVisible();

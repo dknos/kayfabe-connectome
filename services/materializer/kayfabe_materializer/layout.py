@@ -1,4 +1,4 @@
-"""global-layout@1 — deterministic 3D layout.
+"""global-layout@2 — deterministic 3D layout.
 
 * Communities sit on a golden-angle (Fibonacci) spiral sphere; the shell
   radius grows with community size rank (largest community innermost).
@@ -74,7 +74,7 @@ def _relax(points: list[list[float]], center: tuple[float, float, float], radius
                 p[1] = center[1] + oy * f
                 p[2] = center[2] + oz * f
     for p in points:
-        p[2] += (rng.random() - 0.5) * 0.25 * radius  # slight z-jitter
+        p[2] += (rng.random() - 0.5) * 0.5 * radius  # z volume: lobes, not discs
 
 
 def compute_layout(
@@ -105,7 +105,9 @@ def compute_layout(
         shell = 0.38 + (0.5 * rank / (k - 1) if k > 1 else 0.0)
         dx, dy, dz = _fib_sphere(rank, k)
         center = (dx * shell, dy * shell, dz * shell)
-        radius = min(0.30, 0.05 + 0.015 * math.sqrt(size))
+        # v2: the largest community holds ~45% of all people — it needs real
+        # volume or its thousands of fibers integrate into a white core on screen
+        radius = min(0.58, 0.03 + 0.0125 * math.sqrt(size))
         rng = random.Random(LAYOUT_SEED * 1_000_003 + cid)
         pts = []
         for j in range(size):

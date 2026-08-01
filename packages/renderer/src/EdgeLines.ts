@@ -43,8 +43,8 @@ export class EdgeLines {
         varying float vDepth;
         uniform float uGlobalAlpha;
         void main() {
-          float depthFade = smoothstep(9.0, 2.2, vDepth); // distant fibers sink into haze
-          gl_FragColor = vec4(vColor, vAlpha * uGlobalAlpha * mix(0.35, 1.0, depthFade));
+          float depthFade = smoothstep(11.0, 2.0, vDepth); // distant fibers sink into haze
+          gl_FragColor = vec4(vColor, vAlpha * uGlobalAlpha * mix(0.45, 1.0, depthFade));
         }`,
     });
     this.lines = new THREE.LineSegments(this.geo, mat);
