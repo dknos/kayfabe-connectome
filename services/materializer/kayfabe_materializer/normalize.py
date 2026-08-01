@@ -175,7 +175,12 @@ def parse_duration(raw: str | None) -> int | None:
 # (individual rows AND side-row parts). The detected set is recorded in
 # reconciliation/decisions.json.
 _PLACEHOLDER = re.compile(
-    r"(?i)^(?:unknown\b.*|tba|t\.b\.a\.?|to be announced|n/a|various\b.*)$"
+    r"(?i)^(?:unknown\b.*|tba|t\.b\.a\.?|to be announced|n/a|various\b.*"
+    # Bare generational suffixes are scraper split-artifacts of "Name, Jr."-style
+    # rows, not identities ('Jr.' alone appeared in 109 side rows and would
+    # otherwise become a phantom degree-243 person). Suffixes attached to a
+    # name ('Rey Misterio Jr.') are unaffected — only the bare token matches.
+    r"|jr\.?|sr\.?|ii|iii|iv)$"
 )
 
 

@@ -43,13 +43,21 @@ def derive_observations(form: str, kind: str, side_w: list[str], side_l: list[st
         "multiway_loser_pairs_suppressed": 0,
         "multiway_draw_pairs_suppressed": 0,
         "battle_royal_partner_pairs_suppressed": 0,
+        "dual_side_members_suppressed": 0,
     }
+
+    # Source corruption: the same person listed on both sides (15 matches in the
+    # audited corpus). Deriving anything for them would assert same-side AND
+    # opposed in one match — drop the person from this match entirely instead.
+    dual = set(side_w) & set(side_l)
+    if dual:
+        sup["dual_side_members_suppressed"] = len(dual)
+        side_w = [m for m in side_w if m not in dual]
+        side_l = [m for m in side_l if m not in dual]
 
     cross_rel = REL_BR if form == "battle_royal" else REL_OPPOSED
     for a in side_w:
         for b in side_l:
-            if a == b:
-                continue
             obs.append((cross_rel, a, b) if a < b else (cross_rel, b, a))
 
     def partners(side: list[str]) -> None:
@@ -80,7 +88,7 @@ def derive_observations(form: str, kind: str, side_w: list[str], side_l: list[st
 class PairAggregator:
     """Aggregates observations into pair edges with full evidence lists."""
 
-    __slots__ = ("pairs", "counters")
+    __slots__ = ("pairs", "counters", "dual_side_match_ids")
 
     def __init__(self):
         # pair_key -> mutable record
@@ -93,7 +101,9 @@ class PairAggregator:
             "multiway_loser_pairs_suppressed": 0,
             "multiway_draw_pairs_suppressed": 0,
             "battle_royal_partner_pairs_suppressed": 0,
+            "dual_side_members_suppressed": 0,
         }
+        self.dual_side_match_ids: list[int] = []
 
     def add_match(self, rec: dict) -> None:
         """Derive + fold in all observations for one canonical match record."""
@@ -102,6 +112,8 @@ class PairAggregator:
         obs, sup = derive_observations(rec["form"], rec["kind"], side_w, side_l)
         for k, v in sup.items():
             self.counters[k] += v
+        if sup["dual_side_members_suppressed"]:
+            self.dual_side_match_ids.append(rec["id"])
         if not obs:
             return
 

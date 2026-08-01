@@ -202,7 +202,9 @@ def build(out: Path | None = None) -> dict:
                 "l": list(rec["sides"][1]["members"]),
                 "unk": rec["sides"][0]["has_unknown"] or rec["sides"][1]["has_unknown"],
                 "t": f"t:{t_first}" if t_first is not None else None,
-                "tc": rec["title_change"],
+                # tc only meaningful with a real belt — keeps by-year sums equal
+                # to density.titleChanges (raw count stays in quality metrics)
+                "tc": rec["title_change"] if t_first is not None else 0,
                 "dur": rec["dur"],
             }
         )
@@ -598,6 +600,7 @@ def build(out: Path | None = None) -> dict:
     counters = dict(agg.counters)
     counters["partner_obs_by_form"] = dict(sorted(counters["partner_obs_by_form"].items()))
     counters["opposed_obs_by_form"] = dict(sorted(counters["opposed_obs_by_form"].items()))
+    counters["dual_side_match_ids"] = sorted(agg.dual_side_match_ids)
     metrics = {
         "passed": passed,
         "checks": checks,

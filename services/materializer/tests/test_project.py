@@ -126,16 +126,23 @@ def test_aggregator_edge_weights_equal_evidence_counts():
     assert p12["firstDay"] == p12["lastDay"] == 0
 
 
-def test_aggregator_title_match_counted_once_per_match():
+def test_aggregator_title_counts_and_dual_side_quality_ledger():
     agg = PairAggregator()
-    # person on both sides + a partner: same pair receives 2 obs in one match
+    # dual-side corruption is suppressed for that member, logged, and the rest
+    # of the match still derives; title weight tracks matches, not observations
     agg.add_match(
         _rec(9, "2001-01-05", "tag_team", "decisive", ["p:1", "p:2"], ["p:2", "p:3"], title=8)
     )
+    agg.add_match(
+        _rec(10, "2001-02-05", "tag_team", "decisive", ["p:1", "p:4"], ["p:2", "p:3"], title=8)
+    )
     pairs = dict(agg.sorted_pairs())
-    p12 = pairs["p:1|p:2"]
-    assert p12["same"] + p12["opposed"] == 2
-    assert p12["titleMatches"] == 1  # distinct matches, not observations
+    assert "p:1|p:2" not in pairs or pairs["p:1|p:2"]["titleMatches"] == 1
+    # match 9 collapses to p:1 vs p:3 after suppressing p:2
+    p13 = pairs["p:1|p:3"]
+    assert p13["opposed"] == 2 and p13["titleMatches"] == 2
+    assert agg.dual_side_match_ids == [9]
+    assert agg.counters["dual_side_members_suppressed"] == 1
 
 
 # ------------------------------------------------------------ reign-derive@1
@@ -173,3 +180,12 @@ def test_reign_derive_orders_by_date_card_match():
     reigns = derive_reigns(events)
     assert [r["m"] for r in reigns] == ["m:520", "m:761"]
     assert reigns[0]["e"] == "2001-01-07"
+
+
+def test_dual_side_member_suppressed_entirely():
+    # Source corruption: p:2 listed on both sides — nothing may be derived for them.
+    obs, sup = derive_observations("tag_team", "decisive", ["p:1", "p:2"], ["p:2", "p:3"])
+    assert sup["dual_side_members_suppressed"] == 1
+    flat = {x for (_, a, b) in obs for x in (a, b)}
+    assert "p:2" not in flat
+    assert obs == [("opposed", "p:1", "p:3")]

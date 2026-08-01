@@ -210,3 +210,14 @@ def test_belt_qualified_names_are_not_artifacts():
     assert m[23]["kind"] == "title"  # 'Interim <known>'
     # a title-shaped head before a known suffix IS a suspected concat
     assert m[24]["kind"] == "artifact"
+
+
+def test_bare_generational_suffix_is_never_a_person():
+    r = Resolver([(1, "Rey Misterio"), (2, "Eddy Guerrero"), (3, "Eddy Guerrero & Jr. & Rey Misterio")])
+    members, unknown, size = r.resolve(3)
+    assert members == ("p:2", "p:1")
+    assert unknown is True and size == 3
+    assert not any("Jr" in p for p in r.derived_slug)
+    # attached suffixes are untouched
+    r2 = Resolver([(1, "Rey Misterio Jr."), (2, "Psicosis"), (3, "Psicosis & Rey Misterio Jr.")])
+    assert r2.resolve(3) == (("p:2", "p:1"), False, 2)
