@@ -1,0 +1,79 @@
+# Source registry — every fact in the system traces to one of these.
+sources:
+  - id: local_sql
+    display_name: "Local SQLite corpus (wwe_db_2026-01-18.sqlite)"
+    access: "read-only sqlite, mode=ro&immutable=1, private copy in data/private/"
+    authority_class: canonical-bulk
+    retrieved: "2026-07-31 (file dated 2026-01-18)"
+    license_status: "user-supplied private corpus; card rows carry profightdb.com provenance URLs"
+    redistribution: private — raw rows, urls, and html payloads never published
+    attribution: none required internally; provenance URLs retained per record
+    refresh: manual (user supplies new snapshot)
+    trust_notes: >
+      Dates uniform ISO, zero orphan FKs. Wrestlers table conflates people and
+      ampersand-joined sides. Multi-way matches collapsed into two side rows.
+      info_html/match_html are raw payloads: retained privately, never published.
+    raw_payload_retention: yes (private)
+    raw_payload_publication: never
+
+  - id: wrestlingdb_api
+    display_name: "wrestlingdb.org (OWDB — Open Wrestling Database)"
+    access: "REST API, JWT auth, server-side key only; contract in config/wrestlingdb-contract.json"
+    authority_class: enrichment
+    retrieved: "contract derived 2026-07-31; sync BLOCKED: WRESTLINGDB_API_KEY absent"
+    license_status: "OWDB code GPL-3.0; data 'sourced from Wikipedia (factual data only)' per README"
+    redistribution: "facts only; respect upstream attribution requirements when publishing"
+    attribution: "credit wrestlingdb.org when its records are displayed"
+    refresh: incremental sync when key present
+    trust_notes: >
+      Corpus currently far smaller than local_sql (~346 wrestlers vs 19,278 rows
+      observed 2026-07-31). May fill nulls and propose candidates; never
+      silently overwrites local_sql values — conflicts become assertions.
+    raw_payload_retention: yes (private cache)
+    raw_payload_publication: never
+
+  - id: authored_correction
+    display_name: "Manually authored corrections"
+    access: "config/corrections/ files, reviewed"
+    authority_class: highest (explicit human override)
+    retrieved: n/a
+    license_status: project-owned
+    redistribution: publishable
+    attribution: none
+    refresh: manual
+    trust_notes: every correction records author, date, reason
+    raw_payload_retention: n/a
+    raw_payload_publication: yes
+
+  - id: computed_projection
+    display_name: "Derived graph projections"
+    access: services/materializer output
+    authority_class: derived
+    retrieved: at materialization time
+    license_status: project-owned derivation
+    redistribution: publishable (aggregates + source record IDs only)
+    attribution: derived-from labels in UI
+    refresh: every materialization
+    trust_notes: every edge retains supporting canonical match IDs
+    raw_payload_retention: n/a
+    raw_payload_publication: yes
+
+  - id: computed_metric
+    display_name: "Graph analytics (communities, centrality, similarity)"
+    access: services/materializer output
+    authority_class: derived
+    retrieved: at materialization time
+    license_status: project-owned derivation
+    redistribution: publishable with definitions
+    attribution: "labeled 'computed', never 'best/greatest/most important'"
+    refresh: every materialization
+    trust_notes: algorithm + parameters + version recorded in manifest
+    raw_payload_retention: n/a
+    raw_payload_publication: yes
+
+# Research backlog — NOT v1 sources. No fetching, no scrapers, no dormant deps.
+backlog:
+  - id: fandom_prowrestling
+    display_name: "prowrestling.fandom.com (user-suggested 2026-07-31)"
+    status: v2 candidate only — barred for v1 by build spec (no wiki scraping);
+      would require CC-BY-SA attribution plumbing and a licensing review first.

@@ -1,0 +1,19 @@
+{
+  "name": "kayfabe-connectome",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "db:doctor": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.db_doctor",
+    "wrestlingdb:doctor": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.wrestlingdb_doctor",
+    "wrestlingdb:sync": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.wrestlingdb_sync",
+    "data:extract": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.extract",
+    "data:validate": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.validate",
+    "data:materialize": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.materialize",
+    "data:report": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.report",
+    "dev": "pnpm --filter @kayfabe/web dev",
+    "build": "pnpm --filter @kayfabe/web build",
+    "test": "pnpm -r --if-present test && cd services/materializer && python3.12 -m pytest -q",
+    "test:py": "cd services/materializer && python3.12 -m pytest -q"
+  }
+}

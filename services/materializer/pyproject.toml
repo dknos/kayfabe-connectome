@@ -1,0 +1,12 @@
+[project]
+name = "kayfabe-materializer"
+version = "0.1.0"
+description = "Read-only audit, extraction, normalization, and graph materialization for Kayfabe Connectome"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
