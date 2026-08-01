@@ -1,4 +1,5 @@
 import { useStore } from "../state/store";
+import { GeoShortcuts } from "./GeoAnnouncer";
 import { GeoScopePicker } from "./GeoScopePicker";
 import {
   CALENDAR_SPEEDS, RECORD_SPEEDS, dayToIso, scheduler, useGeo,
@@ -205,6 +206,9 @@ export function GeoControls() {
           <p className="derivation-note micro">
             An arc joins consecutive plotted records in this scope. It is a record sequence, not a
             travel route — same-day cards are never joined.
+            {g.clock === "record" && g.speed > 12
+              ? " Suppressed above 12 cards/s: one arc per card at that rate is a mesh, not an annotation."
+              : ""}
           </p>
         )}
         {reducedMotion && (
@@ -214,6 +218,8 @@ export function GeoControls() {
           </p>
         )}
       </section>
+
+      <GeoShortcuts />
     </aside>
   );
 }

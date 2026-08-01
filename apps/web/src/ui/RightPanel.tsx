@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ChampionshipsFile, EvidenceEntry, PersonDossier } from "@kayfabe/graph-contract";
 import { dayToDate, pairKey } from "@kayfabe/graph-contract";
 import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
+import { GeoHandoffActions } from "../geo/GeoHandoff";
 import { EF } from "../graph/model";
 import { isoToDay, useStore } from "../state/store";
 
@@ -82,6 +83,12 @@ function NodeDossier({ id }: { id: string }) {
         <div className="stat"><div className="v">{model.nodes.degree[i]!.toLocaleString()}</div><div className="k">connections</div></div>
         <div className="stat"><div className="v">{model.nodes.reigns[i]!.toLocaleString()}</div><div className="k">reigns*</div></div>
       </div>
+
+      <GeoHandoffActions
+        kind={type === 0 ? "person" : type === 1 ? "promotion" : "championship"}
+        ids={[id]}
+        label={model.nodes.name[i] ?? id}
+      />
 
       {type === 0 && (
         <div className="actions">
@@ -227,6 +234,12 @@ function EdgeDossier({ edge }: { edge: number }) {
         <button onClick={() => select({ kind: "node", id: idA })}>{model.nodes.name[ia]}</button>
         <button onClick={() => select({ kind: "node", id: idB })}>{model.nodes.name[ib]}</button>
       </div>
+
+      <GeoHandoffActions
+        kind="pair"
+        ids={[idA, idB]}
+        label={`${model.nodes.name[ia]} × ${model.nodes.name[ib]}`}
+      />
 
       <div className="evidence">
         <h2>Supporting records <span className="line" /></h2>

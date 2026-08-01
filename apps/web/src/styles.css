@@ -307,13 +307,64 @@ label { color: var(--text-dim); }
 
 @media (max-width: 860px) {
   /* Mobile: the contextual controls become a bottom sheet so the globe stays
-     visible and touch-operable, and the inspector never permanently covers it. */
+     visible and touch-operable, and the inspector never permanently covers it.
+     The connectome hides its left rail outright on narrow viewports; GEO needs
+     it back, because the scope picker is how playback is chosen at all. */
+  .app[data-lens="geo"] .rail.left { display: block; }
   .rail.left, .rail.right {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
     max-height: 46vh; overflow-y: auto; z-index: 30;
     border-top: 1px solid var(--stroke); background: var(--surface-0);
     border-radius: 10px 10px 0 0;
   }
+  /* The sheet must sit ABOVE the transport bar, not under it — a sheet pinned
+     to bottom:0 puts its own play button beneath the footer, where taps land
+     on the footer instead. */
+  .app[data-lens="geo"] .rail.left,
+  .app[data-lens="geo"] .rail.right {
+    bottom: var(--geo-bar-h, 92px);
+    /* The globe has to keep the top half of the screen. A sheet sized by the
+       leftover viewport grows to ~78% on a tall phone and reduces the globe to
+       a strip, which defeats the point of a globe. */
+    max-height: 40vh;
+    overflow-x: hidden;
+  }
+  .app[data-lens="geo"] .rail .panel { padding: 8px 10px; }
+  /* Attribution must stay legible, and at the bottom it ends up under the
+     sheet. Move it to the top of the globe area, where nothing covers it. */
+  .app[data-lens="geo"] .geo-globe .cesium-widget-credits {
+    top: 4px; bottom: auto; left: 6px; right: 6px;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    padding: 2px 4px; border-radius: 4px;
+  }
+  .app[data-lens="geo"] .rail .row { flex-wrap: wrap; gap: 6px; }
+  .app[data-lens="geo"] .rail .row > label:first-child { min-width: 64px; }
+  .app[data-lens="geo"] .rail select,
+  .app[data-lens="geo"] .rail input[type="range"] { max-width: 55vw; }
+  .app[data-lens="geo"] .geo-bar { min-height: var(--geo-bar-h, 92px); }
   .geo-legend { display: none; }
-  .geo-bar .geo-scrub { width: 40vw; }
+  .geo-bar .geo-scrub { width: 36vw; }
+  /* The connectome hides its timeline readout on narrow viewports. GEO must
+     not: the current card — date, promotion, city, match count — is the whole
+     point of playback, and losing it on a phone loses the analysis. */
+  .app[data-lens="geo"] .pulse-readout {
+    display: block; min-width: 0; flex: 1; text-align: right; font-size: 10px;
+  }
+  .app[data-lens="geo"] .pulse-readout .date { font-size: 12px; }
+  .app[data-lens="geo"] .pulse-readout .evt { max-width: none; font-size: 10px; }
+}
+.geo-keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.geo-keys dt { color: var(--text-dim); font-family: var(--font-data); white-space: nowrap; }
+.geo-keys dd { margin: 0; color: var(--text-faint); }
+
+/* The sheet tabs only matter where the rails become sheets. */
+.geo-sheet-tabs { display: none; }
+@media (max-width: 860px) {
+  .geo-sheet-tabs { display: flex; gap: 4px; padding: 0 8px; }
+  /* One sheet at a time. Two bottom-pinned rails would bury both the globe and
+     each other, which is exactly what the mobile journey caught. */
+  .app[data-lens="geo"][data-geo-sheet="controls"] .rail.right,
+  .app[data-lens="geo"][data-geo-sheet="inspector"] .rail.left,
+  .app[data-lens="geo"][data-geo-sheet="hidden"] .rail.left,
+  .app[data-lens="geo"][data-geo-sheet="hidden"] .rail.right { display: none; }
 }

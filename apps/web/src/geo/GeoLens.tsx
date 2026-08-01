@@ -14,6 +14,9 @@ import type { GeoData } from "./geoAdapter";
  * switching back is instant.
  */
 
+/** Playback rate above which chronological arcs are suppressed. */
+const ARC_MAX_RATE = 12;
+
 /** Place rows for a set of indices, skipping any the projection does not
  * carry — a scope can never plot a place the places table lacks. */
 function placesFor(data: GeoData, indices: number[]) {
@@ -159,7 +162,12 @@ export function GeoLens() {
     }
     if (specs.length) e.pulse(specs);
 
-    if (st.showArcs) {
+    // Above this rate an arc per card is a mesh, not an annotation: at 100
+    // cards/second a 2.6s arc life saturates the pool instantly and the globe
+    // turns into spaghetti that communicates nothing. Beacons and the
+    // accumulating footprint carry high-speed playback instead.
+    const rate = st.clock === "record" ? st.speed : intents.length * 2;
+    if (st.showArcs && rate <= ARC_MAX_RATE) {
       for (const it of intents) {
         if (it.placeIdx < 0) continue;
         const prev = lastArc.current;

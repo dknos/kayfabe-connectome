@@ -64,6 +64,9 @@ export interface GeoState {
   openedCard: GeoCard | null;
   /** Set when the visual budget grouped beacons, so the UI can say so. */
   aggregated: number;
+  /** Which bottom sheet is open on a narrow viewport. Only one at a time —
+   * two stacked sheets would bury the globe and each other. */
+  sheet: "controls" | "inspector" | "hidden";
 
   boot(): Promise<void>;
   setScope(scope: GeoScope, pairCardIds?: string[]): Promise<void>;
@@ -80,6 +83,7 @@ export interface GeoState {
   setShowArcs(v: boolean): void;
   setTier(t: QualityTier): void;
   selectPlace(idx: number): void;
+  setSheet(s: "controls" | "inspector" | "hidden"): void;
   openCard(card: GeoCard | null): void;
   syncFromScheduler(): void;
   restart(): void;
@@ -122,6 +126,7 @@ export const useGeo = create<GeoState>((set, get) => ({
   selectedPlace: -1,
   openedCard: null,
   aggregated: 0,
+  sheet: "controls",
 
   async boot() {
     if (get().data || get().loading) return;
@@ -210,7 +215,13 @@ export const useGeo = create<GeoState>((set, get) => ({
   },
 
   selectPlace(selectedPlace) {
-    set({ selectedPlace, openedCard: null });
+    // Selecting a city on a narrow viewport should reveal what was selected.
+    set({ selectedPlace, openedCard: null,
+          ...(selectedPlace >= 0 ? { sheet: "inspector" as const } : {}) });
+  },
+
+  setSheet(sheet) {
+    set({ sheet });
   },
 
   openCard(openedCard) {

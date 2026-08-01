@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { cardStrings, dayToIso, placeOf, useGeo } from "./geoStore";
+import { cardStrings, dayToIso, placeOf, promotionIdOf, useGeo } from "./geoStore";
 import { loadSourceLocationMap, readCard } from "./geoAdapter";
+import { GeoAnalytics, GeoComparison } from "./GeoAnalytics";
+import { openInConnectome } from "./GeoHandoff";
 import type { SourceLocationRow } from "./geoTypes";
 
 /**
@@ -91,6 +93,11 @@ export function GeoInspector() {
             </p>
           )}
           <p className="micro">card {card.cardId}</p>
+          <div className="actions">
+            <button onClick={() => openInConnectome(promotionIdOf(data, card))}>
+              Open promotion in Connectome
+            </button>
+          </div>
           {g.currentBatch.length > 1 && (
             <p className="derivation-note micro" data-testid="geo-same-day">
               {g.currentBatch.length} documented cards share this date. They are shown together;
@@ -216,6 +223,9 @@ export function GeoInspector() {
           </p>
         )}
       </section>
+
+      <GeoAnalytics />
+      <GeoComparison />
     </aside>
   );
 }

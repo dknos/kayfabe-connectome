@@ -275,8 +275,19 @@ def resolve_all(geo: dict, gz, configs: dict) -> dict[str, Resolution]:
                           notes=["override row carries neither geonames_id nor coordinates"])
 
     def prior_countries(key: str) -> list[str]:
+        """Ordered candidate countries for the promotions that ran this location.
+
+        Promotions are walked heaviest-first, then by id: the surface's
+        promotion dict is insertion-ordered, and its insertion order differs
+        between a fresh build and a cached one. That reordered the prior list —
+        and therefore the human-readable note recording it — without changing a
+        single verdict. Deterministic output has to mean byte-identical, so the
+        order is pinned here rather than inherited from a dict."""
+        promos = sorted(
+            surface[key]["promotions"].items(), key=lambda kv: (-kv[1], kv[0])
+        )
         codes: list[str] = []
-        for pid in surface[key]["promotions"]:
+        for pid, _cards in promos:
             for c in priors.get(fold(promo_names.get(pid, "")), ()):
                 if c not in codes:
                     codes.append(c)

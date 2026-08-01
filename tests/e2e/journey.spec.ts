@@ -88,11 +88,11 @@ test.describe("vertical slice journey", () => {
 
   test("timeline playback fires and pauses", async ({ page }) => {
     await page.getByLabel("Timeline mode").selectOption("playback");
-    await page.getByRole("button", { name: "Play" }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
     await page.waitForTimeout(2500);
     await page.getByRole("button", { name: "Pause" }).click();
-    await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
     const errors = (page as any)._consoleErrors as string[];
     expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
   });

@@ -7,7 +7,7 @@
    "confidence": 0.8,
    "matchedLabel": "Merrionette Park",
    "notes": [
-    "candidates constrained to US/CA/MX/GB/JP by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to US/CA/GB/JP/MX by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:4902033",
    "resolution": "probable",
@@ -363,7 +363,7 @@
    "confidence": 0.8,
    "matchedLabel": "Yamanashi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:11611479",
    "resolution": "probable",
@@ -2151,7 +2151,7 @@
    "confidence": 0.8,
    "matchedLabel": "Aomori",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2130658",
    "resolution": "probable",
@@ -2228,7 +2228,7 @@
    "confidence": 0.8,
    "matchedLabel": "Nagaoka",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1856199",
@@ -2866,7 +2866,7 @@
    "confidence": 0.8,
    "matchedLabel": "Asahikawa",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2130629",
    "resolution": "probable",
@@ -2899,7 +2899,7 @@
    "confidence": 0.8,
    "matchedLabel": "Asahikawa",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2130629",
    "resolution": "probable",
@@ -4129,7 +4129,7 @@
    "confidence": 0.65,
    "matchedLabel": "New York City",
    "notes": [
-    "candidates constrained to JP/US/GB/AU/TW/CA by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/JP/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -5649,7 +5649,7 @@
    "confidence": 0.8,
    "matchedLabel": "Broxbourne",
    "notes": [
-    "candidates constrained to JP/US/CA/GB/IE by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to GB/IE/US/JP/CA by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2654481",
    "resolution": "probable",
@@ -7406,7 +7406,7 @@
    "confidence": 0.8,
    "matchedLabel": "Chiba",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2113015",
@@ -9340,7 +9340,7 @@
    "confidence": 0.8,
    "matchedLabel": "London",
    "notes": [
-    "candidates constrained to JP/US/GB/AU/TW/CA/IE by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/IE/CA by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2643743",
@@ -9562,7 +9562,7 @@
    "confidence": 0.8,
    "matchedLabel": "Jacksonville",
    "notes": [
-    "candidates constrained to US/CA/GB/MX/JP by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/JP/MX by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:4160021",
@@ -13928,7 +13928,7 @@
    "confidence": 0.65,
    "matchedLabel": "Fukui-shi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -13989,7 +13989,7 @@
    "confidence": 0.8,
    "matchedLabel": "Fukuoka",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1863967",
    "resolution": "probable",
@@ -14077,7 +14077,7 @@
    "confidence": 0.8,
    "matchedLabel": "Fukushima",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2112923",
@@ -14837,7 +14837,7 @@
    "confidence": 0.8,
    "matchedLabel": "Gifu",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1863641",
    "resolution": "probable",
@@ -15773,7 +15773,7 @@
    "confidence": 0.8,
    "matchedLabel": "Maebashi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1857843",
    "resolution": "probable",
@@ -15982,7 +15982,7 @@
    "confidence": 0.8,
    "matchedLabel": "Hachinohe",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2130203",
    "resolution": "probable",
@@ -16123,7 +16123,7 @@
    "confidence": 0.8,
    "matchedLabel": "Hakodate",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2130188",
    "resolution": "probable",
@@ -16378,7 +16378,7 @@
    "confidence": 0.65,
    "matchedLabel": "New York City",
    "notes": [
-    "candidates constrained to US/JP/GB/AU/TW/CA/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/JP/AU/TW/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -19025,7 +19025,7 @@
    "confidence": 0.8,
    "matchedLabel": "Imabari",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1926134",
    "resolution": "probable",
@@ -19699,7 +19699,7 @@
    "confidence": 0.8,
    "matchedLabel": "Matsuyama",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1926099",
    "resolution": "probable",
@@ -19743,7 +19743,7 @@
    "confidence": 0.8,
    "matchedLabel": "Iwade",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1861244",
@@ -19922,7 +19922,7 @@
    "confidence": 0.65,
    "matchedLabel": "Numakunai",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "matched a GeoNames alternate name, not a primary name"
    ],
    "place_id": "g:2111574",
@@ -20929,7 +20929,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kagoshima",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1860827",
    "resolution": "probable",
@@ -20940,7 +20940,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kagoshima",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1860827",
    "resolution": "probable",
@@ -21261,7 +21261,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kanazawa",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1860243",
    "resolution": "probable",
@@ -21316,7 +21316,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kanuma",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1860098",
    "resolution": "probable",
@@ -21489,7 +21489,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kasugai",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1859891",
    "resolution": "probable",
@@ -21677,7 +21677,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kawasaki",
    "notes": [
-    "candidates constrained to MX/JP/US/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/MX by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1859642",
@@ -22147,7 +22147,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kishiwada",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1859383",
    "resolution": "probable",
@@ -22679,7 +22679,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kochi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1859146",
@@ -22986,7 +22986,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kōriyama",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2112141",
    "resolution": "probable",
@@ -23259,7 +23259,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kumagaya",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1858428",
    "resolution": "probable",
@@ -23669,7 +23669,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kuwana",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:11468429",
    "resolution": "probable",
@@ -23724,7 +23724,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kyoto",
    "notes": [
-    "candidates constrained to MX/JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/CN/GB/AU/TW/MX by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1857910",
    "resolution": "probable",
@@ -24962,7 +24962,7 @@
    "confidence": 0.8,
    "matchedLabel": "Cologne",
    "notes": [
-    "candidates constrained to GB/IE/US/DE/NL/AT by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to DE/GB/NL/AT/US/IE by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:5021807",
    "resolution": "probable",
@@ -25601,7 +25601,7 @@
    "confidence": 0.8,
    "matchedLabel": "Maebashi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1857843",
    "resolution": "probable",
@@ -25735,7 +25735,7 @@
    "confidence": 0.8,
    "matchedLabel": "Chiba",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CA by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2113015",
    "resolution": "probable",
@@ -25911,7 +25911,7 @@
    "confidence": 0.65,
    "matchedLabel": "New York City",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/PR/IN/JP by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -26510,7 +26510,7 @@
    "confidence": 0.8,
    "matchedLabel": "Mie",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1857357",
    "resolution": "probable",
@@ -26933,7 +26933,7 @@
    "confidence": 0.65,
    "matchedLabel": "New York City",
    "notes": [
-    "candidates constrained to US/JP/CA/MX by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/MX/JP by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -27473,7 +27473,7 @@
    "confidence": 0.8,
    "matchedLabel": "Toronto",
    "notes": [
-    "candidates constrained to GB/IE/US/DE/NL/AT by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to DE/GB/NL/AT/US/IE by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:5174095",
    "resolution": "probable",
@@ -27876,7 +27876,7 @@
    "confidence": 0.8,
    "matchedLabel": "Mito",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2111901",
    "resolution": "probable",
@@ -28123,7 +28123,7 @@
    "confidence": 0.8,
    "matchedLabel": "Miyakonojō",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1856775",
    "resolution": "probable",
@@ -28779,15 +28779,15 @@
    "rung": "cross-family"
   },
   "csv:Mountbatten Centre\u001fPortsmouth": {
-   "confidence": 0.0,
-   "matchedLabel": null,
+   "confidence": 0.72,
+   "matchedLabel": "Portsmouth",
    "notes": [
-    "19 places named 'Portsmouth', none dominant"
+    "the only place named 'Portsmouth' in GB, the home country of the promotions that ran this location"
    ],
-   "place_id": null,
-   "resolution": "ambiguous",
+   "place_id": "g:2639996",
+   "resolution": "probable",
    "reviewed": false,
-   "rung": ""
+   "rung": "promotion-home-country"
   },
   "csv:Movement Park Citizen Gymnasium\u001fIyomishima": {
    "confidence": 0.0,
@@ -29326,7 +29326,7 @@
    "confidence": 0.8,
    "matchedLabel": "Nagano",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1856215",
@@ -29422,7 +29422,7 @@
    "confidence": 0.8,
    "matchedLabel": "Nagano",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1856215",
@@ -29517,7 +29517,7 @@
    "confidence": 0.8,
    "matchedLabel": "Nagaoka",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1856199",
@@ -30158,7 +30158,7 @@
    "confidence": 0.8,
    "matchedLabel": "Narutō",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2111677",
    "resolution": "probable",
@@ -30709,7 +30709,7 @@
    "confidence": 0.8,
    "matchedLabel": "Takasaki",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1851002",
    "resolution": "probable",
@@ -31005,7 +31005,7 @@
    "confidence": 0.8,
    "matchedLabel": "Niigata",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1855431",
    "resolution": "probable",
@@ -31939,7 +31939,7 @@
    "confidence": 0.8,
    "matchedLabel": "London",
    "notes": [
-    "candidates constrained to GB/IE/US/CA/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/PR/IN/IE by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2643743",
@@ -32096,7 +32096,7 @@
    "confidence": 0.8,
    "matchedLabel": "Obihiro",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2128815",
    "resolution": "probable",
@@ -32151,7 +32151,7 @@
    "confidence": 0.8,
    "matchedLabel": "Port Hueneme",
    "notes": [
-    "candidates constrained to US/CA/MX/JP/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CA/MX by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:5384339",
    "resolution": "probable",
@@ -32195,7 +32195,7 @@
    "confidence": 0.8,
    "matchedLabel": "Odawara",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1854747",
    "resolution": "probable",
@@ -32408,7 +32408,7 @@
    "confidence": 0.8,
    "matchedLabel": "Ōita",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1854487",
    "resolution": "probable",
@@ -32606,7 +32606,7 @@
    "confidence": 0.8,
    "matchedLabel": "Okinawa",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1894616",
    "resolution": "probable",
@@ -32802,7 +32802,7 @@
    "confidence": 0.8,
    "matchedLabel": "Ōmuta",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1854083",
    "resolution": "probable",
@@ -33882,7 +33882,7 @@
    "confidence": 0.8,
    "matchedLabel": "Mexico City",
    "notes": [
-    "candidates constrained to MX/JP/US by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to MX/US/JP by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:3530597",
    "resolution": "probable",
@@ -36228,7 +36228,7 @@
    "confidence": 0.8,
    "matchedLabel": "Rahway",
    "notes": [
-    "candidates constrained to US/CA/MX/JP/GB/AU/TW/PR/IN by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to US/CA/GB/PR/IN/MX/JP/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:5103055",
    "resolution": "probable",
@@ -37915,7 +37915,7 @@
    "confidence": 0.8,
    "matchedLabel": "Sagamihara",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:11611609",
    "resolution": "probable",
@@ -39455,7 +39455,7 @@
    "confidence": 0.8,
    "matchedLabel": "Sendai",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2111149",
@@ -39812,7 +39812,7 @@
    "confidence": 0.8,
    "matchedLabel": "Ōtsu",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1853574",
    "resolution": "probable",
@@ -40298,7 +40298,7 @@
    "confidence": 0.8,
    "matchedLabel": "Shirakawa",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:11612472",
    "resolution": "probable",
@@ -40474,7 +40474,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kent",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/PR/IN/JP by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:5799625",
@@ -43551,7 +43551,7 @@
    "confidence": 0.8,
    "matchedLabel": "Takaoka",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1851032",
    "resolution": "probable",
@@ -43776,7 +43776,7 @@
    "confidence": 0.75,
    "matchedLabel": "Tanabe",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "matched a small place from the per-country gazetteer, not the major-cities file"
    ],
    "place_id": "g:11777239",
@@ -43888,7 +43888,7 @@
    "confidence": 0.8,
    "matchedLabel": "Ube",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1849498",
    "resolution": "probable",
@@ -46636,7 +46636,7 @@
    "confidence": 0.8,
    "matchedLabel": "Tokoname",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1850185",
    "resolution": "probable",
@@ -46691,7 +46691,7 @@
    "confidence": 0.8,
    "matchedLabel": "Tokushima",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1850158",
    "resolution": "probable",
@@ -47215,7 +47215,7 @@
    "confidence": 0.65,
    "matchedLabel": "Tottori-shi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -47228,7 +47228,7 @@
    "confidence": 0.65,
    "matchedLabel": "Tottori-shi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates",
     "matched a GeoNames alternate name, not a primary name"
    ],
@@ -47487,7 +47487,7 @@
    "confidence": 0.8,
    "matchedLabel": "Toyohashi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1849846",
    "resolution": "probable",
@@ -47595,7 +47595,7 @@
    "confidence": 0.8,
    "matchedLabel": "Toyota",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:1849814",
@@ -47830,7 +47830,7 @@
    "confidence": 0.8,
    "matchedLabel": "Mie",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1857357",
    "resolution": "probable",
@@ -47973,7 +47973,7 @@
    "confidence": 0.8,
    "matchedLabel": "Tsukuba",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2110681",
    "resolution": "probable",
@@ -48234,7 +48234,7 @@
    "confidence": 0.8,
    "matchedLabel": "Shizuoka",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1851717",
    "resolution": "probable",
@@ -54732,7 +54732,7 @@
    "confidence": 0.8,
    "matchedLabel": "Utsunomiya",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1849053",
    "resolution": "probable",
@@ -55348,7 +55348,7 @@
    "confidence": 0.8,
    "matchedLabel": "Huntsville",
    "notes": [
-    "candidates constrained to US/JP/CA/GB/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/PR/IN/JP by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:4068590",
@@ -55572,7 +55572,7 @@
    "confidence": 0.75,
    "matchedLabel": "Wakayanagi",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "matched a small place from the per-country gazetteer, not the major-cities file"
    ],
    "place_id": "g:2110599",
@@ -56572,7 +56572,7 @@
    "confidence": 0.8,
    "matchedLabel": "Kasukabe",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1859884",
    "resolution": "probable",
@@ -57100,7 +57100,7 @@
    "confidence": 0.8,
    "matchedLabel": "Yaizu",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1848774",
    "resolution": "probable",
@@ -57179,7 +57179,7 @@
    "confidence": 0.8,
    "matchedLabel": "Yamagata",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2110556",
@@ -57203,7 +57203,7 @@
    "confidence": 0.8,
    "matchedLabel": "Yamagata",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2110556",
@@ -57251,7 +57251,7 @@
    "confidence": 0.8,
    "matchedLabel": "Yamagata",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2110556",
@@ -57845,7 +57845,7 @@
    "confidence": 0.8,
    "matchedLabel": "London",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/IE/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to GB/IE/US/CA/JP/PR/IN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2643743",
@@ -58024,7 +58024,7 @@
    "confidence": 0.8,
    "matchedLabel": "Ueno",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:1849417",
    "resolution": "probable",
@@ -58127,7 +58127,7 @@
    "confidence": 0.65,
    "matchedLabel": "Zentsujichó",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "matched a GeoNames alternate name, not a primary name"
    ],
    "place_id": "g:1847983",
@@ -58194,7 +58194,7 @@
    "confidence": 0.8,
    "matchedLabel": "Sendai",
    "notes": [
-    "candidates constrained to JP/US/CN/GB/AU/TW by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to JP/US/GB/AU/TW/CN by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2111149",
@@ -61083,7 +61083,7 @@
    "confidence": 0.8,
    "matchedLabel": "Leipzig",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/DE/MX/SA/AU/IT/AE by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to US/CA/GB/JP/MX/SA/AU/DE/IT/AE by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2879139",
    "resolution": "probable",
@@ -61743,7 +61743,7 @@
    "confidence": 0.65,
    "matchedLabel": "Munich",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/DE/IT/MX/SA/AU/AE by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/JP/MX/SA/AU/DE/IT/AE by the promotions that ran this location; a prior narrows, it never selects",
     "matched a GeoNames alternate name, not a primary name"
    ],
    "place_id": "g:2867714",
@@ -61764,7 +61764,7 @@
    "confidence": 0.8,
    "matchedLabel": "Berlin",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/DE/IT/MX/SA/AU/AE by the promotions that ran this location; a prior narrows, it never selects",
+    "candidates constrained to US/CA/GB/JP/MX/SA/AU/DE/IT/AE by the promotions that ran this location; a prior narrows, it never selects",
     "chosen by population dominance over the other candidates"
    ],
    "place_id": "g:2950159",
@@ -63305,7 +63305,7 @@
    "confidence": 0.8,
    "matchedLabel": "Nuremberg",
    "notes": [
-    "candidates constrained to US/CA/GB/JP/DE/IT/MX/SA/AU/AE by the promotions that ran this location; a prior narrows, it never selects"
+    "candidates constrained to US/CA/GB/JP/MX/SA/AU/DE/IT/AE by the promotions that ran this location; a prior narrows, it never selects"
    ],
    "place_id": "g:2861650",
    "resolution": "probable",

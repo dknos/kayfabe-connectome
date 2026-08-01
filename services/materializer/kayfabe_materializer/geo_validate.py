@@ -66,6 +66,9 @@ def run(argv: list[str] | None = None) -> int:
     if "--coverage" in argv:
         _print_coverage(manifest, quality)
         return 0
+    if "--report" in argv:
+        _write_report(manifest, quality)
+        return 0
 
     c = Checks()
     places = _read("places.json")
@@ -271,6 +274,81 @@ def _print_coverage(manifest: dict, quality: dict) -> None:
     print("    coordinate precision: " + ", ".join(
         f"{k} {v}" for k, v in sorted(quality["precisionCounts"].items())))
     print("    " + "; ".join(manifest.get("attribution", [])))
+
+
+def _write_report(manifest: dict, quality: dict) -> None:
+    """Regenerate docs/GEO-COVERAGE-REPORT.md from the projection itself, so the
+    published numbers can never drift from the data that produced them."""
+    root = OUT.parents[2]
+    unresolved = json.loads((OUT / "unresolved.json").read_text(encoding="utf-8"))
+    t = quality["targets"]
+    lines = [
+        "# Geographic coverage report",
+        "",
+        "**Generated** by `pnpm geo:validate --report`. Do not hand-edit — rerun it.",
+        f"Projection `{manifest['projection_version']}`, "
+        f"resolution `{manifest['resolution_version']}`, "
+        f"gazetteer `{manifest['gazetteer_version']}`.",
+        "",
+        "## Coverage",
+        "",
+        "| denominator | resolved | of | share | target | meets |",
+        "|---|---|---|---|---|---|",
+    ]
+    rows = [
+        ("source location rows", quality["totalLocations"] - _unres_locs(quality),
+         quality["totalLocations"], quality["rowCoverage"], t["rows"]),
+        ("cards", quality["plottedCards"], quality["totalCards"],
+         quality["cardCoverage"], t["cards"]),
+        ("matches", quality["plottedMatches"], quality["totalMatches"],
+         quality["matchCoverage"], t["matches"]),
+    ]
+    for label, got, total, frac, target in rows:
+        lines.append(
+            f"| {label} | {got:,} | {total:,} | {frac * 100:.2f}% | "
+            f"{target * 100:.0f}% | {'yes' if frac >= target else 'no'} |"
+        )
+    lines += ["", "## Verdicts", "",
+              "| verdict | locations | cards | matches | plotted |", "|---|---|---|---|---|"]
+    plotted = {"confirmed": "yes", "probable": "yes"}
+    for k in sorted(quality["byResolution"]):
+        v = quality["byResolution"][k]
+        lines.append(
+            f"| {k} | {v['locations']:,} | {v['cards']:,} | {v['matches']:,} | "
+            f"{plotted.get(k, '**no**')} |"
+        )
+    lines += ["", "## Coordinate precision", "", "| precision | places |", "|---|---|"]
+    for k in sorted(quality["precisionCounts"]):
+        lines.append(f"| {k} | {quality['precisionCounts'][k]:,} |")
+    lines += [
+        "", f"{quality['places']:,} canonical places carry "
+        f"{quality['plottedCards']:,} plotted cards.",
+        "", "## Largest unplotted locations", "",
+        "| source location | cards | matches | verdict |", "|---|---|---|---|",
+    ]
+    for r in unresolved[:20]:
+        name = r["rawName"].replace("|", "\\|") or "(empty)"
+        lines.append(f"| `{name}` | {r['cards']} | {r['matches']} | {r['resolution']} |")
+    lines += [
+        "",
+        f"{len(unresolved):,} locations are unplotted, carrying "
+        f"{quality['unplottedCards']:,} cards and "
+        f"{quality['unplottedMatches']:,} matches. Every one is counted in the "
+        "totals above and in the lens; none is plotted, and none sits at 0,0.",
+        "",
+        "## Attribution",
+        "",
+    ] + [f"* {a}" for a in manifest.get("attribution", [])] + [""]
+    path = root / "docs" / "GEO-COVERAGE-REPORT.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"wrote {path}")
+
+
+def _unres_locs(quality: dict) -> int:
+    return sum(
+        v["locations"] for k, v in quality["byResolution"].items()
+        if k in ("ambiguous", "unresolved", "rejected")
+    )
 
 
 if __name__ == "__main__":

@@ -42,6 +42,18 @@ export function GeoTimelineReadout() {
         />
       </div>
 
+      <div className="geo-sheet-tabs" role="tablist" aria-label="Panel">
+        {(["controls", "inspector", "hidden"] as const).map((t) => (
+          <button
+            key={t} role="tab" aria-selected={g.sheet === t}
+            className={`chip ${g.sheet === t ? "on" : ""}`}
+            onClick={() => g.setSheet(t)}
+          >
+            {t === "hidden" ? "globe only" : t}
+          </button>
+        ))}
+      </div>
+
       <div className="geo-legend" aria-label="Legend">
         <span><i className="swatch dot" style={{ background: rgb(GEO_COLORS.beaconHot) }} /> card</span>
         <span><i className="swatch dot" style={{ background: rgb(GEO_COLORS.gold) }} /> title change</span>

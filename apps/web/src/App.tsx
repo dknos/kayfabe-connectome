@@ -8,6 +8,7 @@ import { StageCanvas } from "./ui/StageCanvas";
 import { TableView } from "./ui/TableView";
 import { TimelineBar } from "./ui/TimelineBar";
 import { TopBar } from "./ui/TopBar";
+import { GeoAnnouncer } from "./geo/GeoAnnouncer";
 import { GeoControls } from "./geo/GeoControls";
 import { GeoInspector } from "./geo/GeoInspector";
 import { GeoLens } from "./geo/GeoLens";
@@ -36,6 +37,7 @@ export function App() {
   // The geo projection loads only when the lens is first opened; a reader who
   // never opens GEO never pays for 16 MB of geographic data.
   const geoActive = lens === "geo" || lens === "geoTable";
+  const geoSheet = useGeo((s) => s.sheet);
   useEffect(() => {
     if (!geoActive) return;
     void useGeo.getState().boot().then(() => applyPendingGeoUrl());
@@ -143,7 +145,7 @@ export function App() {
   }
 
   return (
-    <div className="app" data-lens={lens}>
+    <div className="app" data-lens={lens} data-geo-sheet={geoSheet}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
@@ -155,6 +157,7 @@ export function App() {
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
         {model && lens === "geo" && <GeoInspector />}
+        {model && lens === "geo" && <GeoAnnouncer />}
         {model && lens === "geoTable" && <GeoTable />}
         {!model && (
           <div className="boot">
