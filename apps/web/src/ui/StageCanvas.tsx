@@ -5,6 +5,29 @@ import { EF, type FilteredView, type GraphModel } from "../graph/model";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
 
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * Top promotion anchors by corpus weight, computed once per model.
+ *
+ * All 165 anchors would eat the whole label budget, and the ordering never
+ * changes — re-sorting 30,000 nodes on the 140 ms label cadence (which is what
+ * this replaced) was pure waste.
+ */
+function makeTopPromos(): (m: GraphModel) => number[] {
+  let key: GraphModel | null = null;
+  let val: number[] = [];
+  return (m: GraphModel): number[] => {
+    if (m === key) return val;
+    const promos: number[] = [];
+    for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 1) promos.push(i);
+    promos.sort((a, b) => m.nodes.matches[b]! - m.nodes.matches[a]! || a - b);
+    key = m;
+    val = promos.slice(0, 12);
+    return val;
+  };
+}
+
 function buildAdapter(model: GraphModel, view: FilteredView): ViewEdges {
   const wIndex = new Map<number, number>();
   view.visible.forEach((e, i) => wIndex.set(e, i));
@@ -54,8 +77,12 @@ export function StageCanvas({
     r.start();
     onRenderer(r);
 
-    engine.onFire = (f) => {
+    const unlisten = engine.addListener((f) => {
       const st = useStore.getState();
+      // A paused connectome must not process pulses for a lens that is not on
+      // screen: the work is invisible and the ignite decay keeps a rAF-free
+      // renderer's arrays hot for nothing.
+      if (st.lens !== "connectome") return;
       const idx = (id: string) => model.indexOfId.get(id);
       for (const id of f.ignite) {
         const i = idx(id);
@@ -74,7 +101,7 @@ export function StageCanvas({
           }
         }
       }
-    };
+    });
 
     // Push whatever state existed BEFORE this subscription registered — the boot
     // sequence computes the first view synchronously, so without this the
@@ -107,11 +134,22 @@ export function StageCanvas({
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
-      engine.onFire = null;
+      unlisten();
       r.dispose();
       rendererRef.current = null;
+      delete (window as { __kayfabeRenderer?: ConnectomeRenderer }).__kayfabeRenderer;
     };
   }, [model, core, engine, onRenderer, onDropChange]);
+
+  // ---------- lens lifecycle ----------
+  // The connectome stays MOUNTED under every lens so its camera framing and
+  // GPU buffers survive the round trip; only the frame loop is suspended.
+  // Switching Connectome -> Atlas -> Connectome must therefore restore the
+  // previous framing rather than performing an unexpected fit-all.
+  const lens = useStore((s) => s.lens);
+  useEffect(() => {
+    rendererRef.current?.setActive(lens === "connectome");
+  }, [lens]);
 
   // ---------- store → renderer bridges ----------
   useEffect(() => {
@@ -297,6 +335,7 @@ export function StageCanvas({
   // strip is re-attached on every rebuild.
   const probeRef = useRef<number | null>(null);
   const labelEls = useRef(new Map<number, HTMLDivElement>());
+  const topPromoRef = useRef(makeTopPromos());
   useEffect(() => {
     /** The documented relationship between the current selection and one other
      * node, in the fiber palette's own terms. Hovering a name while someone is
@@ -431,37 +470,53 @@ export function StageCanvas({
         : null;
       const isoIds = isolateIdsRef.current ?? connection;
       const cap = isoIds ? isoIds.length + 4 : r.governor.settings.labelCap;
-      const wanted: { i: number; cls: string }[] = [];
+      const wanted: { i: number; cls: string; t: number }[] = [];
       const seen = new Set<number>();
       const push = (id: string | null, cls: string) => {
         if (!id) return;
         const i = m.indexOfId.get(id);
         if (i === undefined || seen.has(i)) return;
         seen.add(i);
-        wanted.push({ i, cls });
+        wanted.push({ i, cls, t: 1 });
       };
       if (st.selection?.kind === "node") push(st.selection.id, "sel");
       push(st.hoverId, "sel");
       st.pathResult?.nodes.forEach((id) => push(id, ""));
       st.pinned.forEach((id) => push(id, ""));
       if (st.currentEvent) [...st.currentEvent.w, ...st.currentEvent.l].forEach((id) => push(id, ""));
-      // top promotion anchors (by corpus weight — 165 anchors would eat the
-      // whole label budget), then top-degree people
-      const order: number[] = [];
-      for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 1) order.push(i);
-      order.sort((a, b) => m.nodes.matches[b]! - m.nodes.matches[a]!);
-      const people: number[] = [];
-      for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 0) people.push(i);
-      people.sort((a, b) => m.nodes.degree[b]! - m.nodes.degree[a]!);
       if (isoIds) {
         for (const id of isoIds) push(id, "iso");
-      }
-      for (const i of [...order.slice(0, 12), ...people.slice(0, 60)]) {
-        if (isoIds) break;
-        if (wanted.length >= cap) break;
-        if (!seen.has(i)) {
+      } else {
+        // Ambient tier, in two parts.
+        //
+        // 1. The largest promotion anchors, always. They are what makes the
+        //    fit-all view readable as a map rather than a nebula, and they do
+        //    not change, so the ranking is computed once per corpus instead of
+        //    re-sorting 30,000 nodes seven times a second.
+        for (const i of topPromoRef.current(m)) {
+          if (wanted.length >= cap) break;
+          if (seen.has(i)) continue;
           seen.add(i);
-          wanted.push({ i, cls: "dim" });
+          wanted.push({ i, cls: "dim", t: 0.6 });
+        }
+        // 2. Whatever the camera is currently among. Flying into the tissue
+        //    should resolve the names around you out of it — a fixed global
+        //    top-degree list shows the same sixty people no matter where you
+        //    are, which is the opposite of exploring.
+        const dist = r.cameraDistance;
+        // Shell tracks the framing: at fit-all it spans the corpus and the
+        // collision grid does the thinning; flown in close it tightens to the
+        // neighbourhood you are actually inside.
+        const shell = Math.max(0.16, 0.46 * dist + 0.06);
+        // The budget grows as you descend. 26 labels reads as a constellation
+        // from outside and as a desert once you are standing in a lobe.
+        const zoomIn = clamp01((2.6 - dist) / 2.1);
+        const budget = Math.round(cap * (1 + 2.4 * zoomIn));
+        for (const { i, t } of r.nearestNodes(shell, budget * 3)) {
+          if (wanted.length >= budget) break;
+          if (seen.has(i)) continue;
+          seen.add(i);
+          wanted.push({ i, cls: "dim", t });
         }
       }
 
@@ -469,7 +524,7 @@ export function StageCanvas({
       const h = host.clientHeight;
       const grid = new Set<string>();
       const live = new Set<number>();
-      for (const { i, cls } of wanted) {
+      for (const { i, cls, t } of wanted) {
         const p = r.project(i);
         if (!p.front || p.x < 0 || p.x > w || p.y < 0 || p.y > h) continue;
         // Collision suppression drops the lower-priority label in a cell. In
@@ -520,7 +575,12 @@ export function StageCanvas({
           const strip = div.querySelector<HTMLElement & { _sync?: () => void }>(".nprobe");
           strip?._sync?.();
         }
-        div.className = `nlabel ${cls}${probing ? " probing" : ""}`;
+        // Proximity reveal: an ambient name fades up as the camera approaches
+        // instead of popping in at a threshold. Selection, hover and isolate
+        // labels are answers to a direct question and stay at full strength.
+        const near = cls === "dim" && t < 0.999;
+        div.className = `nlabel ${cls}${probing ? " probing" : ""}${near ? " near" : ""}`;
+        div.style.opacity = near ? String(0.22 + 0.78 * Math.min(1, t / 0.7)) : "";
         div.style.left = `${p.x}px`;
         div.style.top = `${p.y}px`;
       }

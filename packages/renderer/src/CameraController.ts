@@ -1,8 +1,26 @@
 import * as THREE from "three";
 
+/** Keys that fly the camera, mapped to a local-basis direction. */
+const FLY_KEYS: Record<string, [number, number, number]> = {
+  //        right, up, forward
+  w: [0, 0, 1],
+  s: [0, 0, -1],
+  a: [-1, 0, 0],
+  d: [1, 0, 0],
+  e: [0, 1, 0],
+  q: [0, -1, 0],
+};
+
 /**
- * Orbit/pan/zoom with damped focus flights. The user always wins: any input
- * cancels an in-progress flight. Reduced motion snaps instead of flying.
+ * Orbit/pan/zoom with damped focus flights, plus WASD free flight. The user
+ * always wins: any input cancels an in-progress flight. Reduced motion snaps
+ * instead of flying.
+ *
+ * Flight moves the orbit TARGET along the camera's own basis rather than
+ * dollying the radius, so W actually travels through the tissue instead of
+ * pressing the camera against whatever it was already framing. Speed scales
+ * with the orbit radius for the same reason panning does: a fixed metres-per-
+ * second feels glacial zoomed out and uncontrollable zoomed in.
  */
 export class CameraController {
   readonly camera: THREE.PerspectiveCamera;
@@ -21,6 +39,18 @@ export class CameraController {
   private pinchDist = 0;
   onUserInput: (() => void) | null = null;
 
+  /** Held fly keys. Movement is applied per frame in update(), not per event,
+   * so travel speed is frame-rate independent and diagonals do not double. */
+  private held = new Set<string>();
+  private boost = false;
+  /** Only the lens on screen listens: a paused renderer must not eat WASD. */
+  private flyEnabled = true;
+  /** Scratch vectors — update() runs every frame and must not allocate. */
+  private vRight = new THREE.Vector3();
+  private vUp = new THREE.Vector3();
+  private vFwd = new THREE.Vector3();
+  private vMove = new THREE.Vector3();
+
   constructor(el: HTMLElement, aspect: number) {
     this.el = el;
     this.camera = new THREE.PerspectiveCamera(52, aspect, 0.01, 60);
@@ -31,7 +61,55 @@ export class CameraController {
     el.addEventListener("pointerup", this.onUp);
     el.addEventListener("pointercancel", this.onUp);
     el.addEventListener("wheel", this.onWheel, { passive: false });
+    window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
+    window.addEventListener("blur", this.onBlur);
   }
+
+  /** Enable/disable flight input. Also clears held keys, so switching lens
+   * mid-press cannot leave the camera drifting forever. */
+  setFlyEnabled(v: boolean): void {
+    this.flyEnabled = v;
+    if (!v) {
+      this.held.clear();
+      this.boost = false;
+    }
+  }
+
+  /** True while at least one fly key is down — the HUD reads this. */
+  get flying(): boolean {
+    return this.held.size > 0;
+  }
+
+  private typing(): boolean {
+    const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+    return tag === "input" || tag === "select" || tag === "textarea";
+  }
+
+  private onKeyDown = (e: KeyboardEvent): void => {
+    if (!this.flyEnabled || this.typing()) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Shift") {
+      this.boost = true;
+      return;
+    }
+    const k = e.key.toLowerCase();
+    if (!(k in FLY_KEYS)) return;
+    e.preventDefault();
+    if (!this.held.has(k)) this.cancelFlight();
+    this.held.add(k);
+  };
+
+  private onKeyUp = (e: KeyboardEvent): void => {
+    if (e.key === "Shift") this.boost = false;
+    this.held.delete(e.key.toLowerCase());
+  };
+
+  /** Losing focus mid-press never delivers the keyup. */
+  private onBlur = (): void => {
+    this.held.clear();
+    this.boost = false;
+  };
 
   private cancelFlight(): void {
     this.flight = null;
@@ -118,7 +196,46 @@ export class CameraController {
     return this.sph.radius;
   }
 
+  /** Apply held fly keys for one frame. Returns true if the camera moved. */
+  private fly(dt: number): boolean {
+    if (!this.held.size || dt <= 0) return false;
+    let rx = 0;
+    let uy = 0;
+    let fz = 0;
+    for (const k of this.held) {
+      const v = FLY_KEYS[k];
+      if (!v) continue;
+      rx += v[0];
+      uy += v[1];
+      fz += v[2];
+    }
+    if (rx === 0 && uy === 0 && fz === 0) return false;
+
+    this.vRight.setFromMatrixColumn(this.camera.matrix, 0);
+    this.vUp.setFromMatrixColumn(this.camera.matrix, 1);
+    // matrix column 2 points BEHIND the camera in three.js, so forward is -Z.
+    this.vFwd.setFromMatrixColumn(this.camera.matrix, 2).negate();
+
+    this.vMove
+      .set(0, 0, 0)
+      .addScaledVector(this.vRight, rx)
+      .addScaledVector(this.vUp, uy)
+      .addScaledVector(this.vFwd, fz);
+    if (this.vMove.lengthSq() < 1e-12) return false;
+    // Normalised: holding W+A must not travel √2 faster than W alone.
+    this.vMove.normalize();
+
+    const speed = this.sph.radius * (this.boost ? 2.6 : 0.9);
+    this.target.addScaledVector(this.vMove, speed * dt);
+    // Stay inside the dolly clamp's world: flying far outside the graph and
+    // then scrolling would otherwise strand the reader in empty space.
+    const reach = 6;
+    if (this.target.lengthSq() > reach * reach) this.target.setLength(reach);
+    return true;
+  }
+
   update(dt: number): void {
+    if (this.fly(dt)) this.flight = null;
     if (this.flight) {
       this.flight.t = Math.min(1, this.flight.t + dt / this.flight.dur);
       const k = 1 - Math.pow(1 - this.flight.t, 3); // ease-out cubic
@@ -159,5 +276,8 @@ export class CameraController {
     this.el.removeEventListener("pointerup", this.onUp);
     this.el.removeEventListener("pointercancel", this.onUp);
     this.el.removeEventListener("wheel", this.onWheel);
+    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onBlur);
   }
 }

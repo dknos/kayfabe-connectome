@@ -99,13 +99,10 @@ export function GeoLens() {
     };
   }, []);
 
-  // Suspend the connectome's render loop for as long as the globe is up.
-  useEffect(() => {
-    const three = (window as { __kayfabeRenderer?: { stop(): void; start(): void } })
-      .__kayfabeRenderer;
-    three?.stop();
-    return () => three?.start();
-  }, []);
+  // The connectome's render loop is suspended for as long as another lens is
+  // up, but StageCanvas owns that toggle (it is the component that knows the
+  // lens and outlives every other lens). Two owners raced on unmount order and
+  // could leave both loops running.
 
   // ---------- scope -> places ----------
   useEffect(() => {

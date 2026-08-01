@@ -252,6 +252,17 @@ label { color: var(--text-dim); }
 .nlabel.dim { color: var(--text-dim); font-size: 10px; }
 .nlabel.sel { font-size: 13px; font-weight: 650; }
 .nlabel .flag { color: var(--caution); }
+/* Proximity reveal: ambient names resolve out of the tissue as the camera
+   flies toward them. Opacity is set per label from the world distance; the
+   transition smooths the 140 ms rebuild cadence into a fade rather than a
+   staircase, and grows the glyph slightly as you arrive. */
+.nlabel.near {
+  transition: opacity 160ms linear, color 160ms linear, font-size 160ms linear;
+}
+.nlabel.near:not(.sel):not(.iso) { color: var(--text-dim); }
+@media (prefers-reduced-motion: reduce) {
+  .nlabel.near { transition: none; }
+}
 
 /* ---------- table lens ---------- */
 .tableview { position: absolute; inset: 0; overflow: auto; padding: 18px; background: var(--bg); z-index: 15; }
@@ -315,7 +326,9 @@ label { color: var(--text-dim); }
 .app[data-lens="geo"] .stage > canvas.gl,
 .app[data-lens="geo"] .stage > .labels,
 .app[data-lens="geoTable"] .stage > canvas.gl,
-.app[data-lens="geoTable"] .stage > .labels { display: none; }
+.app[data-lens="geoTable"] .stage > .labels,
+.app[data-lens="atlas"] .stage > canvas.gl,
+.app[data-lens="atlas"] .stage > .labels { display: none; }
 /* Cesium injects its own widget styles; keep the credit visible (required
    attribution) but tuck it into the corner in the app's own register. */
 .geo-globe .cesium-widget-credits {

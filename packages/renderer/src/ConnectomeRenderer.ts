@@ -154,6 +154,17 @@ export class ConnectomeRenderer {
   private raf = 0;
   private running = false;
   private contextLost = false;
+  /**
+   * Whether this renderer is the lens the reader is looking at.
+   *
+   * A second lens (ATLAS, GEO) keeps the connectome MOUNTED so its camera
+   * framing survives the round trip, but a mounted renderer must not burn a
+   * requestAnimationFrame loop behind an opaque surface. `start()` is a no-op
+   * while inactive, which also stops the visibility handler from resurrecting
+   * a paused — or disposed — loop when the tab is refocused.
+   */
+  private active = true;
+  private onVisibility: () => void;
 
   /** edges dropped by the quality cap on the last rebuild — surfaced, never silent */
   droppedEdges = 0;
@@ -256,10 +267,11 @@ export class ConnectomeRenderer {
       this.contextLost = false;
       if (this.view) this.setView(this.view);
     });
-    document.addEventListener("visibilitychange", () => {
+    this.onVisibility = () => {
       if (document.hidden) this.stop();
       else this.start();
-    });
+    };
+    document.addEventListener("visibilitychange", this.onVisibility);
 
     this.resize();
     this.applyQuality();
@@ -536,6 +548,51 @@ export class ConnectomeRenderer {
     };
   }
 
+  /**
+   * The nodes the camera is currently among, nearest first.
+   *
+   * Flying through the tissue should make names resolve out of it as you
+   * approach, the way a label on a distant object does — so the ambient label
+   * tier is ranked by WORLD proximity to the camera rather than by a global
+   * degree ordering that never changes no matter where you fly.
+   *
+   * `t` is the reveal weight in [0,1]: 1 at the camera, 0 at `radius`. The
+   * label layer maps it to opacity so names fade up instead of popping.
+   *
+   * Runs over the raw position array with no per-node allocation — it is
+   * called on the label cadence over the whole corpus (30k nodes).
+   */
+  nearestNodes(
+    radius: number,
+    limit: number,
+    accept?: (i: number) => boolean,
+  ): { i: number; t: number }[] {
+    const cam = this.cameraCtl.camera.position;
+    const r2 = radius * radius;
+    const out: { i: number; t: number }[] = [];
+    const p = this.posArr;
+    for (let i = 0; i < this.g.count; i++) {
+      if (this.nodes.emphasis[i]! < 0.05) continue; // hidden by isolate/time
+      if (accept && !accept(i)) continue;
+      const dx = p[i * 3]! - cam.x;
+      const dy = p[i * 3 + 1]! - cam.y;
+      const dz = p[i * 3 + 2]! - cam.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > r2) continue;
+      out.push({ i, t: 1 - Math.sqrt(d2) / radius });
+    }
+    // Ties broken by index so the ranking is stable frame to frame — an
+    // unstable sort here makes labels flicker between equidistant nodes.
+    out.sort((a, b) => b.t - a.t || a.i - b.i);
+    return out.length > limit ? out.slice(0, limit) : out;
+  }
+
+  /** Distance from the camera to the orbit target — the reading of "how deep
+   * into the tissue am I", used to scale the proximity shell. */
+  get cameraDistance(): number {
+    return this.cameraCtl.distance();
+  }
+
   pick(px: number, py: number): PickResult | null {
     // nodes first: nearest projected node within its screen radius
     let best = -1;
@@ -640,8 +697,22 @@ export class ConnectomeRenderer {
     return this.fiberExposure;
   }
 
+  /** Pause/resume without losing camera framing or GPU buffers. */
+  setActive(v: boolean): void {
+    if (this.active === v) return;
+    this.active = v;
+    // WASD is a window-level listener; a paused lens must not steal it.
+    this.cameraCtl.setFlyEnabled(v);
+    if (v) this.start();
+    else this.stop();
+  }
+
+  get isActive(): boolean {
+    return this.active;
+  }
+
   start(): void {
-    if (this.running) return;
+    if (this.running || !this.active) return;
     this.running = true;
     this.clock.getDelta();
     const loop = () => {
@@ -717,7 +788,9 @@ export class ConnectomeRenderer {
   }
 
   dispose(): void {
+    this.active = false;
     this.stop();
+    document.removeEventListener("visibilitychange", this.onVisibility);
     this.nodes.dispose();
     this.edges.dispose();
     this.ribbons.dispose();

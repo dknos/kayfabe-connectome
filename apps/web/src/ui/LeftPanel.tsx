@@ -222,6 +222,12 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
         <div className="micro" style={{ marginTop: 6 }}>
           communities are computed (louvain) — not editorial groupings
         </div>
+        <div className="micro" style={{ marginTop: 6 }} data-testid="fly-hint">
+          fly: W A S D · Q E height · shift boost · drag orbit · R fit
+        </div>
+        <div className="micro" style={{ marginTop: 2, textTransform: "none", letterSpacing: 0 }}>
+          Names resolve out of the tissue as you approach them.
+        </div>
         <div className="row" style={{ marginTop: 6 }}>
           <label htmlFor="rm">Reduced motion</label>
           <input id="rm" type="checkbox" checked={reducedMotion}
