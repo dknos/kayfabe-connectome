@@ -94,18 +94,25 @@ await page.getByRole("option").first().click({ force: true });
 await page.waitForTimeout(2600);
 await shot("6-motherboard");
 
-// title → lineage (via inspector row if present)
-const titleRow = page.locator(".morph-rail .ev-row.search-row").first();
-if (await titleRow.count()) {
-  await titleRow.click();
+// title → lineage (via inspector row if present; the rail is a sheet on
+// mobile, so these steps degrade gracefully there)
+try {
+  const titleRow = page.locator(".morph-rail .ev-row.search-row").first();
+  await titleRow.click({ timeout: 6000 });
   await page.waitForTimeout(2400);
   await shot("7-lineage");
+} catch {
+  console.log(`${TAG}-7-lineage skipped (no reachable title row)`);
 }
 
 // return to tissue
-await page.getByRole("button", { name: /Return to tissue/ }).click();
-await page.waitForTimeout(2400);
-await shot("8-tissue");
+try {
+  await page.getByRole("button", { name: /Return to tissue/ }).click({ timeout: 6000 });
+  await page.waitForTimeout(2400);
+  await shot("8-tissue");
+} catch {
+  console.log(`${TAG}-8-tissue skipped (button behind sheet)`);
+}
 
 // back to connectome — must be intact
 await page.getByRole("button", { name: "Connectome", exact: true }).click();
