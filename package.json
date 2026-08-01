@@ -15,5 +15,8 @@
     "build": "pnpm --filter @kayfabe/web build",
     "test": "pnpm -r --if-present test && cd services/materializer && python3.12 -m pytest -q",
     "test:py": "cd services/materializer && python3.12 -m pytest -q"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

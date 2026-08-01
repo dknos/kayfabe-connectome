@@ -1,0 +1,41 @@
+# Versioned projection recipes. The materializer implements these; the web app
+# re-derives record-accurate variants client-side using THE SAME rules
+# (mirrored in apps/web/src/graph/model.ts and unit-tested).
+
+encounters@1:
+  nodes: canonical people (+ promotion and championship anchors)
+  observation_rules:
+    opposed: winner-side × loser-side, always — except battle_royal which emits
+      the separate br class (never presented as rivalry)
+    same_side: |
+      within a side ONLY when the side is a genuine team:
+        tag_team / team_implied -> both sides
+        multi_way -> decisive winner side only; NEVER within the collapsed
+          loser group (neither same nor opposed within it)
+        battle_royal -> none
+    unknown_members: produce nothing
+  edge_payload: [sameSide, opposed, brOpposed, titleMatches, firstDay, lastDay,
+                 promoMask, formMask, supporting match ids -> evidence buckets]
+
+form-classify@1:
+  order: [battle_royal, multi_way, tag_team, singles, team_implied, unknown]
+  battle_royal: ["battle royal", "royal rumble", "rumble"]
+  multi_way: ["three-way", "3-way", "triple threat", "four-way", "4-way",
+              "five-way", "six-way", "fatal", "elimination chamber", "gauntlet", "dance"]
+  tag_team: ["tag", "-man", "-person", "handicap"]
+
+reign-derive@1:
+  interval: title_change match -> next title_change of same belt
+  open_end: null (never invented)
+  vacancies: invisible to corpus -> stay gaps, labeled derived
+
+louvain-seeded@1:
+  weight: 2*sameSide + opposed + 0.25*brOpposed
+  seed: 1963
+  determinism: byte-identical across runs
+
+global-layout@1:
+  communities: golden-angle spiral sphere, radius by size rank
+  members: seeded per-community force relaxation
+  promotions: outer ring anchors; titles near their promotion
+  output: normalized ~[-1,1]^3, NaN-checked
