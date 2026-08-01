@@ -382,8 +382,10 @@ describe("who lights up", () => {
   });
 
   it("never invents a member that is not a node in the graph", () => {
-    const stray = { "t:9": { ...(champs as never)["t:9"],
-      reigns: [{ holders: ["p:404"], s: "1", e: null, m: "m:1" }] } } as never;
+    const stray = {
+      "t:9": { n: "Belt", pr: "pr:big", artifact: false, titleMatches: 1, changes: 1,
+               reigns: [{ holders: ["p:404"], s: "1", e: null, m: "m:1" }] },
+    } as never;
     expect(resolveMembers(model, manifest, search, "t:9", stray).ids).toEqual([]);
   });
 

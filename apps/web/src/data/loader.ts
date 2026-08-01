@@ -31,8 +31,12 @@ const manifestSchema = z.object({
   validation: z.object({ passed: z.boolean() }).passthrough(),
 });
 
+/** Deploy base. Vite injects "/" in dev and the configured base in a build,
+ * so the same code works at a domain root and under a project subpath. */
+const BASE = import.meta.env.BASE_URL;
+
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`/data/${path}`);
+  const res = await fetch(`${BASE}data/${path}`);
   if (!res.ok) throw new Error(`GET /data/${path} → ${res.status}`);
   return (await res.json()) as T;
 }
@@ -64,7 +68,7 @@ export async function loadCore(onProgress: (frac: number, what: string) => void)
   if (nodes.pos.length !== 3 * n) throw new Error("nodes.pos length mismatch");
 
   onProgress(0.45, "edges");
-  const res = await fetch("/data/graph/edges.bin");
+  const res = await fetch(`${BASE}data/graph/edges.bin`);
   if (!res.ok) throw new Error(`edges.bin → ${res.status}`);
   const buf = await res.arrayBuffer();
   const edges = new Uint32Array(buf);

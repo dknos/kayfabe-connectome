@@ -14,7 +14,7 @@ import type {
  */
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`/data/geo/${path}`);
+  const res = await fetch(`${import.meta.env.BASE_URL}data/geo/${path}`);
   if (!res.ok) throw new Error(`GET /data/geo/${path} → ${res.status}`);
   return (await res.json()) as T;
 }
@@ -40,7 +40,7 @@ export async function loadGeo(onProgress?: (frac: number, what: string) => void)
   onProgress?.(0.3, "places");
   const raw = await getJSON<GeoPlacesFile>("places.json");
   onProgress?.(0.55, "cards");
-  const res = await fetch("/data/geo/cards.bin");
+  const res = await fetch(`${import.meta.env.BASE_URL}data/geo/cards.bin`);
   if (!res.ok) throw new Error(`cards.bin → ${res.status}`);
   const cards = new Uint32Array(await res.arrayBuffer());
   const expected = manifest.cards_bin.count * manifest.cards_bin.stride_u32;

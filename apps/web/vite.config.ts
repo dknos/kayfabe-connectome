@@ -101,6 +101,9 @@ function materializedData(): Plugin {
 }
 
 export default defineConfig({
+  // GitHub Pages serves a project site from /<repo>/. KAYFABE_BASE lets the
+  // deploy set that without hard-coding a host into the source.
+  base: process.env.KAYFABE_BASE ?? "/",
   plugins: [react(), materializedData(), cesiumAssets()],
   server: { port: 9460, strictPort: true, host: "127.0.0.1" },
   preview: { port: 9461, strictPort: true, host: "127.0.0.1" },

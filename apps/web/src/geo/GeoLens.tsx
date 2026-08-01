@@ -75,6 +75,7 @@ export function GeoLens() {
       const { GeoReplayEngine: Engine } = await import("@kayfabe/geo-renderer");
       if (cancelled) return;
       created = await Engine.create(host, {
+        baseUrl: `${import.meta.env.BASE_URL}cesium/`,
         reducedMotion: useStore.getState().reducedMotion,
         tier: useGeo.getState().tier,
         onPick: (placeIdx) => useGeo.getState().selectPlace(placeIdx ?? -1),

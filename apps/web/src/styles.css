@@ -6,7 +6,7 @@
  * mono rules on every section heading. The reading is meant to be biological:
  * panels sit above the tissue rather than framing it.
  */
-@import "/fonts/plex.css";
+@import "./fonts.css";
 
 :root {
   --bg: #04060b;
