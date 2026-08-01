@@ -69,7 +69,12 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--stroke);
   z-index: 30;
+  /* Without this the topbar's nowrap children set the document's width, and a
+     document wider than the viewport pushes the absolutely-positioned right
+     rail off screen — the inspector gets clipped at 1440 and below. */
+  min-width: 0;
 }
+.app { overflow-x: hidden; }
 .brand { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .brand b { font-size: 13px; letter-spacing: 0.22em; font-weight: 650; }
 .brand span { color: var(--text-faint); }
@@ -246,6 +251,16 @@ label { color: var(--text-dim); }
 }
 
 /* ---------- responsive ---------- */
+/* The corpus counts are the first thing to go: they are context, not control,
+   and keeping them costs the inspector its right edge. */
+@media (max-width: 1600px) {
+  .coverage { display: none; }
+}
+@media (max-width: 1180px) {
+  .search { width: min(280px, 26vw); }
+  .brand span { display: none; }
+}
+
 @media (max-width: 900px) {
   :root { --rail-w: 250px; --dossier-w: 100vw; }
   .rail.left { display: none; }
@@ -353,6 +368,24 @@ label { color: var(--text-dim); }
   .app[data-lens="geo"] .pulse-readout .date { font-size: 12px; }
   .app[data-lens="geo"] .pulse-readout .evt { max-width: none; font-size: 10px; }
 }
+/* GEO carries more panels than the connectome (scope, range, playback, globe,
+   keyboard, match beats, footprint, comparison), so a fixed-height flex column
+   squashes and clips them. Let the rail scroll and every panel keep its own
+   height. Scoped to the geo lens so the connectome rails are untouched. */
+.app[data-lens="geo"] .rail {
+  overflow-y: auto; overflow-x: hidden; pointer-events: auto;
+  scrollbar-width: thin; scrollbar-color: var(--stroke) transparent;
+  padding-right: 2px;
+}
+.app[data-lens="geo"] .rail > .panel { flex: 0 0 auto; }
+/* Place names are long ("Los Angeles, California, United States"); wrapping
+   them to four lines each makes a top-ten list unreadable in a 250px rail. */
+.app[data-lens="geo"] .rail .ev-row { flex-wrap: nowrap; gap: 8px; }
+.app[data-lens="geo"] .rail .ev-row > span:first-of-type {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+}
+.app[data-lens="geo"] .rail .ev-row > span:last-of-type { flex: 0 0 auto; }
+
 .geo-keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
 .geo-keys dt { color: var(--text-dim); font-family: var(--font-data); white-space: nowrap; }
 .geo-keys dd { margin: 0; color: var(--text-faint); }

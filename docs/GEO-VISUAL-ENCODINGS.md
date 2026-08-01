@@ -13,7 +13,7 @@ misleads.
 | light column | blue | the same card, height by metric |
 | **gold** core + ring | gold | **a documented title change on this card** |
 | arc | dim slate | consecutive plotted records — a record sequence |
-| heat | blue → amber | accumulated weight at this place |
+| heat | blue → red | accumulated weight at this place |
 | selection | ember | the selected place |
 
 Gold is reserved for evidence-backed title changes and nothing else. A card
@@ -37,9 +37,15 @@ existing beacon** rather than stacking a second identical dot on one pixel.
 
 ## Heat ramp
 
-`heatColor(t)` interpolates blue → amber over `sqrt(t)`. Square-rooted for the
-same reason: Korakuen Hall holds 2,402 cards while the median place holds four,
-so a linear ramp would leave every place but a handful black.
+`heatColor(t)` interpolates blue → **red** over `sqrt(t)`. The high end is red
+rather than amber deliberately: heat and title-change gold appear together
+constantly, and an amber high end is close enough to gold that a dense city
+reads as a title change. Gold has to stay the one thing that means a documented
+title change.
+
+The ramp is square-rooted for the same reason as beacon energy: Korakuen Hall
+holds 2,402 cards while the median place holds four, so a linear ramp would
+leave every place but a handful black.
 
 A place in scope with **zero** weight still draws, faintly. That keeps it
 clickable and shows the scope's reachable geography without claiming activity
@@ -129,3 +135,18 @@ reason.
 Required attribution — Natural Earth II via CesiumJS, and GeoNames CC BY 4.0
 for every plotted coordinate — is placed **on screen**, not folded into
 Cesium's expandable lightbox.
+
+## Layout
+
+GEO carries more panels than the connectome (scope, range, playback, globe,
+keyboard, match beats, footprint, comparison), so its rails scroll rather than
+squashing a fixed-height flex column — squashing clipped the scope summary and
+overlapped the globe controls. Place names are ellipsised rather than wrapped:
+"Los Angeles, California, United States" over four lines makes a top-ten list
+unreadable in a 250 px rail.
+
+The lens switcher gained a third button, which pushed the topbar's nowrap
+children past 1440 px and made the document wider than the viewport — that in
+turn pushed the absolutely-positioned inspector off screen. The corpus counts
+now hide below 1600 px, and `.app` clips horizontal overflow so no future
+addition can do the same thing silently.

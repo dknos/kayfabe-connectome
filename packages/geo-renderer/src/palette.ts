@@ -21,9 +21,12 @@ export const GEO_COLORS = {
   goldCore: [1.0, 0.93, 0.72] as RGB,
   /** Chronological record connection — deliberately dim, it proves nothing. */
   arc: [0.45, 0.55, 0.72] as RGB,
-  /** Accumulated geographic footprint. */
+  /** Accumulated geographic footprint. The high end is pushed to red rather
+   * than amber so it cannot be mistaken for the title-change gold — the two
+   * appear together constantly, and gold has to stay the one thing that means
+   * a documented title change. */
   heatLow: [0.18, 0.34, 0.52] as RGB,
-  heatHigh: [0.95, 0.62, 0.32] as RGB,
+  heatHigh: [0.90, 0.33, 0.26] as RGB,
   /** Selected / pinned place. */
   select: [1.0, 0.45, 0.35] as RGB,
   label: [0.85, 0.91, 0.98] as RGB,
