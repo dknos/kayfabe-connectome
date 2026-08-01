@@ -32,7 +32,7 @@ export class NodePoints {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uPixelRatio: { value: 1 }, uFar: { value: 0 } },
+      uniforms: { uPixelRatio: { value: 1 }, uFar: { value: 0 }, uDensity: { value: 1 } },
       vertexShader: /* glsl */ `
         attribute vec3 aColor;
         attribute float aSize, aEmphasis, aActivity, aShape;
@@ -51,6 +51,7 @@ export class NodePoints {
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         varying float vEmphasis, vActivity, vShape, vFar;
+        uniform float uDensity;
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float r = length(uv);
@@ -71,6 +72,10 @@ export class NodePoints {
           col *= vEmphasis * mix(1.0, 0.72, vFar);
           float alpha = (halo * 0.3 + core * 0.9) * min(1.0, vEmphasis)
                         * mix(1.0, 0.38, vFar * (1.0 - vActivity));
+          // corpus-density adaptation: 30k additive somata integrate to white
+          // at the alpha 6k somata need to stay visible. Selected/active
+          // somata keep full presence.
+          alpha *= mix(uDensity, 1.0, max(vActivity, step(1.5, vEmphasis)));
           gl_FragColor = vec4(col, alpha);
         }`,
     });
@@ -85,6 +90,11 @@ export class NodePoints {
   /** 0 = close-up detail, 1 = observatory range (dims soma accumulation). */
   setFar(far: number): void {
     (this.points.material as THREE.ShaderMaterial).uniforms.uFar!.value = far;
+  }
+
+  /** Corpus-density alpha scale (1 at ~6k people, <1 for larger corpora). */
+  setDensity(d: number): void {
+    (this.points.material as THREE.ShaderMaterial).uniforms.uDensity!.value = d;
   }
 
   commitEmphasis(): void {

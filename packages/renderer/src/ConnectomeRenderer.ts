@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CameraController } from "./CameraController";
@@ -120,6 +121,11 @@ export class ConnectomeRenderer {
       shapes[i] = t;
     }
     this.nodes = new NodePoints(this.posArr, colors, sizes, shapes);
+    // corpus-density adaptation: neutral (=1) at the ~6k-person scale the
+    // additive budgets were tuned on, scaling down as the corpus grows
+    let personCount = 0;
+    for (let i = 0; i < graph.count; i++) if (graph.type[i] === 0) personCount++;
+    this.nodes.setDensity(Math.min(1, Math.max(0.4, Math.sqrt(6500 / Math.max(1, personCount)))));
     this.scene.add(this.nodes.points);
     this.scene.add(this.edges.lines);
     this.scene.add(this.ribbons.mesh);
@@ -133,15 +139,26 @@ export class ConnectomeRenderer {
       hazeColors.set([cc.r, cc.g, cc.b], k * 3);
       hazeSizes[k] = 0.25 + 0.5 * Math.min(1, Math.sqrt(graph.communitySizes[k]!) / 30);
     }
-    this.haze = new CommunityHaze(Float32Array.from(graph.communityCenters), hazeSizes, hazeColors);
+    const hazeIntensity = Math.min(1, Math.max(0.3, Math.sqrt(55 / Math.max(1, K))));
+    this.haze = new CommunityHaze(
+      Float32Array.from(graph.communityCenters), hazeSizes, hazeColors, hazeIntensity,
+    );
     this.scene.add(this.haze.points);
 
     this.cameraCtl = new CameraController(canvas, 1);
 
     this.composer = new EffectComposer(this.gl);
     this.composer.addPass(new RenderPass(this.scene, this.cameraCtl.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.33, 0.5, 0.86);
+    // bloom thresholds in the HDR domain (pre-tonemap): only genuinely hot
+    // accumulation blooms, not the whole dense-lobe field
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 1.05);
     this.composer.addPass(this.bloom);
+    // ACES roll-off: the additive HDR field accumulates far past 1.0 in dense
+    // lobes — without tone mapping it hard-clips into a white plateau. With
+    // it, density reads as a graded ember instead of a burnout.
+    this.gl.toneMapping = THREE.ACESFilmicToneMapping;
+    this.gl.toneMappingExposure = 0.95;
+    this.composer.addPass(new OutputPass());
 
     this.governor.onChange = (tier, s) => {
       this.applyQuality();
@@ -184,6 +201,15 @@ export class ConnectomeRenderer {
       const cma = new THREE.Vector3().fromArray(this.g.communityCenters, ca * 3);
       const cmb = new THREE.Vector3().fromArray(this.g.communityCenters, cb * 3);
       mid.lerp(cma.lerp(cmb, 0.5), 0.35);
+      // hollow core: with hundreds of communities every cross-lobe corridor
+      // passes near the origin and the integrated field burns white — push
+      // central midpoints outward so tracts wrap the core instead
+      const r = mid.length();
+      if (r < 0.42) {
+        const dir =
+          r > 1e-3 ? mid.clone().multiplyScalar(1 / r) : pa.clone().add(pb).normalize();
+        mid.addScaledVector(dir, (0.42 - r) * 0.85);
+      }
     } else if (ca >= 0 && ca === cb) {
       // intra-community fibers wrap the lobe surface instead of skewering its
       // center — a straight-chord core integrates into a white plateau
@@ -228,9 +254,24 @@ export class ConnectomeRenderer {
       (e) => {
         const w = view.weights(e);
         const total = w.same + w.opposed + w.br;
-        // additive overlap scales with drawn-fiber count — adapt alpha to density
-        const densityScale = Math.min(1, Math.sqrt(5500 / Math.max(1, shown.length)));
-        return (0.07 + 0.22 * Math.min(1, total / 12)) * densityScale;
+        // Additive overlap grows LINEARLY with drawn-fiber count — sqrt
+        // compensation half-corrects and the field integrates to white at
+        // merged-corpus scale (measured: fibers alone reproduce the plateau).
+        const densityScale = Math.min(1, Math.max(0.15, 5500 / Math.max(1, shown.length)));
+        // Inside one lobe, overlap also scales with lobe population: a
+        // 9k-person community's interior fibers can never all be visible.
+        // Interiors become texture; inter-lobe tracts carry the light.
+        const ca = this.g.community[view.a(e)]!;
+        const cb = this.g.community[view.b(e)]!;
+        let intraScale = 1;
+        if (ca >= 0 && ca === cb) {
+          const size = this.g.communitySizes[ca] ?? 1;
+          intraScale = Math.min(1, Math.max(0.13, Math.sqrt(420 / Math.max(1, size))));
+        }
+        // steep weight curve + low floor: the alpha budget concentrates in the
+        // strongest documented relationships instead of a uniform wash
+        const t = Math.min(1, total / 14);
+        return (0.025 + 0.26 * Math.pow(t, 1.4)) * densityScale * intraScale;
       },
     );
     this.applyEmphasis(this.emphasisState);

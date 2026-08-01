@@ -808,7 +808,7 @@ def build(out: Path | None = None) -> dict:
             "csv_initial_matches": _sha256_file(csv_source_path()),
         },
         "epoch": "1900-01-01",
-        "layout_version": "global-layout@2",
+        "layout_version": "global-layout@3",
         "projection_version": "encounters@2",
         "algorithms": {
             "communities": "louvain-seeded@1",

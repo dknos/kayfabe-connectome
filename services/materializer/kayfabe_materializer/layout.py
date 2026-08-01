@@ -1,4 +1,4 @@
-"""global-layout@2 — deterministic 3D layout.
+"""global-layout@3 — deterministic 3D layout.
 
 * Communities sit on a golden-angle (Fibonacci) spiral sphere; the shell
   radius grows with community size rank (largest community innermost).
@@ -109,12 +109,17 @@ def compute_layout(
     for rank, cid in enumerate(cids):  # cid order == size rank (renumbered)
         members = sorted(groups[cid])
         size = len(members)
-        shell = 0.38 + (0.5 * rank / (k - 1) if k > 1 else 0.0)
+        # v3: the merged corpus's largest community holds ~9k people (v2's held
+        # ~2k, capped 0.58). Two rules changed together:
+        #  * radius keeps scaling with sqrt(size) (cap 1.05) so dense lobes get
+        #    volume instead of integrating into a white plateau, and
+        #  * shell distance grows WITH radius — a giant lobe centered near the
+        #    origin engulfs the whole scene, so the big lobes ring a hollow
+        #    core (brain lobes, not a sun) and small communities fill between.
+        radius = min(1.05, 0.03 + 0.0125 * math.sqrt(size))
+        shell = 0.22 + 1.12 * radius + (0.42 * rank / (k - 1) if k > 1 else 0.0)
         dx, dy, dz = _fib_sphere(rank, k)
         center = (dx * shell, dy * shell, dz * shell)
-        # v2: the largest community holds ~45% of all people — it needs real
-        # volume or its thousands of fibers integrate into a white core on screen
-        radius = min(0.58, 0.03 + 0.0125 * math.sqrt(size))
         rng = random.Random(LAYOUT_SEED * 1_000_003 + cid)
         pts = []
         for j in range(size):

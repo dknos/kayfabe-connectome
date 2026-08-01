@@ -9,7 +9,7 @@ export class CommunityHaze {
   readonly points: THREE.Points;
   private geo: THREE.BufferGeometry;
 
-  constructor(centers: Float32Array, sizes: Float32Array, colors: Float32Array) {
+  constructor(centers: Float32Array, sizes: Float32Array, colors: Float32Array, intensity = 1) {
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute("position", new THREE.BufferAttribute(centers, 3));
     this.geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
@@ -19,7 +19,9 @@ export class CommunityHaze {
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uCamDist: { value: 5 }, uMaxPx: { value: 380 } },
+      // intensity scales with community count: 51 sprites read as atmosphere,
+      // 371 identical ones integrate into a white wash
+      uniforms: { uCamDist: { value: 5 }, uMaxPx: { value: 380 }, uIntensity: { value: intensity } },
       vertexShader: /* glsl */ `
         attribute float aSize;
         attribute vec3 aColor;
@@ -36,12 +38,13 @@ export class CommunityHaze {
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         varying float vFade;
+        uniform float uIntensity;
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float r = length(uv);
           if (r > 1.0) discard;
           float g = exp(-3.4 * r * r);
-          gl_FragColor = vec4(vColor * g * 0.13, g * 0.085 * vFade);
+          gl_FragColor = vec4(vColor * g * 0.13 * uIntensity, g * 0.085 * vFade * uIntensity);
         }`,
     });
     this.points = new THREE.Points(this.geo, mat);

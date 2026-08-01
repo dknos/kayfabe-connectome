@@ -66,7 +66,7 @@ test.describe("vertical slice journey", () => {
 
     // 6. share URL restores state
     const url = page.url();
-    expect(url).toContain("#1/");
+    expect(url).toContain("#2/");
     await page.goto(url);
     await expect(page.locator("canvas.gl")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Person dossier")).toBeVisible({ timeout: 15000 });
