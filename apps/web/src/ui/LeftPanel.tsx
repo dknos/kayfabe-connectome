@@ -11,6 +11,8 @@ const FORM_LABELS: Record<string, string> = {
   unknown: "Unclassified",
 };
 
+import { TissuePanel } from "./TissuePanel";
+
 export function LeftPanel({ shownEdges, droppedEdges, tier }: {
   shownEdges: number;
   droppedEdges: number;
@@ -69,7 +71,11 @@ export function LeftPanel({ shownEdges, droppedEdges, tier }: {
 
   return (
     <div className="rail left">
-      <div className="panel" style={{ flex: collapsed ? "0 0 auto" : 1 }}>
+      <TissuePanel />
+      {/* No inline flex: the rail scrolls now, so Filters keeps its natural
+          height instead of absorbing the rail's slack and shrinking its own
+          content away when another panel joins the column. */}
+      <div className="panel">
         <h2>
           Filters <span className="line" />
           <button className="collapse-btn ghost" onClick={() => setCollapsed(!collapsed)}

@@ -32,26 +32,27 @@ export class NodePoints {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uPixelRatio: { value: 1 }, uFar: { value: 0 }, uDensity: { value: 1 } },
+      uniforms: { uPixelRatio: { value: 1 }, uFar: { value: 0 }, uDensity: { value: 1 },
+                  uSomaScale: { value: 1 }, uSomaAlpha: { value: 1 } },
       vertexShader: /* glsl */ `
         attribute vec3 aColor;
         attribute float aSize, aEmphasis, aActivity, aShape;
         varying vec3 vColor;
         varying float vEmphasis, vActivity, vShape, vFar;
-        uniform float uPixelRatio, uFar;
+        uniform float uPixelRatio, uFar, uSomaScale;
         void main() {
           vColor = aColor; vEmphasis = aEmphasis; vActivity = aActivity; vShape = aShape;
           vFar = uFar;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float size = aSize * (1.0 + aActivity * 0.9) * (0.4 + 0.6 * min(aEmphasis, 1.5));
           size *= mix(1.0, 0.78, uFar); // somata recede at observatory range
-          gl_PointSize = clamp(size * 340.0 / max(1.0, -mv.z) * uPixelRatio, 1.5, 64.0 * uPixelRatio);
+          gl_PointSize = clamp(size * uSomaScale * 340.0 / max(1.0, -mv.z) * uPixelRatio, 1.5, 64.0 * uPixelRatio);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         varying float vEmphasis, vActivity, vShape, vFar;
-        uniform float uDensity;
+        uniform float uDensity, uSomaAlpha;
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float r = length(uv);
@@ -76,6 +77,7 @@ export class NodePoints {
           // at the alpha 6k somata need to stay visible. Selected/active
           // somata keep full presence.
           alpha *= mix(uDensity, 1.0, max(vActivity, step(1.5, vEmphasis)));
+          alpha *= uSomaAlpha;
           gl_FragColor = vec4(col, alpha);
         }`,
     });
@@ -95,6 +97,15 @@ export class NodePoints {
   /** Corpus-density alpha scale (1 at ~6k people, <1 for larger corpora). */
   setDensity(d: number): void {
     (this.points.material as THREE.ShaderMaterial).uniforms.uDensity!.value = d;
+  }
+
+  /** Tissue treatment: cell-body size and core opacity. Multiplies the
+   * density scale rather than replacing it, so a treatment can restyle the
+   * reading without undoing the corpus-scale compensation underneath it. */
+  setSoma(scale: number, alpha: number): void {
+    const u = (this.points.material as THREE.ShaderMaterial).uniforms;
+    u.uSomaScale!.value = scale;
+    u.uSomaAlpha!.value = alpha;
   }
 
   commitEmphasis(): void {

@@ -1,4 +1,12 @@
-/* Kayfabe Connectome — instrument console. Tokens first, everything derives. */
+/* Kayfabe Connectome — instrument console. Tokens first, everything derives.
+ *
+ * Redesign pass: the palette was already right (the concept was drawn from
+ * palette.ts), so what changed is the CHROME — Plex typography, frosted
+ * floating panels over the canvas instead of solid slabs, pill controls, and
+ * mono rules on every section heading. The reading is meant to be biological:
+ * panels sit above the tissue rather than framing it.
+ */
+@import "/fonts/plex.css";
 
 :root {
   --bg: #04060b;
@@ -19,14 +27,19 @@
   --caution: #b3ac6f;
   --select: #ffffff;
 
-  --font-ui: "Inter Tight", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --font-data: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --rail-w: 292px;
   --dossier-w: 336px;
   --bar-h: 46px;
-  --pulse-h: 92px;
-  --radius: 6px;
+  --pulse-h: 98px;
+  --radius: 8px;
+
+  /* Panels float over the canvas: translucent, blurred, hairline-bordered. */
+  --panel-bg: rgba(10, 15, 24, 0.84);
+  --panel-blur: blur(14px);
+  --divider: #101826;
 }
 
 * { box-sizing: border-box; }
@@ -135,18 +148,26 @@ label { color: var(--text-dim); }
 .rail.right { right: 12px; width: var(--dossier-w); }
 .panel {
   pointer-events: auto;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  background: var(--panel-bg);
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 11px 12px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 .panel h2 {
-  margin: 0 0 8px;
-  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-  font-family: var(--font-data); font-weight: 500; color: var(--text-faint);
-  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 9px;
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .panel h2 .line { flex: 1; height: 1px; background: var(--stroke); }
 .panel .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
@@ -156,7 +177,7 @@ label { color: var(--text-dim); }
 .checks { display: flex; flex-wrap: wrap; gap: 4px; }
 .checks.scrollable { max-height: 168px; overflow-y: auto; padding-right: 2px; }
 .chip {
-  padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  padding: 3px 9px; border-radius: 999px; font-size: 11px; white-space: nowrap;
   border: 1px solid var(--stroke); background: transparent; cursor: pointer;
   color: var(--text-dim);
 }
@@ -407,3 +428,74 @@ label { color: var(--text-dim); }
   .app[data-lens="geo"][data-geo-sheet="hidden"] .rail.left,
   .app[data-lens="geo"][data-geo-sheet="hidden"] .rail.right { display: none; }
 }
+
+
+/* ---------- redesign: chrome ---------- */
+/* Controls read as instrument parts: pill outlines, mono numerals, hairline
+   borders. Nothing gains a fill — a filled control competes with the tissue. */
+.topbar button,
+.panel button,
+.pulse-controls button {
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 11.5px;
+  border: 1px solid var(--stroke-bright);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.topbar button:hover,
+.panel button:hover,
+.pulse-controls button:hover { border-color: var(--same); color: var(--same-soft); }
+.topbar button.active,
+.panel button.active { border-color: var(--same); color: var(--same-soft); }
+.topbar button:disabled,
+.panel button:disabled { color: var(--text-faint); border-color: var(--stroke); cursor: default; }
+
+input[type="number"],
+input[type="text"],
+input[type="search"],
+select {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  padding: 3px 7px;
+  outline: none;
+}
+input:focus-visible, select:focus-visible, button:focus-visible {
+  border-color: var(--same);
+  box-shadow: 0 0 0 2px rgba(63, 211, 255, 0.18);
+}
+input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
+
+/* The lens switcher is the one place a pill group reads better than separate
+   buttons — it is a mode, not an action. */
+.topbar [role="group"] { display: flex; gap: 4px; }
+
+/* Rails float over the tissue rather than framing it, so they get depth. */
+.rail .panel { box-shadow: 0 8px 30px rgba(4, 6, 11, 0.55); }
+
+/* Data numerals everywhere they carry a reading. */
+.stat .v, .pulse-readout .date, .coverage b, .num { font-family: var(--font-data); }
+.dossier-title { font-weight: 600; letter-spacing: -0.01em; }
+.tissue-toggles {
+  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--divider);
+  gap: 14px;
+}
+.tissue-toggles label { color: var(--text-dim); font-size: 11.5px; cursor: pointer; }
+.chip.on { border-color: var(--same); color: var(--same-soft); background: transparent; }
+
+/* The connectome rail gained a Tissue panel, so like the geo rails it has to
+   scroll instead of squashing a fixed-height flex column — the Filters panel
+   was being crushed to a single row. */
+.app[data-lens="connectome"] .rail.left {
+  overflow-y: auto; overflow-x: hidden; pointer-events: auto;
+  scrollbar-width: thin; scrollbar-color: var(--stroke) transparent;
+  padding-right: 2px;
+}
+.app[data-lens="connectome"] .rail.left > .panel { flex: 0 0 auto; }
+/* The Filters panel is the one that should absorb slack when there is any. */
+.app[data-lens="connectome"] .rail.left > .panel:nth-of-type(2) { min-height: 0; }

@@ -52,6 +52,11 @@ export class CommunityHaze {
     this.points.renderOrder = -2;
   }
 
+  /** Tissue treatment: how much atmosphere the lobes carry. */
+  setIntensity(v: number): void {
+    (this.points.material as THREE.ShaderMaterial).uniforms.uIntensity!.value = v;
+  }
+
   tick(camDist: number, maxPx: number): void {
     const u = (this.points.material as THREE.ShaderMaterial).uniforms;
     u.uCamDist!.value = camDist;

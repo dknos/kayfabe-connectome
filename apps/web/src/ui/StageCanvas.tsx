@@ -48,6 +48,8 @@ export function StageCanvas({
     (window as { __kayfabeRenderer?: ConnectomeRenderer }).__kayfabeRenderer = r; // QA instrumentation
     r.onDropChange = onDropChange;
     r.setReducedMotion(useStore.getState().reducedMotion);
+    r.setTissue(useStore.getState().tissue);
+    r.setHazeVisible(useStore.getState().showHaze);
     r.start();
     onRenderer(r);
 
@@ -239,6 +241,21 @@ export function StageCanvas({
       cv.removeEventListener("dblclick", onDbl);
     };
   }, [model]);
+
+  // ---------- tissue treatment ----------
+  const tissue = useStore((s) => s.tissue);
+  const showHaze = useStore((s) => s.showHaze);
+  const showLabels = useStore((s) => s.showLabels);
+  useEffect(() => {
+    rendererRef.current?.setTissue(tissue);
+  }, [tissue]);
+  useEffect(() => {
+    rendererRef.current?.setHazeVisible(showHaze);
+  }, [showHaze]);
+  useEffect(() => {
+    const host = labelsRef.current;
+    if (host) host.style.display = showLabels ? "" : "none";
+  }, [showLabels]);
 
   // ---------- managed labels (imperative, capped, collision-suppressed) ----------
   useEffect(() => {

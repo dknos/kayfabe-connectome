@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { dayToDate, isoToDay } from "@kayfabe/graph-contract";
 import type { TimelineEvent } from "@kayfabe/graph-contract";
 import { loadCore, loadYear, type CoreData } from "../data/loader";
+import type { Tissue } from "@kayfabe/renderer";
 import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 
 export type Lens = "connectome" | "table" | "geo" | "geoTable";
@@ -46,6 +47,10 @@ interface AppState {
 
   reducedMotion: boolean;
   announcement: string;
+  /** Tissue treatment — a reading of the corpus, not a theme. */
+  tissue: Tissue;
+  showHaze: boolean;
+  showLabels: boolean;
 
   boot(): Promise<void>;
   setLens(l: Lens): void;
@@ -62,6 +67,9 @@ interface AppState {
   setTimeline(patch: Partial<TimelineState>): void;
   setCurrentEvent(ev: TimelineEvent | null): void;
   setReducedMotion(v: boolean): void;
+  setTissue(t: Tissue): void;
+  setShowHaze(v: boolean): void;
+  setShowLabels(v: boolean): void;
   announce(msg: string): void;
 }
 
@@ -109,6 +117,9 @@ export const useStore = create<AppState>((set, get) => ({
 
   reducedMotion: prefersReduced,
   announcement: "",
+  tissue: "cortex",
+  showHaze: true,
+  showLabels: true,
 
   async boot() {
     try {
@@ -248,6 +259,17 @@ export const useStore = create<AppState>((set, get) => ({
     set({ reducedMotion });
   },
 
+  setTissue(tissue) {
+    set({ tissue });
+    writeUrl();
+  },
+  setShowHaze(showHaze) {
+    set({ showHaze });
+  },
+  setShowLabels(showLabels) {
+    set({ showLabels });
+  },
+
   announce(announcement) {
     set({ announcement });
   },
@@ -282,6 +304,7 @@ export function writeUrl(): void {
       if (v !== null && v !== undefined && v !== "") p.push(`${k}=${encodeURIComponent(String(v))}`);
     };
     push("lens", s.lens !== "connectome" ? s.lens : null);
+    push("tis", s.tissue !== "cortex" ? s.tissue : null);
     if (s.lens === "geo" || s.lens === "geoTable") {
       const g = geoUrlState?.();
       if (g) for (const [k, v] of Object.entries(g)) push(k, v);
@@ -367,6 +390,9 @@ export function restoreFromUrl(): void {
     pathMode: ["fewest", "strongest", "partners", "opponents"].includes(kv.get("pm") ?? "")
       ? (kv.get("pm") as PathMode)
       : prev.pathMode,
+    tissue: ["cortex", "myelin", "deep"].includes(kv.get("tis") ?? "")
+      ? (kv.get("tis") as Tissue)
+      : prev.tissue,
     filters: { ...prev.filters, ...patch },
     timeline: {
       ...prev.timeline,

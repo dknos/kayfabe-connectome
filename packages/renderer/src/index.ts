@@ -1,5 +1,7 @@
-export { ConnectomeRenderer } from "./ConnectomeRenderer";
+export { ConnectomeRenderer, TISSUE } from "./ConnectomeRenderer";
 export type {
+  Tissue,
+  TissueParams,
   RendererGraphInput,
   ViewEdges,
   EmphasisState,

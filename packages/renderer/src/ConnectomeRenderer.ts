@@ -11,6 +11,41 @@ import { PulseSystem } from "./PulseSystem";
 import { QualityGovernor, type QualityTier } from "./QualityGovernor";
 import { RibbonHighlight } from "./RibbonHighlight";
 
+/**
+ * Tissue treatments: three readings of the same corpus, as renderer parameter
+ * sets rather than new chrome. Each is a stated point of view about what the
+ * connectome is FOR at that moment, not a decoration.
+ *
+ * `fiber` multiplies the exposure control (which still owns saturation), so a
+ * treatment can change the reading without being able to reintroduce the white
+ * plateau. `haze` and the soma terms scale on top of the corpus-density
+ * compensation for the same reason.
+ */
+export type Tissue = "cortex" | "myelin" | "deep";
+
+export interface TissueParams {
+  soma: number;
+  somaAlpha: number;
+  fiber: number;
+  haze: number;
+  note: string;
+}
+
+export const TISSUE: Record<Tissue, TissueParams> = {
+  cortex: {
+    soma: 0.86, somaAlpha: 0.72, fiber: 1.0, haze: 0.26,
+    note: "Dense and cool. Every fiber above the weight floor is drawn — the reading is population, not narrative.",
+  },
+  myelin: {
+    soma: 1.2, somaAlpha: 0.95, fiber: 1.55, haze: 0.14,
+    note: "Stained tissue. Fibers thicken and gold championship tracks come forward; cell bodies gain a sheath.",
+  },
+  deep: {
+    soma: 0.7, somaAlpha: 0.5, fiber: 0.5, haze: 0.04,
+    note: "Long exposure. Only the strongest tracts survive the falloff; the corpus reads as structure, not detail.",
+  },
+};
+
 /** Normalised layout radius — nodes.json positions reach ~1.03. */
 const GRAPH_RADIUS = 1.03;
 /**
@@ -112,6 +147,8 @@ export class ConnectomeRenderer {
   onDropChange: ((dropped: number, shown: number) => void) | null = null;
   private emphasisAlpha = 1;
   private fiberExposure = 1;
+  private tissue: Tissue = "cortex";
+  private hazeBase = 1;
   onTierChange: ((tier: QualityTier) => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement, graph: RendererGraphInput) {
@@ -166,7 +203,11 @@ export class ConnectomeRenderer {
       hazeColors.set([cc.r, cc.g, cc.b], k * 3);
       hazeSizes[k] = 0.25 + 0.5 * Math.min(1, Math.sqrt(graph.communitySizes[k]!) / 30);
     }
+    // Baseline atmosphere for this corpus size; a tissue treatment scales it
+    // rather than replacing it, so 371 communities never wash out whatever the
+    // treatment asks for.
     const hazeIntensity = Math.min(1, Math.max(0.3, Math.sqrt(55 / Math.max(1, K))));
+    this.hazeBase = hazeIntensity;
     this.haze = new CommunityHaze(
       Float32Array.from(graph.communityCenters), hazeSizes, hazeColors, hazeIntensity,
     );
@@ -541,7 +582,7 @@ export class ConnectomeRenderer {
     const area = Math.max(1, spanPx * spanPx);
     const n = Math.max(1, this.shownEdges.length);
     const exposure = THREE.MathUtils.clamp(
-      FIBER_EXPOSURE_K * Math.pow(area / n, FIBER_EXPOSURE_P),
+      FIBER_EXPOSURE_K * Math.pow(area / n, FIBER_EXPOSURE_P) * TISSUE[this.tissue].fiber,
       FIBER_EXPOSURE_MIN,
       FIBER_EXPOSURE_MAX,
     );
@@ -607,6 +648,22 @@ export class ConnectomeRenderer {
 
   screenshot(): string {
     return this.canvas.toDataURL("image/png");
+  }
+
+  /** Apply a tissue treatment. Cheap: uniforms only, no rebuild. */
+  setTissue(t: Tissue): void {
+    this.tissue = t;
+    const p = TISSUE[t];
+    this.nodes.setSoma(p.soma, p.somaAlpha);
+    this.haze.setIntensity(p.haze * this.hazeBase);
+  }
+
+  get tissueTreatment(): Tissue {
+    return this.tissue;
+  }
+
+  setHazeVisible(v: boolean): void {
+    this.haze.points.visible = v;
   }
 
   setReducedMotion(v: boolean): void {

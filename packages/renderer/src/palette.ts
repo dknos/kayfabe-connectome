@@ -13,14 +13,24 @@ export const COLORS = {
 };
 
 /**
- * Community hues: golden-angle walk through a restrained band (blues → violets →
- * teals with occasional warm accents), muted so semantic fiber colors stay louder.
+ * Community hues: a restrained teal → blue → violet band, with one warm accent
+ * every seventh community.
+ *
+ * The previous walk was a full golden-angle sweep of the colour wheel, so
+ * community hue competed with the SEMANTIC fiber colours — ember for opposed,
+ * cyan for same-side, gold for a title change. Those three have to stay the
+ * loudest thing on screen, because they carry meaning; a community index does
+ * not. Constraining the band to 96° and dropping saturation gives community a
+ * legible identity without letting it shout over the semantics.
  */
 export function communityColor(community: number): THREE.Color {
   if (community < 0) return COLORS.promotion.clone();
-  const hue = ((community * 137.508) % 360) / 360;
-  const sat = 0.42 + 0.16 * ((community * 7) % 3) / 2;
-  const light = 0.58 + 0.1 * ((community * 13) % 2);
+  // A periodic warm accent keeps neighbouring communities separable inside a
+  // narrow band — without it a 96° sweep reads as one colour at low saturation.
+  if (community % 7 === 3) return new THREE.Color().setHSL(0.075, 0.42, 0.6);
+  const hue = (188 + ((community * 61) % 96)) / 360;
+  const sat = 0.3 + 0.11 * (((community * 7) % 3) / 2);
+  const light = 0.52 + 0.07 * ((community * 13) % 2);
   return new THREE.Color().setHSL(hue, sat, light);
 }
 
