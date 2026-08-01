@@ -118,12 +118,12 @@ def test_aggregator_edge_weights_equal_evidence_counts():
     pairs = dict(agg.sorted_pairs())
     p12 = pairs["p:1|p:2"]
     assert p12["opposed"] == 2 and p12["same"] == 1 and p12["br"] == 0
-    assert len(p12["evidence"]) == 4  # 2 opposed + 1 same + ... no: 2+1
-    # evidence count equals sum of weights
-    assert len(p12["evidence"]) == p12["same"] + p12["opposed"] + p12["br"] + 1 - 1
+    # every weight equals its evidence entry count
+    assert len(p12["evidence"]) == p12["same"] + p12["opposed"] + p12["br"] == 3
     assert p12["titleMatches"] == 1
     # evidence is sorted by (date, match id)
     assert [e[1] for e in p12["evidence"]] == [1, 2, 3]
+    assert p12["firstDay"] == p12["lastDay"] == 0
 
 
 def test_aggregator_title_match_counted_once_per_match():

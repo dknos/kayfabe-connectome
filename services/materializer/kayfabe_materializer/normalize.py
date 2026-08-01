@@ -299,6 +299,8 @@ class Resolver:
 
 NO_TITLE_BELT_ID = 1
 
+_TITLE_SHAPED = re.compile(r"(?i)\b(?:titles?|championships?|belts?|crown)\b")
+
 
 def split_belts(belts: dict[int, str]) -> dict[int, dict]:
     """belt-split@1 — classify every belt (id != 1).
@@ -353,11 +355,21 @@ def split_belts(belts: dict[int, str]) -> dict[int, dict]:
                     comp_ids.append(ci)
             result[i] = {"kind": "split", "components": comp_ids, "parts": parts}
         else:
-            suspected = any(
-                (n.startswith(o + " ") or n.endswith(" " + o))
-                for o in name_list
-                if o != n
-            )
+            # Concat suspicion without a full split:
+            #  * a standalone name is a proper PREFIX ('<known> <tail>'), or
+            #  * a standalone name is a proper SUFFIX and the leftover head is
+            #    itself title-shaped ('<X Championship> <known>'). A bare
+            #    qualifier head ('Undisputed', 'Interim') is NOT a concat.
+            suspected = False
+            for o in name_list:
+                if o == n:
+                    continue
+                if n.startswith(o + " "):
+                    suspected = True
+                    break
+                if n.endswith(" " + o) and _TITLE_SHAPED.search(n[: -len(o) - 1]):
+                    suspected = True
+                    break
             result[i] = {
                 "kind": "artifact" if suspected else "title",
                 "components": [i],

@@ -174,6 +174,9 @@ BELTS = {
     14: "ECW World Heavyweight Title WWA World Heavyweight Title",
     20: "WWE Championship",
     21: "WWE Championship WWE Championship",
+    22: "Undisputed WWE Championship",
+    23: "Interim ECW FTW Title",
+    24: "Cruiserweight Classic Championship ECW FTW Title",
 }
 
 
@@ -198,3 +201,12 @@ def test_belt_split_artifact_kept():
     assert 1 not in m
     # standalone titles stay standalone
     assert m[10]["kind"] == "title" and m[11]["kind"] == "title"
+
+
+def test_belt_qualified_names_are_not_artifacts():
+    m = split_belts(BELTS)
+    # bare qualifier heads are genuine titles, not concat artifacts
+    assert m[22]["kind"] == "title"  # 'Undisputed <known>'
+    assert m[23]["kind"] == "title"  # 'Interim <known>'
+    # a title-shaped head before a known suffix IS a suspected concat
+    assert m[24]["kind"] == "artifact"

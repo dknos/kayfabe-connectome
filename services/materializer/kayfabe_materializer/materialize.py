@@ -19,7 +19,7 @@ from . import MATERIALIZATION_SCHEMA_VERSION
 from .analytics import degrees, louvain, pair_weight
 from .extract import extract_all
 from .layout import compute_layout
-from .normalize import FORM_BITS, bucket_of, iso_to_day
+from .normalize import FORM_BITS, bucket_of, day_to_iso, iso_to_day
 from .project import PairAggregator, derive_reigns
 from .source_db import source_db_path
 from .validate import run_checks
@@ -682,8 +682,6 @@ def build(out: Path | None = None) -> dict:
 
 
 def _day_iso(day: int) -> str:
-    from .normalize import day_to_iso
-
     return day_to_iso(day)
 
 

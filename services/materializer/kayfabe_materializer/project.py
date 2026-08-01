@@ -17,7 +17,7 @@ supporting evidence list.
 
 from __future__ import annotations
 
-from .normalize import FORM_BITS, pair_key
+from .normalize import FORM_BITS
 
 REL_SAME = "same"
 REL_OPPOSED = "opposed"
