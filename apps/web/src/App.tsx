@@ -16,6 +16,8 @@ import { GeoTable } from "./geo/GeoTable";
 import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
 import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
 import { scheduler, useGeo } from "./geo/geoStore";
+import { AtlasLens } from "./atlas/AtlasLens";
+import { installAtlasUrl } from "./atlas/atlasUrl";
 
 export function App() {
   const bootError = useStore((s) => s.bootError);
@@ -31,14 +33,18 @@ export function App() {
 
   // Playback follows the selection: choosing a wrestler and pressing play
   // replays that career.
+  // The ATLAS lens owns the scope while it is mounted (a promotion lane and a
+  // title lineage are scopes too), and restores this one on the way out.
   const selection = useStore((s) => s.selection);
   useEffect(() => {
+    if (lens === "atlas") return;
     const id = selection?.kind === "node" && selection.id.startsWith("p:") ? selection.id : null;
     engineRef.current.setParticipant(id);
-  }, [selection]);
+  }, [selection, lens]);
 
   useEffect(() => {
     installGeoUrl();
+    installAtlasUrl();
     void useStore.getState().boot();
   }, []);
 
@@ -164,6 +170,7 @@ export function App() {
           <LeftPanel shownEdges={edgeStats.shown} droppedEdges={edgeStats.dropped} tier={tier} />
         )}
         {model && lens === "connectome" && <RightPanel />}
+        {model && lens === "atlas" && <AtlasLens engine={engineRef.current} />}
         {model && lens === "table" && <TableView />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}

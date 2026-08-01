@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kayfabe/atlas-renderer": "workspace:*",
     "@kayfabe/geo-renderer": "workspace:*",
     "@kayfabe/graph-contract": "workspace:*",
     "@kayfabe/renderer": "workspace:*",

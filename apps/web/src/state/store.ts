@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "table" | "geo" | "geoTable";
+export type Lens = "connectome" | "atlas" | "table" | "geo" | "geoTable";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -177,7 +177,9 @@ export const useStore = create<AppState>((set, get) => ({
           ? "Geo Replay — territory globe"
           : lens === "geoTable"
             ? "Geo table view"
-            : "Connectome view",
+            : lens === "atlas"
+              ? "Atlas — chronological archive. Promotions are lanes on a time axis."
+              : "Connectome view",
     );
   },
 
@@ -393,14 +395,19 @@ export const useStore = create<AppState>((set, get) => ({
 
 /** The GEO lens registers its own serialiser here rather than this module
  * importing geo state — the connectome must not depend on the globe. */
-let geoUrlState: (() => Record<string, string | number | null>) | null = null;
-let geoUrlRestore: ((kv: Map<string, string>) => void) | null = null;
-export function registerGeoUrl(
-  serialize: () => Record<string, string | number | null>,
-  restore: (kv: Map<string, string>) => void,
-): void {
-  geoUrlState = serialize;
-  geoUrlRestore = restore;
+type UrlSerializer = () => Record<string, string | number | null>;
+type UrlRestorer = (kv: Map<string, string>) => void;
+
+/** One slot per lens rather than one slot total: a single global pair was
+ *  fine while GEO was the only tenant and would have silently made ATLAS
+ *  overwrite it. */
+const lensUrl = new Map<Lens, { serialize: UrlSerializer; restore: UrlRestorer }>();
+
+export function registerGeoUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("geo", { serialize, restore });
+}
+export function registerAtlasUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("atlas", { serialize, restore });
 }
 
 // v2: day numbers re-based to the 1900 epoch, promo bits widened — old
@@ -420,8 +427,12 @@ export function writeUrl(): void {
     push("lens", s.lens !== "connectome" ? s.lens : null);
     push("tis", s.tissue !== "cortex" ? s.tissue : null);
     if (s.lens === "geo" || s.lens === "geoTable") {
-      const g = geoUrlState?.();
+      const g = lensUrl.get("geo")?.serialize();
       if (g) for (const [k, v] of Object.entries(g)) push(k, v);
+    }
+    if (s.lens === "atlas") {
+      const a = lensUrl.get("atlas")?.serialize();
+      if (a) for (const [k, v] of Object.entries(a)) push(k, v);
     }
     push("focus", s.focusId);
     if (s.selection?.kind === "node") push("sel", s.selection.id);
@@ -461,6 +472,22 @@ export function restoreFromUrl(): void {
   if (!model) return;
   const valid = (id: string | undefined): string | null =>
     id && model.indexOfId.has(id) ? id : null;
+  /**
+   * A selectable id is not the same thing as a graph node.
+   *
+   * 406 of 571 promotions and 3,648 of 4,389 championships never earned a node
+   * — they are below the node thresholds — but ATLAS represents every one of
+   * them and a shared ATLAS link has to restore them. So selection accepts any
+   * id the corpus knows about; only camera FOCUS still requires a node,
+   * because only a node has a position in the connectome.
+   */
+  const selectable = (id: string | undefined): string | null => {
+    if (!id) return null;
+    if (model.indexOfId.has(id)) return id;
+    if (id.startsWith("pr:") && s.core?.promotions[id]) return id;
+    if (id.startsWith("t:") || id.startsWith("p:")) return id;
+    return null;
+  };
 
   const patch: Partial<Filters> = {};
   const num = (k: string): number | null => {
@@ -487,14 +514,12 @@ export function restoreFromUrl(): void {
   if (minE !== null) patch.minEncounters = minE;
 
   const lensParam = kv.get("lens");
-  geoUrlRestore?.(kv);
+  for (const { restore } of lensUrl.values()) restore(kv);
+  const LENSES: Lens[] = ["table", "geo", "geoTable", "atlas"];
   useStore.setState((prev) => ({
-    lens:
-      lensParam === "table" || lensParam === "geo" || lensParam === "geoTable"
-        ? (lensParam as Lens)
-        : "connectome",
+    lens: LENSES.includes(lensParam as Lens) ? (lensParam as Lens) : "connectome",
     focusId: valid(kv.get("focus")),
-    selection: valid(kv.get("sel"))
+    selection: selectable(kv.get("sel"))
       ? { kind: "node", id: kv.get("sel")! }
       : num("sele") !== null && num("sele")! < model.edgeCount
         ? { kind: "edge", edge: num("sele")! }

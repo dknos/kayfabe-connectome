@@ -48,15 +48,29 @@ export function SearchBox() {
     return scored.sort((a, b) => a[0] - b[0]).slice(0, 12).map(([, e]) => e);
   }, [core, q]);
 
+  const lens = useStore((s) => s.lens);
   const choose = (e: SearchEntity) => {
     setOpen(false);
     setQ(e.n);
+    // Selection is not gated on being a graph NODE any more. 406 of 571
+    // promotions and most championships sit below the node thresholds, and
+    // ATLAS represents every one of them — refusing to select them meant
+    // search could not reach most of what that lens draws. Camera focus still
+    // requires a node, because only a node has a connectome position.
+    if (e.t === "event") {
+      announce(`${e.n} is an event name, not a selectable entity.`);
+      return;
+    }
+    select({ kind: "node", id: e.id });
     if (model?.indexOfId.has(e.id)) {
-      select({ kind: "node", id: e.id });
       focus(e.id);
       announce(`Focused ${e.n} (${KIND_LABEL[e.t]})`);
+    } else if (lens === "atlas") {
+      announce(`Centred ${e.n} (${KIND_LABEL[e.t]}) in the Atlas.`);
     } else {
-      announce(`${e.n} is indexed but not a graph node (${KIND_LABEL[e.t]}).`);
+      announce(
+        `${e.n} (${KIND_LABEL[e.t]}) is in the corpus but below the connectome's node threshold — open the Atlas to read it.`,
+      );
     }
   };
 

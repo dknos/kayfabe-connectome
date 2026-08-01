@@ -597,3 +597,112 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   color: var(--text-dim);
 }
 .back-btn:hover { color: var(--same-soft); border-color: var(--same); }
+
+/* ---------- ATLAS lens ----------
+ *
+ * The atlas is a board you read, not a field you fly through, so its chrome is
+ * flatter and quieter than the connectome's: the canvas carries the reading and
+ * the panels stay out of its way. Tokens are the same; nothing here introduces
+ * a colour the semantic palette does not already own.
+ */
+.atlas-gl {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  display: block; touch-action: none;
+}
+.atlas-labels {
+  position: absolute; inset: 0; pointer-events: none; z-index: 12; overflow: hidden;
+}
+.alabel {
+  position: absolute; top: 0; left: 0;
+  transform-origin: 0 0;
+  display: flex; align-items: baseline; gap: 5px;
+  margin-top: -0.6em;
+  font-size: 11px; line-height: 1.15; color: var(--text);
+  white-space: nowrap;
+  -webkit-text-stroke: 2.5px rgba(4, 6, 11, 0.88);
+  paint-order: stroke fill;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+.alabel.pickable { pointer-events: auto; cursor: pointer; }
+.alabel.pickable:hover { color: var(--select); }
+.alabel.center { transform: translateX(-50%); }
+.alabel-name { font-weight: 500; }
+.alabel-sub {
+  display: block; position: absolute; top: 1.1em; left: 0;
+  font-family: var(--font-data); font-size: 9px; letter-spacing: 0.06em;
+  color: var(--text-faint); font-weight: 400;
+}
+.alabel-badge {
+  font-family: var(--font-data); font-size: 8.5px; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 4px; border-radius: 3px;
+  border: 1px solid currentColor; opacity: 0.75;
+  -webkit-text-stroke: 0;
+}
+.alabel.tone-gold { color: var(--gold); }
+.alabel.tone-promotion { color: var(--text); }
+.alabel.tone-person { color: var(--same-soft); }
+.alabel.tone-muted { color: var(--text-dim); font-size: 10px; }
+.alabel.tone-warn { color: var(--caution); }
+.alabel.tone-neutral { color: var(--select); }
+
+.atlas-crumbs {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 24;
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  background: var(--panel-bg); backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--stroke); border-radius: 999px;
+  max-width: min(70vw, 900px); overflow: hidden;
+}
+.atlas-crumbs .crumb {
+  background: transparent; border: 0; padding: 2px 6px; border-radius: 999px;
+  color: var(--text-dim); font-size: 11px; white-space: nowrap;
+}
+.atlas-crumbs .crumb:hover { color: var(--text); }
+.atlas-crumbs .crumb.here { color: var(--text); font-weight: 600; }
+.atlas-crumbs .sep { color: var(--text-faint); }
+.atlas-crumbs .loading-dot { margin-left: 6px; }
+
+.atlas-rail { z-index: 20; }
+.atlas-minimap canvas {
+  width: 100%; height: 190px; display: block;
+  border: 1px solid var(--stroke); border-radius: var(--radius);
+  background: var(--surface-2); cursor: crosshair;
+}
+.atlas-minimap .micro { margin-top: 4px; }
+
+.atlas-boot {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 30; padding: 10px 16px;
+  background: var(--panel-bg); border: 1px solid var(--stroke); border-radius: var(--radius);
+}
+
+/* Mobile: the board is the point, so the rails become one bottom sheet at a
+   time and the controls collapse. Hover is never required — every affordance
+   here is reachable by tap. */
+@media (max-width: 820px) {
+  .app[data-lens="atlas"] .atlas-rail {
+    position: absolute; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; max-height: 46vh; overflow-y: auto;
+    border-top: 1px solid var(--stroke-bright);
+    background: var(--panel-bg); backdrop-filter: var(--panel-blur);
+  }
+  .app[data-lens="atlas"][data-atlas-sheet="controls"] .rail.right,
+  .app[data-lens="atlas"][data-atlas-sheet="inspector"] .rail.left,
+  .app[data-lens="atlas"][data-atlas-sheet="hidden"] .rail.left,
+  .app[data-lens="atlas"][data-atlas-sheet="hidden"] .rail.right { display: none; }
+  .atlas-crumbs { top: 6px; max-width: 94vw; font-size: 10px; }
+  .alabel { font-size: 10px; }
+  .alabel-sub { display: none; }
+  .atlas-minimap canvas { height: 120px; }
+  .atlas-sheet-tabs { display: flex; }
+}
+.atlas-sheet-tabs {
+  display: none;
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 26;
+  gap: 6px; padding: 6px 10px;
+  background: var(--surface); border-top: 1px solid var(--stroke);
+}
+.atlas-sheet-tabs button { flex: 1; }

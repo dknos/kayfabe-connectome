@@ -116,7 +116,30 @@ function NodeDossier({ id }: { id: string }) {
     }
   }, [id]);
 
-  if (i === undefined) return <div className="error-note">Unknown entity {id}.</div>;
+  // Not every selectable entity is a graph node — most promotions and
+  // championships sit below the node thresholds but are fully represented in
+  // the Atlas. Selecting one there and switching back here must offer the way
+  // forward rather than an error.
+  if (i === undefined) {
+    const known = core?.promotions[id]?.n;
+    return (
+      <>
+        <h2>
+          Dossier <span className="line" />
+          <BackButton />
+          <button className="collapse-btn ghost" aria-label="Close dossier" onClick={() => select(null)}>✕</button>
+        </h2>
+        <div className="dossier-title">{known ?? id}</div>
+        <div className="empty-note">
+          This entity is in the corpus but below the connectome's node threshold, so it has no
+          position in the network view. The Atlas represents every promotion and championship.
+        </div>
+        <div className="actions">
+          <button onClick={() => useStore.getState().setLens("atlas")}>Organize in Atlas</button>
+        </div>
+      </>
+    );
+  }
   const name = model.nodes.name[i]!;
   const resolution = model.nodes.resolution[i]!;
   const promoName = (pid: string) =>
@@ -156,6 +179,16 @@ function NodeDossier({ id }: { id: string }) {
       </div>
 
       <LitSetNote />
+
+      <div className="actions">
+        <button
+          data-testid="open-in-atlas"
+          title="Read this entity as chronology instead of network"
+          onClick={() => useStore.getState().setLens("atlas")}
+        >
+          Organize in Atlas
+        </button>
+      </div>
 
       <GeoHandoffActions
         kind={type === 0 ? "person" : type === 1 ? "promotion" : "championship"}
