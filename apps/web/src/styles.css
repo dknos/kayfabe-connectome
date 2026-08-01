@@ -219,6 +219,12 @@ label { color: var(--text-dim); }
 .nlabel {
   position: absolute; transform: translate(-50%, -140%);
   font-size: 11px; color: var(--text);
+  /* Light text over a bright additive fiber field is unreadable with a soft
+     shadow alone — the glow has nothing dark to sit against. A painted stroke
+     gives the glyph a crisp edge whatever is behind it, and the shadow still
+     lifts it off the dark background everywhere else. */
+  -webkit-text-stroke: 2.5px rgba(0, 0, 0, 0.85);
+  paint-order: stroke fill;
   text-shadow: 0 1px 4px #000, 0 0 10px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
 }

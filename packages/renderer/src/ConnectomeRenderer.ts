@@ -10,6 +10,31 @@ import { NodePoints } from "./NodePoints";
 import { PulseSystem } from "./PulseSystem";
 import { QualityGovernor, type QualityTier } from "./QualityGovernor";
 import { RibbonHighlight } from "./RibbonHighlight";
+
+/** Normalised layout radius — nodes.json positions reach ~1.03. */
+const GRAPH_RADIUS = 1.03;
+/**
+ * Fiber exposure calibration. Measured on the full corpus at the default
+ * fit-all framing: 24,000 fibers, 812px canvas, camera distance 2.8, where a
+ * uniform multiplier of ~0.18 against the old per-edge budget was the point
+ * the white plateau resolved into visible structure with labels still legible.
+ */
+const FIBER_EXPOSURE_K = 0.01046;
+/**
+ * Sub-linear response. The purely geometric model — overlap = fibers / area,
+ * so exposure should rise as area — assumes the graph is uniformly dense. It
+ * is not: zooming in means zooming INTO the core, where the fibers you newly
+ * resolve are the densest ones, so overlap falls far slower than area grows.
+ * Measured with a linear response, zooming in twice took exposure 0.041 -> 1.91
+ * and put 8% of the view back at pure white. A square-root response tracks the
+ * real fall-off instead of the idealised one.
+ */
+const FIBER_EXPOSURE_P = 0.5;
+/** Floor: a huge drawn count zoomed all the way out still shows something. */
+const FIBER_EXPOSURE_MIN = 0.02;
+/** Ceiling: close-in views brighten, but never past the point where a few
+ * overlapping fibers can saturate on their own. */
+const FIBER_EXPOSURE_MAX = 0.6;
 import { COLORS, communityColor, edgeColor, hash01 } from "./palette";
 
 export interface RendererGraphInput {
@@ -85,6 +110,8 @@ export class ConnectomeRenderer {
   /** edges dropped by the quality cap on the last rebuild — surfaced, never silent */
   droppedEdges = 0;
   onDropChange: ((dropped: number, shown: number) => void) | null = null;
+  private emphasisAlpha = 1;
+  private fiberExposure = 1;
   onTierChange: ((tier: QualityTier) => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement, graph: RendererGraphInput) {
@@ -254,10 +281,11 @@ export class ConnectomeRenderer {
       (e) => {
         const w = view.weights(e);
         const total = w.same + w.opposed + w.br;
-        // Additive overlap grows LINEARLY with drawn-fiber count — sqrt
-        // compensation half-corrects and the field integrates to white at
-        // merged-corpus scale (measured: fibers alone reproduce the plateau).
-        const densityScale = Math.min(1, Math.max(0.15, 5500 / Math.max(1, shown.length)));
+        // This callback sets only the RELATIVE weight of one fiber against
+        // another. Compensating for how many fibers are drawn belongs to
+        // updateFiberExposure(), because the thing that actually saturates is
+        // overlap PER PIXEL — which depends on the zoom as much as the count,
+        // and a per-edge constant cannot see the camera.
         // Inside one lobe, overlap also scales with lobe population: a
         // 9k-person community's interior fibers can never all be visible.
         // Interiors become texture; inter-lobe tracts carry the light.
@@ -271,7 +299,7 @@ export class ConnectomeRenderer {
         // steep weight curve + low floor: the alpha budget concentrates in the
         // strongest documented relationships instead of a uniform wash
         const t = Math.min(1, total / 14);
-        return (0.025 + 0.26 * Math.pow(t, 1.4)) * densityScale * intraScale;
+        return (0.025 + 0.26 * Math.pow(t, 1.4)) * intraScale;
       },
     );
     this.applyEmphasis(this.emphasisState);
@@ -355,7 +383,10 @@ export class ConnectomeRenderer {
       em[i] = v * this.visFactor[i]!;
     }
     this.nodes.commitEmphasis();
-    this.edges.setGlobalAlpha(anyFocus ? 0.16 : 1);
+    // Emphasis is a FACTOR now; the exposure control owns the uniform and
+    // multiplies the two, so dimming for a selection cannot undo the
+    // saturation compensation (or vice versa).
+    this.emphasisAlpha = anyFocus ? 0.16 : 1;
   }
 
   /* ---------- timeline ---------- */
@@ -486,6 +517,43 @@ export class ConnectomeRenderer {
     this.cameraCtl.setAspect(w / h);
   }
 
+  /**
+   * Fiber exposure: hold additive overlap PER PIXEL roughly constant.
+   *
+   * Additive blending saturates on how many fiber segments land on the same
+   * pixel, which is (fibers drawn) / (screen area the graph covers). Both
+   * terms move: the drawn count changes with filters and the quality tier, and
+   * the covered area changes every time the camera moves. A per-edge constant
+   * can only be right at one zoom on one corpus — which is why the full corpus
+   * at the default framing integrated to a white plateau (measured: 7.4% of
+   * the graph region at pure white, fibers alone reproducing all of it) while
+   * a filtered view looked fine.
+   *
+   * K is calibrated against that measurement: 24,000 fibers, an 812px-tall
+   * canvas and camera distance 2.8 must land just under saturation.
+   */
+  private updateFiberExposure(): void {
+    const h = Math.max(1, this.canvas.clientHeight) * this.gl.getPixelRatio();
+    const dist = Math.max(0.05, this.cameraCtl.distance());
+    const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(this.cameraCtl.camera.fov) / 2);
+    // On-screen radius of the graph, in device pixels.
+    const spanPx = (GRAPH_RADIUS * h) / (dist * Math.max(1e-3, tanHalfFov));
+    const area = Math.max(1, spanPx * spanPx);
+    const n = Math.max(1, this.shownEdges.length);
+    const exposure = THREE.MathUtils.clamp(
+      FIBER_EXPOSURE_K * Math.pow(area / n, FIBER_EXPOSURE_P),
+      FIBER_EXPOSURE_MIN,
+      FIBER_EXPOSURE_MAX,
+    );
+    this.fiberExposure = exposure;
+    this.edges.setGlobalAlpha(exposure * this.emphasisAlpha);
+  }
+
+  /** QA seam: what the exposure control settled on this frame. */
+  get exposure(): number {
+    return this.fiberExposure;
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
@@ -508,6 +576,7 @@ export class ConnectomeRenderer {
         }
         this.nodes.commitActivity();
       }
+      this.updateFiberExposure();
       const dist = this.cameraCtl.distance();
       this.nodes.setFar(THREE.MathUtils.smoothstep(dist, 1.2, 2.6));
       this.pulses.tick(this.clock.elapsedTime, this.gl.getPixelRatio());
