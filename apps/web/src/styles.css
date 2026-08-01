@@ -263,3 +263,57 @@ label { color: var(--text-dim); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- GEO — territory globe ---------- */
+.geo-globe { position: absolute; inset: 0; }
+/* The connectome canvas stays MOUNTED (its camera framing and GPU buffers are
+   preserved for an instant switch back) but is hidden and its render loop is
+   stopped. Stopping the loop alone would leave its last frame painted under
+   the globe. */
+.app[data-lens="geo"] .stage > canvas.gl,
+.app[data-lens="geo"] .stage > .labels,
+.app[data-lens="geoTable"] .stage > canvas.gl,
+.app[data-lens="geoTable"] .stage > .labels { display: none; }
+/* Cesium injects its own widget styles; keep the credit visible (required
+   attribution) but tuck it into the corner in the app's own register. */
+.geo-globe .cesium-widget-credits {
+  position: absolute; bottom: 4px; left: 8px; right: auto;
+  font-size: 10px; color: var(--text-faint); text-shadow: 0 1px 2px #000;
+  pointer-events: auto; z-index: 5;
+}
+.geo-globe .cesium-widget-credits a { color: var(--text-dim); }
+.geo-globe .cesium-viewer-bottom { z-index: 5; }
+.geo-boot {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  padding: 10px 16px; background: var(--surface-1); border: 1px solid var(--stroke);
+  border-radius: 6px; z-index: 20;
+}
+.geo-bar { position: relative; }
+.geo-bar .geo-scrub { width: min(300px, 26vw); }
+.geo-legend {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-dim); flex: 1; padding: 0 16px;
+}
+.geo-legend .swatch { width: 14px; height: 3px; }
+.geo-legend .swatch.dot { width: 8px; height: 8px; border-radius: 50%; }
+.geo-progress-line {
+  position: absolute; left: 0; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold)); pointer-events: none;
+}
+.geo-table { overflow: auto; }
+.geo-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.geo-table th, .geo-table td { padding: 4px 8px; border-bottom: 1px solid var(--stroke); text-align: left; }
+.geo-table th button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+
+@media (max-width: 860px) {
+  /* Mobile: the contextual controls become a bottom sheet so the globe stays
+     visible and touch-operable, and the inspector never permanently covers it. */
+  .rail.left, .rail.right {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
+    max-height: 46vh; overflow-y: auto; z-index: 30;
+    border-top: 1px solid var(--stroke); background: var(--surface-0);
+    border-radius: 10px 10px 0 0;
+  }
+  .geo-legend { display: none; }
+  .geo-bar .geo-scrub { width: 40vw; }
+}

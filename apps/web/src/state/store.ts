@@ -4,7 +4,7 @@ import type { TimelineEvent } from "@kayfabe/graph-contract";
 import { loadCore, loadYear, type CoreData } from "../data/loader";
 import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 
-export type Lens = "connectome" | "table";
+export type Lens = "connectome" | "table" | "geo" | "geoTable";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -136,7 +136,15 @@ export const useStore = create<AppState>((set, get) => ({
   setLens(lens) {
     set({ lens });
     writeUrl();
-    get().announce(lens === "table" ? "Accessible table view" : "Connectome view");
+    get().announce(
+      lens === "table"
+        ? "Accessible table view"
+        : lens === "geo"
+          ? "Geo Replay — territory globe"
+          : lens === "geoTable"
+            ? "Geo table view"
+            : "Connectome view",
+    );
   },
 
   setFilters(patch) {
@@ -247,6 +255,18 @@ export const useStore = create<AppState>((set, get) => ({
 
 /* ---------- URL state (versioned, stable IDs) ---------- */
 
+/** The GEO lens registers its own serialiser here rather than this module
+ * importing geo state — the connectome must not depend on the globe. */
+let geoUrlState: (() => Record<string, string | number | null>) | null = null;
+let geoUrlRestore: ((kv: Map<string, string>) => void) | null = null;
+export function registerGeoUrl(
+  serialize: () => Record<string, string | number | null>,
+  restore: (kv: Map<string, string>) => void,
+): void {
+  geoUrlState = serialize;
+  geoUrlRestore = restore;
+}
+
 // v2: day numbers re-based to the 1900 epoch, promo bits widened — old
 // v1 fragments are ignored safely rather than restored wrong.
 const URL_VERSION = "2";
@@ -262,6 +282,10 @@ export function writeUrl(): void {
       if (v !== null && v !== undefined && v !== "") p.push(`${k}=${encodeURIComponent(String(v))}`);
     };
     push("lens", s.lens !== "connectome" ? s.lens : null);
+    if (s.lens === "geo" || s.lens === "geoTable") {
+      const g = geoUrlState?.();
+      if (g) for (const [k, v] of Object.entries(g)) push(k, v);
+    }
     push("focus", s.focusId);
     if (s.selection?.kind === "node") push("sel", s.selection.id);
     if (s.selection?.kind === "edge") push("sele", s.selection.edge);
@@ -325,8 +349,13 @@ export function restoreFromUrl(): void {
   const minE = num("minE");
   if (minE !== null) patch.minEncounters = minE;
 
+  const lensParam = kv.get("lens");
+  geoUrlRestore?.(kv);
   useStore.setState((prev) => ({
-    lens: kv.get("lens") === "table" ? "table" : "connectome",
+    lens:
+      lensParam === "table" || lensParam === "geo" || lensParam === "geoTable"
+        ? (lensParam as Lens)
+        : "connectome",
     focusId: valid(kv.get("focus")),
     selection: valid(kv.get("sel"))
       ? { kind: "node", id: kv.get("sel")! }

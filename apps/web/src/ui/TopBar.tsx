@@ -27,7 +27,13 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
         <button className={lens === "connectome" ? "active" : ""} onClick={() => setLens("connectome")}>
           Connectome
         </button>{" "}
-        <button className={lens === "table" ? "active" : ""} onClick={() => setLens("table")}>
+        <button className={lens === "geo" ? "active" : ""} onClick={() => setLens("geo")}>
+          Geo Replay
+        </button>{" "}
+        <button
+          className={lens === "table" || lens === "geoTable" ? "active" : ""}
+          onClick={() => setLens(lens === "geo" || lens === "geoTable" ? "geoTable" : "table")}
+        >
           Table
         </button>
       </div>

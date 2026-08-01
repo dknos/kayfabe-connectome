@@ -8,6 +8,13 @@ import { StageCanvas } from "./ui/StageCanvas";
 import { TableView } from "./ui/TableView";
 import { TimelineBar } from "./ui/TimelineBar";
 import { TopBar } from "./ui/TopBar";
+import { GeoControls } from "./geo/GeoControls";
+import { GeoInspector } from "./geo/GeoInspector";
+import { GeoLens } from "./geo/GeoLens";
+import { GeoTable } from "./geo/GeoTable";
+import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
+import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
+import { scheduler, useGeo } from "./geo/geoStore";
 
 export function App() {
   const bootError = useStore((s) => s.bootError);
@@ -22,8 +29,17 @@ export function App() {
   const [tier, setTier] = useState("high");
 
   useEffect(() => {
+    installGeoUrl();
     void useStore.getState().boot();
   }, []);
+
+  // The geo projection loads only when the lens is first opened; a reader who
+  // never opens GEO never pays for 16 MB of geographic data.
+  const geoActive = lens === "geo" || lens === "geoTable";
+  useEffect(() => {
+    if (!geoActive) return;
+    void useGeo.getState().boot().then(() => applyPendingGeoUrl());
+  }, [geoActive]);
 
   // global keyboard map
   useEffect(() => {
@@ -41,6 +57,26 @@ export function App() {
         st.focus(st.selection.id);
       } else if (e.key === "r") {
         rendererRef.current?.fitAll();
+      } else if (st.lens === "geo" && (e.key === "f" || e.key === "F")) {
+        const g = useGeo.getState();
+        if (g.selectedPlace >= 0) (window as any).__kayfabeGeo?.focusPlace(g.selectedPlace);
+      } else if (st.lens === "geo" && (e.key === "w" || e.key === "W")) {
+        (window as any).__kayfabeGeo?.worldView();
+      } else if (st.lens === "geo" && (e.key === "a" || e.key === "A")) {
+        useGeo.getState().setShowArcs(!useGeo.getState().showArcs);
+      } else if (st.lens === "geo" && (e.key === "h" || e.key === "H")) {
+        const g = useGeo.getState();
+        g.setAfterglow(g.afterglow === "none" ? "accumulate" : "none");
+      } else if (st.lens === "geo" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+        e.preventDefault();
+        const g = useGeo.getState();
+        if (e.key === "ArrowRight") {
+          const b = e.shiftKey ? scheduler?.stepBatch() : scheduler?.stepCard();
+          if (b) (window as any).__kayfabeGeoEmit?.(b.intents);
+        } else {
+          scheduler?.seek(Math.max(0, g.cursor - (e.shiftKey ? 10 : 1)));
+          g.syncFromScheduler();
+        }
       } else if (e.key === "[") {
         document.querySelector<HTMLButtonElement>('[aria-label="Previous record"]')?.click();
       } else if (e.key === "]") {
@@ -107,7 +143,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" data-lens={lens}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
@@ -116,6 +152,10 @@ export function App() {
         )}
         {model && lens === "connectome" && <RightPanel />}
         {model && lens === "table" && <TableView />}
+        {model && lens === "geo" && <GeoLens />}
+        {model && lens === "geo" && <GeoControls />}
+        {model && lens === "geo" && <GeoInspector />}
+        {model && lens === "geoTable" && <GeoTable />}
         {!model && (
           <div className="boot">
             <div className="inner">
@@ -126,7 +166,8 @@ export function App() {
           </div>
         )}
       </main>
-      {model && <TimelineBar engine={engineRef.current} />}
+      {model && lens === "geo" && <GeoTimelineReadout />}
+      {model && lens !== "geo" && <TimelineBar engine={engineRef.current} />}
       <div aria-live="polite" className="visually-hidden">{announcement}</div>
     </div>
   );
