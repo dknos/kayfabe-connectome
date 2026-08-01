@@ -18,7 +18,10 @@ mkdirSync(OUT, { recursive: true });
 const BASE = process.env.KAYFABE_BASE_URL ?? "http://127.0.0.1:9460";
 const browser = await chromium.launch({ args: ["--use-gl=angle", "--enable-webgl"] });
 
+const ONLY = process.argv[3] ?? null;
+
 async function record(name, drive) {
+  if (ONLY && !name.includes(ONLY)) return;
   const dir = join(OUT, ".tmp-" + name);
   mkdirSync(dir, { recursive: true });
   const ctx = await browser.newContext({
@@ -34,7 +37,11 @@ async function record(name, drive) {
   await page.getByRole("button", { name: "Morph Lab β" }).click();
   await page.waitForSelector(".morph-gl", { timeout: 20000 });
   await page.waitForTimeout(2500);
-  await drive(page);
+  try {
+    await drive(page);
+  } catch (e) {
+    console.log(name, "DRIVE FAILED:", String(e).split("\n")[0]);
+  }
   await ctx.close();
   const file = readdirSync(dir).find((f) => f.endsWith(".webm"));
   if (file) renameSync(join(dir, file), join(OUT, `${name}.webm`));
@@ -79,11 +86,11 @@ await record("4-motherboard-to-lineage", async (page) => {
 await record("5-career-playback", async (page) => {
   await search(page, "Undertaker");
   await page.waitForTimeout(1800);
-  await page.getByRole("button", { name: "Career Circuit" }).click();
+  await page.locator(".morph-layouts .chip", { hasText: "Career Circuit" }).click({ timeout: 8000 });
   await page.waitForTimeout(2200);
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.locator('.pulsebar [aria-label="Play"]').click({ timeout: 8000 });
   await page.waitForTimeout(6000);
-  await page.getByRole("button", { name: "Pause" }).click().catch(() => {});
+  await page.locator('.pulsebar [aria-label="Pause"]').click({ timeout: 4000 }).catch(() => {});
 });
 
 await record("6-return-to-tissue", async (page) => {
