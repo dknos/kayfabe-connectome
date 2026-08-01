@@ -49,6 +49,10 @@ export class GeoScheduler {
   /** How far through `scope` playback has consumed. */
   private cursor = 0;
   private clock: ClockKind = "record";
+  /** When true, record time consumes whole DATES rather than single cards.
+   * Calendar time already batches by date because the source records a date
+   * and not a show time. */
+  private dailyBatches = false;
   /** days/second in calendar mode, cards/second in record mode. */
   private speed = 3;
   private currentDay = 0;
@@ -97,6 +101,11 @@ export class GeoScheduler {
   setClock(clock: ClockKind, speed: number): void {
     this.clock = clock;
     this.speed = speed;
+    this.carry = 0;
+  }
+
+  setDailyBatches(on: boolean): void {
+    this.dailyBatches = on;
     this.carry = 0;
   }
 
@@ -203,10 +212,19 @@ export class GeoScheduler {
       const take = Math.floor(this.carry);
       this.carry -= take;
       for (let n = 0; n < take && !this.done; n++) {
-        const c = this.card(this.cursor);
-        intents.push(this.consume(c, true)!);
-        this.cursor++;
-        this.currentDay = c.day;
+        if (this.dailyBatches) {
+          const day = this.card(this.cursor).day;
+          while (!this.done && this.card(this.cursor).day === day) {
+            intents.push(this.consume(this.card(this.cursor), true)!);
+            this.cursor++;
+          }
+          this.currentDay = day;
+        } else {
+          const c = this.card(this.cursor);
+          intents.push(this.consume(c, true)!);
+          this.cursor++;
+          this.currentDay = c.day;
+        }
       }
     }
     if (!intents.length) return null;

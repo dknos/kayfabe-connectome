@@ -212,6 +212,30 @@ describe("scheduler accounting", () => {
     expect(s.scopePlaces()).toEqual([0, 1, 2]);
   });
 
+  it("daily batches consume whole dates, one date per tick", () => {
+    const s = new GeoScheduler(data);
+    s.setScope(ALL);
+    s.setClock("record", 1);
+    s.setDailyBatches(true);
+    // day 100 holds two cards; one tick takes the whole date, not one card
+    const first = s.advance(1)!;
+    expect(first.intents).toHaveLength(2);
+    expect(new Set(first.intents.map((i) => i.day))).toEqual(new Set([100]));
+    expect(s.advance(1)!.intents).toHaveLength(1); // day 200
+  });
+
+  it("match beats never add a card or a place to any counter", () => {
+    // A beat is inspector-only: the scheduler is not advanced by one, so the
+    // counters a ten-match show produces are identical either way.
+    const s = new GeoScheduler(data);
+    s.setScope(ALL);
+    s.stepCard();
+    const before = { ...s.counters };
+    // stepping matches inside the card touches nothing here
+    expect(s.counters).toEqual(before);
+    expect(s.counters.cardsProcessed).toBe(1);
+  });
+
   it("resets cleanly between scopes", () => {
     const s = new GeoScheduler(data);
     s.setScope(ALL);

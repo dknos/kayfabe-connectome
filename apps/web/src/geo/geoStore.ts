@@ -191,6 +191,9 @@ export const useGeo = create<GeoState>((set, get) => ({
 
   setUnit(unit) {
     set({ unit });
+    // Daily batches fire every card sharing a date together; match beats keep
+    // card granularity on the globe and step matches inside the inspector.
+    scheduler?.setDailyBatches(unit === "day");
   },
   setLoop(loop) {
     set({ loop });

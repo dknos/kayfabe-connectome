@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { cardStrings, dayToIso, placeOf, promotionIdOf, useGeo } from "./geoStore";
 import { loadSourceLocationMap, readCard } from "./geoAdapter";
 import { GeoAnalytics, GeoComparison } from "./GeoAnalytics";
+import { GeoMatchBeats } from "./GeoMatchBeats";
 import { openInConnectome } from "./GeoHandoff";
 import type { SourceLocationRow } from "./geoTypes";
 
@@ -224,6 +225,7 @@ export function GeoInspector() {
         )}
       </section>
 
+      <GeoMatchBeats />
       <GeoAnalytics />
       <GeoComparison />
     </aside>
