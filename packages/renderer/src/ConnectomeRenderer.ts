@@ -99,6 +99,14 @@ export interface EmphasisState {
   pathNodes: number[];
   pathEdges: number[];
   pinned: number[];
+  /**
+   * Node indices to light regardless of edges.
+   *
+   * The graph's edges are person-person only, so promotion and championship
+   * nodes have none and edge-derived emphasis lights nothing for them. The app
+   * resolves membership per node type and hands the answer in here.
+   */
+  members?: number[];
 }
 
 export interface TimeVisibility {
@@ -357,9 +365,12 @@ export class ConnectomeRenderer {
     this.emphasisState = st;
     const em = this.nodes.emphasis;
     const anyFocus =
-      st.selectedNode !== null || st.selectedEdge !== null || st.pathNodes.length > 0;
+      st.selectedNode !== null ||
+      st.selectedEdge !== null ||
+      st.pathNodes.length > 0 ||
+      (st.members?.length ?? 0) > 0;
 
-    const neighbor = new Set<number>();
+    const neighbor = new Set<number>(st.members ?? []);
     const fibers: { curve: THREE.Vector3[]; color: THREE.Color; width: number }[] = [];
     const addFiber = (e: number, width: number, brighten: number) => {
       if (!this.view) return;

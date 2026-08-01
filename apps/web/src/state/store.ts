@@ -4,6 +4,8 @@ import type { TimelineEvent } from "@kayfabe/graph-contract";
 import { loadCore, loadYear, type CoreData } from "../data/loader";
 import type { Tissue } from "@kayfabe/renderer";
 import { GraphModel, type FilteredView, type Filters } from "../graph/model";
+import { resolveMembers, type MemberResult } from "../graph/members";
+import { loadChampionships } from "../data/loader";
 
 export type Lens = "connectome" | "table" | "geo" | "geoTable";
 export type Selection =
@@ -34,6 +36,8 @@ interface AppState {
   viewPending: boolean;
 
   selection: Selection;
+  /** Who lights up for the current selection, and what that set means. */
+  members: MemberResult;
   focusId: string | null;
   hoverId: string | null;
   pinned: string[];
@@ -71,6 +75,7 @@ interface AppState {
   setShowHaze(v: boolean): void;
   setShowLabels(v: boolean): void;
   announce(msg: string): void;
+  resolveSelectionMembers(): Promise<void>;
 }
 
 const prefersReduced =
@@ -104,6 +109,7 @@ export const useStore = create<AppState>((set, get) => ({
   viewPending: false,
 
   selection: null,
+  members: { ids: [], basis: "" },
   focusId: null,
   hoverId: null,
   pinned: [],
@@ -189,6 +195,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   select(selection) {
     set({ selection });
+    void get().resolveSelectionMembers();
     writeUrl();
     const { model } = get();
     if (selection?.kind === "node" && model) {
@@ -272,6 +279,20 @@ export const useStore = create<AppState>((set, get) => ({
 
   announce(announcement) {
     set({ announcement });
+  },
+
+  /** Recompute the lit set for the current selection.
+   *
+   * Championship membership needs the reign records, which load lazily — so
+   * this resolves once without them (lighting nothing) and again once they
+   * arrive, rather than leaving a selected title permanently dark. */
+  async resolveSelectionMembers() {
+    const { model, core, selection } = get();
+    if (!model || !core) return;
+    const id = selection?.kind === "node" ? selection.id : null;
+    const champs = id?.startsWith("t:") ? await loadChampionships().catch(() => null) : null;
+    if (get().selection?.kind === "node" && (get().selection as { id: string }).id !== id) return;
+    set({ members: resolveMembers(model, core.manifest, core.search, id, champs) });
   },
 }));
 

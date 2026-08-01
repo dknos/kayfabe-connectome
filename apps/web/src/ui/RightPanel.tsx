@@ -3,6 +3,20 @@ import type { ChampionshipsFile, EvidenceEntry, PersonDossier } from "@kayfabe/g
 import { dayToDate, pairKey } from "@kayfabe/graph-contract";
 import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
 import { GeoHandoffActions } from "../geo/GeoHandoff";
+
+/** What the glow currently means. Three node types answer "who lights up" from
+ * three different signals, and saying which one is in play is the difference
+ * between a reading and a decoration. */
+function LitSetNote() {
+  const members = useStore((s) => s.members);
+  if (!members.basis) return null;
+  return (
+    <>
+      <p className="micro" data-testid="lit-basis">{members.basis}</p>
+      {members.caveat && <p className="derivation-note">{members.caveat}</p>}
+    </>
+  );
+}
 import { EF } from "../graph/model";
 import { isoToDay, useStore } from "../state/store";
 
@@ -83,6 +97,8 @@ function NodeDossier({ id }: { id: string }) {
         <div className="stat"><div className="v">{model.nodes.degree[i]!.toLocaleString()}</div><div className="k">connections</div></div>
         <div className="stat"><div className="v">{model.nodes.reigns[i]!.toLocaleString()}</div><div className="k">reigns*</div></div>
       </div>
+
+      <LitSetNote />
 
       <GeoHandoffActions
         kind={type === 0 ? "person" : type === 1 ? "promotion" : "championship"}

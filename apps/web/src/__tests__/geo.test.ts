@@ -5,6 +5,7 @@ import type { GeoData } from "../geo/geoAdapter";
 import { clampToRange, readCard } from "../geo/geoAdapter";
 import { GeoScheduler } from "../geo/GeoScheduler";
 import { comparePlaces, computeFootprint, greatCircleKm } from "../geo/geoAnalytics";
+import { resolveMembers } from "../graph/members";
 
 /**
  * A hand-built projection. Small enough to reason about by hand, which is the
@@ -314,5 +315,79 @@ describe("visual encodings", () => {
     // a linear ramp would leave it almost indistinguishable from zero.
     expect(mid[0]).toBeGreaterThan(low[0]);
     expect(heatColor(0.25)[0]).toBeCloseTo(mix(heatColor(0), heatColor(1), 0.5)[0], 5);
+  });
+});
+
+/* ------------------------------------------------------------------ members */
+
+describe("who lights up", () => {
+  // The encounter graph's edges are person-person only, so promotion and
+  // championship nodes have none. Each node type has to answer from a
+  // different signal, and each answer has to say what it is.
+  const nodes = {
+    count: 6,
+    id: ["p:1", "p:2", "p:3", "pr:big", "pr:small", "t:9"],
+    type: [0, 0, 0, 1, 1, 2],
+    name: ["Flair", "Steamboat", "Muta", "BIG", "SMALL", "Belt"],
+    promoMask: [0b0011, 0b0001, 0b0000, 0, 0, 0],
+    community: [0, 0, 0, -1, -1, -1],
+  } as never;
+  const model = {
+    nodes,
+    indexOfId: new Map(["p:1", "p:2", "p:3", "pr:big", "pr:small", "t:9"].map((id, i) => [id, i])),
+    // Flair wrestled Steamboat and Muta.
+    neighbors: (n: number) => (n === 0 ? [{ node: 1, edge: 0 }, { node: 2, edge: 1 }] : []),
+  } as never;
+  const manifest = { promo_bits: { big: 0 } } as never;
+  const search = [
+    { id: "p:1", t: "person", n: "Flair", m: 9, pm: ["BIG", "SMALL"] },
+    { id: "p:3", t: "person", n: "Muta", m: 4, pm: ["SMALL"] },
+  ] as never;
+  const champs = {
+    "t:9": { n: "Belt", pr: "pr:big", artifact: false, titleMatches: 3, changes: 2,
+             reigns: [{ holders: ["p:2"], s: "1", e: null, m: "m:1" },
+                      { holders: ["p:3"], s: "2", e: null, m: "m:2" }] },
+  } as never;
+
+  it("lights everyone a wrestler shares a documented match with", () => {
+    const r = resolveMembers(model, manifest, search, "p:1", null);
+    expect(r.ids.sort()).toEqual(["p:2", "p:3"]);
+    expect(r.basis).toContain("share a documented match");
+  });
+
+  it("lights a promotion's roster from the bitmask when it has a bit", () => {
+    const r = resolveMembers(model, manifest, search, "pr:big", null);
+    expect(r.ids.sort()).toEqual(["p:1", "p:2"]);
+    expect(r.caveat).toBeUndefined();
+  });
+
+  it("falls back to promotion NAMES when the promotion has no bit, and says so", () => {
+    // SMALL shares the "other" bit with 134 promotions, so the mask cannot
+    // identify it — the search index's top-six names are the only signal.
+    const r = resolveMembers(model, manifest, search, "pr:small", null);
+    expect(r.ids.sort()).toEqual(["p:1", "p:3"]);
+    expect(r.caveat).toMatch(/top six/);
+  });
+
+  it("lights a championship's documented holders, and says holders only", () => {
+    const r = resolveMembers(model, manifest, search, "t:9", champs);
+    expect(r.ids.sort()).toEqual(["p:2", "p:3"]);
+    expect(r.caveat).toMatch(/challenged for this title without winning/);
+  });
+
+  it("reports honestly while the reign records are still loading", () => {
+    const r = resolveMembers(model, manifest, search, "t:9", null);
+    expect(r.ids).toEqual([]);
+    expect(r.basis).toContain("loading");
+  });
+
+  it("never invents a member that is not a node in the graph", () => {
+    const stray = { "t:9": { ...(champs as never)["t:9"],
+      reigns: [{ holders: ["p:404"], s: "1", e: null, m: "m:1" }] } } as never;
+    expect(resolveMembers(model, manifest, search, "t:9", stray).ids).toEqual([]);
+  });
+
+  it("returns an empty set for no selection", () => {
+    expect(resolveMembers(model, manifest, search, null, null).ids).toEqual([]);
   });
 });

@@ -88,6 +88,7 @@ export function StageCanvas({
       pathNodes: (s0.pathResult?.nodes ?? []).map(idx0).filter((v): v is number => v !== null),
       pathEdges: s0.pathResult?.edges ?? [],
       pinned: s0.pinned.map(idx0).filter((v): v is number => v !== null),
+      members: s0.members.ids.map(idx0).filter((v): v is number => v !== null),
     });
     if (s0.timeline.mode !== "off" && s0.timeline.mode !== "playback") {
       r.setTimeVisibility({
@@ -126,7 +127,8 @@ export function StageCanvas({
           s.selection !== prev.selection ||
           s.hoverId !== prev.hoverId ||
           s.pathResult !== prev.pathResult ||
-          s.pinned !== prev.pinned
+          s.pinned !== prev.pinned ||
+          s.members !== prev.members
         ) {
           const idx = (id: string | null) => (id ? (model.indexOfId.get(id) ?? null) : null);
           r.applyEmphasis({
@@ -136,6 +138,7 @@ export function StageCanvas({
             pathNodes: (s.pathResult?.nodes ?? []).map((id) => idx(id)).filter((v): v is number => v !== null),
             pathEdges: s.pathResult?.edges ?? [],
             pinned: s.pinned.map((id) => idx(id)).filter((v): v is number => v !== null),
+            members: s.members.ids.map((id) => idx(id)).filter((v): v is number => v !== null),
           });
         }
 
