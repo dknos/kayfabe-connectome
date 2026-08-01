@@ -355,7 +355,8 @@ describe("who lights up", () => {
     // p:1 opposed p:2 and teamed with p:3. Opponent and tag partner are
     // different documented relationships, not one blurred set.
     const m = {
-      ...(model as never),
+      nodes,
+      indexOfId: new Map(["p:1", "p:2", "p:3", "pr:big", "pr:small", "t:9"].map((id, i) => [id, i])),
       neighbors: (n: number) => (n === 0 ? [{ node: 1, edge: 0 }, { node: 2, edge: 1 }] : []),
       edgeField: (e: number, f: number) =>
         f === EF.opposed ? (e === 0 ? 4 : 0) : f === EF.same ? (e === 1 ? 2 : 0) : 0,

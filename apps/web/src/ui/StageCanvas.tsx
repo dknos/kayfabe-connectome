@@ -246,6 +246,9 @@ export function StageCanvas({
   }, [model]);
 
   // ---------- isolate to the selected relation ----------
+  /** The ids currently isolated, read by the label builder so an isolated
+   * selection names every node it leaves on screen. */
+  const isolateIdsRef = useRef<string[] | null>(null);
   const members = useStore((s) => s.members);
   const memberGroup = useStore((s) => s.memberGroup);
   const isolate = useStore((s) => s.isolate);
@@ -258,8 +261,10 @@ export function StageCanvas({
     const ids = group ? group.ids : members.ids;
     if (!isolate || !selId || !ids.length) {
       r.setIsolate(null);
+      isolateIdsRef.current = null;
       return;
     }
+    isolateIdsRef.current = [selId, ...ids];
     // The selection itself stays visible — isolating a wrestler and then
     // hiding the wrestler would be a strange reading.
     const idx = [selId, ...ids]
@@ -284,7 +289,64 @@ export function StageCanvas({
   }, [showLabels]);
 
   // ---------- managed labels (imperative, capped, collision-suppressed) ----------
+  // The label layer is rebuilt on an interval, which would destroy hover state
+  // seven times a second — so the hovered node is held in a ref and its contact
+  // strip is re-attached on every rebuild.
+  const probeRef = useRef<number | null>(null);
+  const labelEls = useRef(new Map<number, HTMLDivElement>());
   useEffect(() => {
+    const buildProbe = (i: number, id: string): HTMLElement => {
+      const strip = document.createElement("div");
+      strip.className = "nprobe";
+      // A pad reflects live state: pinning a wrestler has to light the PIN pad
+      // while the cursor is still on it, without rebuilding the element the
+      // cursor is resting on.
+      const syncs: Array<() => void> = [];
+      const pad = (
+        text: string,
+        title: string,
+        isOn: () => boolean,
+        run: () => void,
+      ) => {
+        const b = document.createElement("button");
+        const paint = () => {
+          const on = isOn();
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-pressed", String(on));
+        };
+        syncs.push(paint);
+        b.className = "nprobe-pad";
+        b.textContent = text;
+        b.title = title;
+        b.setAttribute("aria-label", title);
+        b.onmousedown = (e) => e.stopPropagation();
+        b.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          run();
+          paint();
+        };
+        paint();
+        strip.appendChild(b);
+      };
+      const name = useStore.getState().model!.nodes.name[i]!;
+      pad("PIN", `Pin ${name}`, () => useStore.getState().pinned.includes(id), () =>
+        useStore.getState().togglePin(id),
+      );
+      pad("A", "Lock as path A", () => useStore.getState().pathA === id, () =>
+        useStore.getState().setPathEndpoint("a", useStore.getState().pathA === id ? null : id),
+      );
+      pad("B", "Lock as path B", () => useStore.getState().pathB === id, () =>
+        useStore.getState().setPathEndpoint("b", useStore.getState().pathB === id ? null : id),
+      );
+      pad("OPEN", "Open dossier", () => false, () => {
+        useStore.getState().select({ kind: "node", id });
+        useStore.getState().focus(id);
+      });
+      (strip as HTMLElement & { _sync?: () => void })._sync = () => syncs.forEach((f) => f());
+      return strip;
+    };
+
     const timer = setInterval(() => {
       const r = rendererRef.current;
       const st = useStore.getState();
@@ -292,9 +354,14 @@ export function StageCanvas({
       const host = labelsRef.current;
       if (!r || !m || !host || st.lens !== "connectome") {
         if (host) host.replaceChildren();
+        labelEls.current.clear();
         return;
       }
-      const cap = r.governor.settings.labelCap;
+      // Isolating a selection is a request to READ it, so every node still on
+      // screen gets its name. The cap exists to stop 30,000 labels; an isolated
+      // set is bounded by construction.
+      const isoIds = isolateIdsRef.current;
+      const cap = isoIds ? isoIds.length + 4 : r.governor.settings.labelCap;
       const wanted: { i: number; cls: string }[] = [];
       const seen = new Set<number>();
       const push = (id: string | null, cls: string) => {
@@ -317,7 +384,11 @@ export function StageCanvas({
       const people: number[] = [];
       for (let i = 0; i < m.nodes.count; i++) if (m.nodes.type[i] === 0) people.push(i);
       people.sort((a, b) => m.nodes.degree[b]! - m.nodes.degree[a]!);
+      if (isoIds) {
+        for (const id of isoIds) push(id, "iso");
+      }
       for (const i of [...order.slice(0, 12), ...people.slice(0, 60)]) {
+        if (isoIds) break;
         if (wanted.length >= cap) break;
         if (!seen.has(i)) {
           seen.add(i);
@@ -328,28 +399,68 @@ export function StageCanvas({
       const w = host.clientWidth;
       const h = host.clientHeight;
       const grid = new Set<string>();
-      const frag = document.createDocumentFragment();
+      const live = new Set<number>();
       for (const { i, cls } of wanted) {
         const p = r.project(i);
         if (!p.front || p.x < 0 || p.x > w || p.y < 0 || p.y > h) continue;
+        // Collision suppression drops the lower-priority label in a cell. In
+        // isolate mode that would hide members the reader explicitly asked to
+        // see, so the grid only thins the ambient "dim" tier.
         const cell = `${Math.round(p.x / 92)}:${Math.round(p.y / 24)}`;
         if (grid.has(cell) && cls === "dim") continue;
         grid.add(cell);
-        const div = document.createElement("div");
-        div.className = `nlabel ${cls}`;
+        live.add(i);
+
+        // Reuse the element rather than rebuilding it. replaceChildren every
+        // 140ms swaps the node out from under the cursor, so a click aimed at
+        // a contact pad can land on a detached element.
+        let div = labelEls.current.get(i);
+        if (!div) {
+          div = document.createElement("div");
+          const nodeId = m.nodes.id[i]!;
+          div.onclick = (e) => {
+            e.stopPropagation();
+            useStore.getState().select({ kind: "node", id: nodeId });
+          };
+          div.onmouseenter = () => {
+            probeRef.current = i;
+            if (!div!.querySelector(".nprobe")) div!.appendChild(buildProbe(i, nodeId));
+            div!.classList.add("probing");
+          };
+          div.onmouseleave = () => {
+            if (probeRef.current === i) probeRef.current = null;
+            div!.querySelector(".nprobe")?.remove();
+            div!.classList.remove("probing");
+          };
+          const text = document.createElement("span");
+          text.className = "nlabel-name";
+          text.textContent = m.nodes.name[i]!;
+          div.appendChild(text);
+          if (m.nodes.resolution[i] === 1) {
+            const flag = document.createElement("span");
+            flag.className = "flag";
+            flag.textContent = " ◦";
+            flag.title = "probable identity (derived from side rows)";
+            text.appendChild(flag);
+          }
+          labelEls.current.set(i, div);
+          host.appendChild(div);
+        }
+        const probing = probeRef.current === i;
+        if (probing) {
+          const strip = div.querySelector<HTMLElement & { _sync?: () => void }>(".nprobe");
+          strip?._sync?.();
+        }
+        div.className = `nlabel ${cls}${probing ? " probing" : ""}`;
         div.style.left = `${p.x}px`;
         div.style.top = `${p.y}px`;
-        div.textContent = m.nodes.name[i]!;
-        if (m.nodes.resolution[i] === 1 && cls === "sel") {
-          const flag = document.createElement("span");
-          flag.className = "flag";
-          flag.textContent = " ◦";
-          flag.title = "probable identity (derived from side rows)";
-          div.appendChild(flag);
-        }
-        frag.appendChild(div);
       }
-      host.replaceChildren(frag);
+      for (const [i, el] of labelEls.current) {
+        // Never retire the label the cursor is currently on.
+        if (live.has(i) || probeRef.current === i) continue;
+        el.remove();
+        labelEls.current.delete(i);
+      }
     }, 140);
     return () => clearInterval(timer);
   }, []);

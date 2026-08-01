@@ -510,3 +510,49 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
 .chip.tone-br.on { border-color: var(--caution); color: var(--caution); }
 .chip.tone-gold.on { border-color: var(--gold); color: var(--gold); }
 .isolate-toggle { display: block; margin: 6px 0 2px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+
+/* ---------- node contact strip ----------
+   Hovering a name attaches a probe to it. The pads are square on a hairline
+   shank — recording contacts, not buttons — which is the one place the pill
+   language of the rest of the chrome is deliberately broken: this is an
+   instrument touching tissue, not a toolbar. */
+.labels { pointer-events: none; }
+.nlabel { pointer-events: auto; cursor: pointer; }
+/* The stroke lives on the name span so the contact strip does not inherit it. */
+.nlabel .nlabel-name { -webkit-text-stroke: inherit; paint-order: stroke fill; }
+.nprobe, .nprobe * { -webkit-text-stroke: 0; }
+.nlabel:hover { color: var(--select); }
+.nlabel.iso { color: var(--text); font-size: 11px; }
+
+.nprobe {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 2px; padding: 3px 4px;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--stroke-bright);
+  border-radius: 3px;
+  white-space: nowrap;
+  animation: probe-attach 120ms ease-out;
+}
+/* The shank: a hairline from the name down to the contacts. */
+.nprobe::before {
+  content: ""; position: absolute; left: 50%; top: -5px; width: 1px; height: 5px;
+  background: var(--stroke-bright);
+}
+.nprobe-pad {
+  font-family: var(--font-data); font-size: 8.5px; letter-spacing: 0.1em;
+  line-height: 1; padding: 4px 5px; min-width: 17px;
+  border: 1px solid var(--stroke-bright); border-radius: 2px;
+  background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.nprobe-pad:hover { border-color: var(--same); color: var(--same-soft); }
+/* A locked contact fills monochrome. Filling it with a semantic colour would
+   collide with the fiber palette, where every colour already means something. */
+.nprobe-pad.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+.nprobe-pad:focus-visible { outline: 1px solid var(--same); outline-offset: 1px; }
+
+@keyframes probe-attach {
+  from { opacity: 0; transform: translateX(-50%) translateY(-2px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .nprobe { animation: none; } }
