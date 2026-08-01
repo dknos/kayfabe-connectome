@@ -1,0 +1,36 @@
+# --- secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- private data: never commit ---
+data/private/
+data/staging/
+data/materialized/
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+wrestlingdb-cache/
+
+# --- build output ---
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# --- tooling noise ---
+.DS_Store
+*.log
+playwright-report/
+test-results/
+coverage/
