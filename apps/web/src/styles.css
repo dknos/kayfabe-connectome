@@ -556,3 +556,31 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) { .nprobe { animation: none; } }
+
+/* The connection readout above the contacts. Hovering a name while someone is
+   selected asks about the RELATIONSHIP, so the counts carry the same colours
+   the fibers do — the number and the line it describes are one object. */
+.nprobe-rel {
+  display: flex; gap: 7px; align-items: baseline;
+  padding: 1px 2px 4px; margin-bottom: 3px;
+  border-bottom: 1px solid var(--stroke);
+  font-family: var(--font-data); font-size: 8.5px; letter-spacing: 0.08em;
+}
+.nprobe-rel .rel-opposed { color: var(--opposed); }
+.nprobe-rel .rel-same { color: var(--same); }
+.nprobe-rel .rel-br { color: var(--caution); }
+.nprobe-rel .rel-title { color: var(--gold); }
+.nprobe-rel .rel-span { color: var(--text-faint); margin-left: auto; }
+.nprobe-rel .rel-none { color: var(--text-faint); font-style: normal; }
+.nprobe-pads { display: flex; gap: 2px; }
+/* The pulse says whose history it is drawing, in the same ember the scoped
+   series uses — the label and the bars are one statement. */
+.pulse-scope { color: var(--opposed); letter-spacing: 0.12em; }
+/* The trail back sits in the dossier header beside the close control, naming
+   where it goes — "← Evan Bourne" is a destination, "←" is a guess. */
+.back-btn {
+  margin-right: auto; max-width: 46%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-dim);
+}
+.back-btn:hover { color: var(--same-soft); border-color: var(--same); }

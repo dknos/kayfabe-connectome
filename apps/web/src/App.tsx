@@ -29,6 +29,14 @@ export function App() {
   const [edgeStats, setEdgeStats] = useState({ dropped: 0, shown: 0 });
   const [tier, setTier] = useState("high");
 
+  // Playback follows the selection: choosing a wrestler and pressing play
+  // replays that career.
+  const selection = useStore((s) => s.selection);
+  useEffect(() => {
+    const id = selection?.kind === "node" && selection.id.startsWith("p:") ? selection.id : null;
+    engineRef.current.setParticipant(id);
+  }, [selection]);
+
   useEffect(() => {
     installGeoUrl();
     void useStore.getState().boot();
@@ -52,6 +60,9 @@ export function App() {
       if (e.key === " ") {
         e.preventDefault();
         document.querySelector<HTMLButtonElement>('[aria-label="Play"], [aria-label="Pause"]')?.click();
+      } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) {
+        e.preventDefault();
+        st.back();
       } else if (e.key === "Escape") {
         if (st.selection) st.select(null);
         else if (st.focusId) st.focus(null);

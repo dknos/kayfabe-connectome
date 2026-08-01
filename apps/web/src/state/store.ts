@@ -5,7 +5,7 @@ import { loadCore, loadYear, type CoreData } from "../data/loader";
 import type { Tissue } from "@kayfabe/renderer";
 import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
-import { loadChampionships } from "../data/loader";
+import { loadChampionships, loadPersonDossier } from "../data/loader";
 
 export type Lens = "connectome" | "table" | "geo" | "geoTable";
 export type Selection =
@@ -40,6 +40,12 @@ interface AppState {
   members: MemberResult;
   /** Which relation category is being read. */
   memberGroup: GroupKey;
+  /** Where you have been, most recent last. Following a connection is how this
+   * app is read, so getting back has to be one action rather than a search. */
+  history: string[];
+  /** Per-year match counts for the current selection, so the History Pulse
+   * reads the thing that is selected rather than the whole corpus. */
+  pulseScope: { label: string; years: Record<string, number> } | null;
   /** Hide everything outside the lit set instead of dimming it. */
   isolate: boolean;
   focusId: string | null;
@@ -81,6 +87,7 @@ interface AppState {
   announce(msg: string): void;
   resolveSelectionMembers(): Promise<void>;
   setMemberGroup(g: GroupKey): void;
+  back(): void;
   setIsolate(v: boolean): void;
 }
 
@@ -117,6 +124,8 @@ export const useStore = create<AppState>((set, get) => ({
   selection: null,
   members: { ids: [], basis: "" },
   memberGroup: "all",
+  pulseScope: null,
+  history: [],
   isolate: true,
   focusId: null,
   hoverId: null,
@@ -204,7 +213,15 @@ export const useStore = create<AppState>((set, get) => ({
   select(selection) {
     // A new selection starts from the whole connection set; the reader narrows
     // from there rather than inheriting the last node's category.
-    set({ selection, memberGroup: "all" });
+    const prev = get().selection;
+    set((st) => ({
+      selection,
+      memberGroup: "all",
+      history:
+        prev?.kind === "node" && prev.id !== (selection?.kind === "node" ? selection.id : null)
+          ? [...st.history.slice(-24), prev.id]
+          : st.history,
+    }));
     void get().resolveSelectionMembers();
     writeUrl();
     const { model } = get();
@@ -296,6 +313,20 @@ export const useStore = create<AppState>((set, get) => ({
    * Championship membership needs the reign records, which load lazily — so
    * this resolves once without them (lighting nothing) and again once they
    * arrive, rather than leaving a selected title permanently dark. */
+  /** Step back to the previously selected node. Popping the trail rather than
+   * pushing onto it, so back-then-back walks the way you came. */
+  back() {
+    const st = get();
+    const prev = st.history[st.history.length - 1];
+    if (!prev) return;
+    set({ history: st.history.slice(0, -1), selection: { kind: "node", id: prev },
+          memberGroup: "all" });
+    void get().resolveSelectionMembers();
+    writeUrl();
+    const i = st.model?.indexOfId.get(prev);
+    if (i !== undefined && st.model) get().announce(`Back to ${st.model.nodes.name[i]}`);
+  },
+
   setMemberGroup(memberGroup) {
     set({ memberGroup });
     writeUrl();
@@ -312,6 +343,49 @@ export const useStore = create<AppState>((set, get) => ({
     const champs = id?.startsWith("t:") ? await loadChampionships().catch(() => null) : null;
     if (get().selection?.kind === "node" && (get().selection as { id: string }).id !== id) return;
     set({ members: resolveMembers(model, core.manifest, core.search, id, champs) });
+
+    // The pulse follows the selection. A person's dossier already carries exact
+    // per-year match counts; nothing equivalent exists for a promotion or a
+    // championship without scanning the whole timeline, so those keep the
+    // corpus series rather than showing an invented one.
+    if (!id || !id.startsWith("p:")) {
+      set({ pulseScope: null });
+      return;
+    }
+    const bucket = await loadPersonDossier(id).catch(() => null);
+    if (get().selection?.kind !== "node") return;
+    if ((get().selection as { id: string }).id !== id) return;
+    const d = bucket?.[id];
+    if (!d) {
+      set({ pulseScope: null });
+      return;
+    }
+    // Park the playhead on their first documented record. Leaving it at the
+    // corpus start means pressing play drags through sixty empty years before
+    // anything belonging to this wrestler happens.
+    const firstDay = isoToDay(d.first);
+    // A wrestler's promotions and championships are context, not clutter: the
+    // dossier already lists them, and leaving them off the tissue means the
+    // reader can see who someone wrestled but not where or for what. They are
+    // added as their own groups AND kept in every isolate set as anchors.
+    const titleIds = d.titles.map((t) => t.t).filter((t) => model.indexOfId.has(t));
+    const promoIds = Object.keys(d.promos).filter((pr) => model.indexOfId.has(pr));
+    set((st) => ({
+      pulseScope: { label: d.n, years: d.years },
+      timeline: st.timeline.mode === "off" ? st.timeline : { ...st.timeline, day: firstDay },
+      members: {
+        ...st.members,
+        anchors: [...promoIds, ...titleIds],
+        groups: (st.members.groups ?? []).map((g) =>
+          g.key === "promotions" ? { ...g, ids: promoIds } : g,
+        ).concat(
+          titleIds.length
+            ? [{ key: "titles" as const, label: "Championships", ids: titleIds,
+                 tone: "gold" as const }]
+            : [],
+        ),
+      },
+    }));
   },
 }));
 

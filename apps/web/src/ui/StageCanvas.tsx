@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { dayToDate } from "@kayfabe/graph-contract";
 import { ConnectomeRenderer, type ViewEdges } from "@kayfabe/renderer";
 import { EF, type FilteredView, type GraphModel } from "../graph/model";
 import { useStore } from "../state/store";
@@ -258,7 +259,9 @@ export function StageCanvas({
     if (!r || !model) return;
     const selId = selection?.kind === "node" ? selection.id : null;
     const group = members.groups?.find((g) => g.key === memberGroup);
-    const ids = group ? group.ids : members.ids;
+    // Anchors ride along with every category: seeing WWE and the belts beside a
+    // wrestler's opponents is what makes the set legible as a career.
+    const ids = [...new Set([...(group ? group.ids : members.ids), ...(members.anchors ?? [])])];
     if (!isolate || !selId || !ids.length) {
       r.setIsolate(null);
       isolateIdsRef.current = null;
@@ -295,9 +298,56 @@ export function StageCanvas({
   const probeRef = useRef<number | null>(null);
   const labelEls = useRef(new Map<number, HTMLDivElement>());
   useEffect(() => {
+    /** The documented relationship between the current selection and one other
+     * node, in the fiber palette's own terms. Hovering a name while someone is
+     * selected is a question about the CONNECTION, not about the node. */
+    const relationLine = (other: number): HTMLElement | null => {
+      const st = useStore.getState();
+      const m = st.model;
+      if (!m || st.selection?.kind !== "node") return null;
+      const selIdx = m.indexOfId.get(st.selection.id);
+      if (selIdx === undefined || selIdx === other) return null;
+
+      const line = document.createElement("div");
+      line.className = "nprobe-rel";
+      const hit = m.neighbors(selIdx).find((n) => n.node === other);
+      if (!hit) {
+        const none = document.createElement("span");
+        none.className = "rel-none";
+        none.textContent = "no documented match";
+        line.appendChild(none);
+        return line;
+      }
+      const f = (k: number) => m.edgeField(hit.edge, k);
+      const part = (cls: string, label: string, n: number) => {
+        if (n <= 0) return;
+        const el = document.createElement("span");
+        el.className = `rel-${cls}`;
+        el.textContent = `${label} ×${n}`;
+        line.appendChild(el);
+      };
+      part("opposed", "opp", f(EF.opposed));
+      part("same", "tag", f(EF.same));
+      part("br", "br", f(EF.br));
+      part("title", "title", f(EF.title));
+      const y = (d: number) => dayToDate(d).getUTCFullYear();
+      const span = document.createElement("span");
+      span.className = "rel-span";
+      const a = y(f(EF.firstDay));
+      const b = y(f(EF.lastDay));
+      span.textContent = a === b ? `${a}` : `${a}–${b}`;
+      line.appendChild(span);
+      return line;
+    };
+
     const buildProbe = (i: number, id: string): HTMLElement => {
       const strip = document.createElement("div");
       strip.className = "nprobe";
+      const rel = relationLine(i);
+      if (rel) strip.appendChild(rel);
+      const pads = document.createElement("div");
+      pads.className = "nprobe-pads";
+      strip.appendChild(pads);
       // A pad reflects live state: pinning a wrestler has to light the PIN pad
       // while the cursor is still on it, without rebuilding the element the
       // cursor is resting on.
@@ -327,7 +377,7 @@ export function StageCanvas({
           paint();
         };
         paint();
-        strip.appendChild(b);
+        pads.appendChild(b);
       };
       const name = useStore.getState().model!.nodes.name[i]!;
       pad("PIN", `Pin ${name}`, () => useStore.getState().pinned.includes(id), () =>
@@ -343,7 +393,14 @@ export function StageCanvas({
         useStore.getState().select({ kind: "node", id });
         useStore.getState().focus(id);
       });
-      (strip as HTMLElement & { _sync?: () => void })._sync = () => syncs.forEach((f) => f());
+      (strip as HTMLElement & { _sync?: () => void })._sync = () => {
+        syncs.forEach((f) => f());
+        const next = relationLine(i);
+        const current = strip.querySelector(".nprobe-rel");
+        if (next && current) current.replaceWith(next);
+        else if (next && !current) strip.prepend(next);
+        else if (!next && current) current.remove();
+      };
       return strip;
     };
 
@@ -360,7 +417,19 @@ export function StageCanvas({
       // Isolating a selection is a request to READ it, so every node still on
       // screen gets its name. The cap exists to stop 30,000 labels; an isolated
       // set is bounded by construction.
-      const isoIds = isolateIdsRef.current;
+      // A selection makes the label layer answer ONE question: who is
+      // connected to this node. The ambient tier — top promotion anchors and
+      // top-degree people — is the answer to a different question, so Liger,
+      // Janela and Ultimo Dragon leave the screen unless they are part of the
+      // connection. The cap exists to stop 30,000 labels; a connection set is
+      // bounded by construction.
+      const selected = st.selection?.kind === "node" ? st.selection.id : null;
+      const connection = selected
+        ? [selected,
+           ...(st.members.groups?.find((g) => g.key === st.memberGroup)?.ids ?? st.members.ids),
+           ...(st.members.anchors ?? [])]
+        : null;
+      const isoIds = isolateIdsRef.current ?? connection;
       const cap = isoIds ? isoIds.length + 4 : r.governor.settings.labelCap;
       const wanted: { i: number; cls: string }[] = [];
       const seen = new Set<number>();

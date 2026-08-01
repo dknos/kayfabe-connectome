@@ -21,6 +21,7 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
   const currentEvent = useStore((s) => s.currentEvent);
   const setTimeline = useStore((s) => s.setTimeline);
   const reducedMotion = useStore((s) => s.reducedMotion);
+  const pulseScope = useStore((s) => s.pulseScope);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -44,12 +45,27 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
     const bw = Math.max(1.5, (w - 2) / (y1 - y0 + 1) - 1);
 
     // density: sqrt scale keeps the 1960s visible next to the Attitude Era wall
+    // When something is selected the corpus drops to a ghost and the selection
+    // is drawn over it at its OWN scale — the reading is "when was this active",
+    // and a career of 200 matches against a corpus peak of 20,000 would be a
+    // flat line if both shared an axis.
+    const scopeMax = pulseScope
+      ? Math.max(1, ...Object.values(pulseScope.years))
+      : 0;
     for (const y of years) {
       const d = core.density.years[String(y)]!;
       const hh = Math.sqrt(d.matches / maxM) * (h - 18);
-      ctx.fillStyle = "rgba(63, 211, 255, 0.34)";
+      ctx.fillStyle = pulseScope ? "rgba(63, 211, 255, 0.09)" : "rgba(63, 211, 255, 0.34)";
       ctx.fillRect(x(y), h - 12 - hh, bw, hh);
-      if (d.titleChanges > 0) {
+      if (pulseScope) {
+        const n = pulseScope.years[String(y)] ?? 0;
+        if (n > 0) {
+          const sh = Math.sqrt(n / scopeMax) * (h - 18);
+          ctx.fillStyle = "rgba(255, 122, 69, 0.85)";
+          ctx.fillRect(x(y), h - 12 - sh, bw, sh);
+        }
+      }
+      if (!pulseScope && d.titleChanges > 0) {
         const th = Math.min(1, d.titleChanges / 40) * (h - 26) + 4;
         ctx.fillStyle = "rgba(255, 209, 102, 0.8)";
         ctx.fillRect(x(y) + bw / 2 - 0.5, h - 12 - th, 1, th);
@@ -72,7 +88,7 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
       ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.fillRect(hx - 3, 2, 7, h - 14);
     }
-  }, [core, model, timeline.day, timeline.mode]);
+  }, [core, model, timeline.day, timeline.mode, pulseScope]);
 
   if (!core || !model) return <div className="pulsebar" />;
 
@@ -175,6 +191,11 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
         />
       </div>
       <div className="pulse-readout">
+        {pulseScope && (
+          <div className="pulse-scope micro" data-testid="pulse-scope">
+            {pulseScope.label} · career
+          </div>
+        )}
         <div className="date">{timeline.mode === "off" ? `${core.manifest.date_range[0]} → ${core.manifest.date_range[1]}` : fmtDay(timeline.day)}</div>
         <div className="evt" aria-live="off">
           {currentEvent

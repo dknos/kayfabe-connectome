@@ -28,6 +28,10 @@ export interface MemberResult {
   basis: string;
   /** Set when the corpus cannot answer precisely, and why. */
   caveat?: string;
+  /** Nodes that stay visible whichever category is active — a wrestler's
+   * promotions and championships, which locate the connections rather than
+   * being connections. */
+  anchors?: string[];
   /** For a wrestler: the same connections split by what KIND of connection it
    * is. Opponent and tag partner are different relationships and a reader
    * asking "who did Evan Bourne team with" is not asking who he fought. */

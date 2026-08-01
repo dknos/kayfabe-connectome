@@ -7,6 +7,29 @@ import { GeoHandoffActions } from "../geo/GeoHandoff";
 /** What the glow currently means. Three node types answer "who lights up" from
  * three different signals, and saying which one is in play is the difference
  * between a reading and a decoration. */
+/** Step back along the trail of selections. Following a connection is how this
+ * app is read, so returning has to be one action. */
+function BackButton() {
+  const history = useStore((s) => s.history);
+  const back = useStore((s) => s.back);
+  const model = useStore((s) => s.model);
+  const prev = history[history.length - 1];
+  if (!prev || !model) return null;
+  const i = model.indexOfId.get(prev);
+  const name = i !== undefined ? model.nodes.name[i] : prev;
+  return (
+    <button
+      className="collapse-btn ghost back-btn"
+      data-testid="dossier-back"
+      title={`Back to ${name}`}
+      aria-label={`Back to ${name}`}
+      onClick={back}
+    >
+      ← {name}
+    </button>
+  );
+}
+
 function LitSetNote() {
   const members = useStore((s) => s.members);
   const group = useStore((s) => s.memberGroup);
@@ -114,6 +137,7 @@ function NodeDossier({ id }: { id: string }) {
     <>
       <h2>
         {type === 0 ? "Person" : type === 1 ? "Promotion" : "Championship"} dossier <span className="line" />
+        <BackButton />
         <button className="collapse-btn ghost" aria-label="Close dossier" onClick={() => select(null)}>✕</button>
       </h2>
       <div className="dossier-title">
@@ -264,6 +288,7 @@ function EdgeDossier({ edge }: { edge: number }) {
     <>
       <h2>
         Relationship dossier <span className="line" />
+        <BackButton />
         <button className="collapse-btn ghost" aria-label="Close dossier" onClick={() => select(null)}>✕</button>
       </h2>
       <div className="dossier-title">

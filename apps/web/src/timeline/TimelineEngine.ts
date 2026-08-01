@@ -22,6 +22,18 @@ export class TimelineEngine {
   private raf = 0;
   private lastTs = 0;
   onFire: ((f: FiredEvent) => void) | null = null;
+  /** When set, only records this person took part in are played. Pressing play
+   * with someone selected should replay THEIR history, not the corpus's. */
+  private participant: string | null = null;
+
+  setParticipant(id: string | null): void {
+    this.participant = id;
+  }
+
+  private involves(ev: TimelineEvent): boolean {
+    if (!this.participant) return true;
+    return ev.w.includes(this.participant) || ev.l.includes(this.participant);
+  }
 
   async ensureRange(y0: number, y1: number): Promise<void> {
     const range = useStore.getState().core?.manifest.date_range;
@@ -103,6 +115,10 @@ export class TimelineEngine {
     let fired = 0;
     while (this.cursor < this.events.length && fired < 12) {
       const ev = this.events[this.cursor]!;
+      if (!this.involves(ev)) {
+        this.cursor++;
+        continue;
+      }
       if (isoToDay(ev.d) > day) break;
       this.cursor++;
       fired++;
