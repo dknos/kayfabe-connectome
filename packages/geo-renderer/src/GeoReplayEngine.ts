@@ -117,6 +117,17 @@ export class GeoReplayEngine {
     // Imported here, inside the dynamic path, so it lands in the GEO chunk.
     await import("cesium/Build/Cesium/Widgets/widgets.css");
 
+    // CesiumJS ships with a public demo Ion token baked in. This globe uses
+    // none of Ion — no Ion imagery, terrain or buildings, only the Natural
+    // Earth II raster bundled in the package — so the token is cleared. If any
+    // code path ever did reach for Ion it now fails closed instead of quietly
+    // spending someone else's quota.
+    try {
+      Cesium.Ion.defaultAccessToken = "";
+    } catch {
+      /* older builds expose no Ion singleton */
+    }
+
     const viewer = new Cesium.Viewer(container, {
       // Every widget off: the lens supplies its own controls, and Cesium's
       // animation/timeline widgets would compete with the History Pulse clock.
