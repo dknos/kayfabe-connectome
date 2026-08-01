@@ -1,6 +1,6 @@
 import { useStore } from "../state/store";
 import type { BankGroup, LoomSort } from "./layouts/layoutTypes";
-import { morphModeFor, useMorph, type MorphModeOverride } from "./morphStore";
+import { h2hPair, morphModeFor, useMorph, type MorphModeOverride } from "./morphStore";
 
 const SORTS: { id: LoomSort; label: string }[] = [
   { id: "strength", label: "Relationship strength" },
@@ -43,6 +43,14 @@ export function MorphControls() {
   const selId = selection?.kind === "node" ? selection.id : null;
   const mode = morphModeFor(selId, modeOverride, tissue);
 
+  const pathA = useStore((s) => s.pathA);
+  const pathB = useStore((s) => s.pathB);
+  const pinned = useStore((s) => s.pinned);
+  void pathA;
+  void pathB;
+  void pinned; // subscribed so the H2H chip enables the moment a pair exists
+  const pair = h2hPair();
+
   const allowed = (l: (typeof LAYOUTS)[number]): boolean => {
     if (!l.needs) return true;
     return !!selId && selId.startsWith(l.needs + ":");
@@ -81,7 +89,13 @@ export function MorphControls() {
               {l.label}
             </button>
           ))}
-          <button className="chip" disabled title="scaffolded — arrives after the core modes">
+          <button
+            className={"chip " + (modeOverride === "h2h" && !tissue ? "on" : "")}
+            aria-pressed={modeOverride === "h2h" && !tissue}
+            disabled={!pair}
+            title={pair ? `compare ${pair[0]} and ${pair[1]}` : "set path A and B (shift-click two wrestlers) or pin a second wrestler"}
+            onClick={() => setModeOverride("h2h")}
+          >
             Head-to-Head β
           </button>
         </div>

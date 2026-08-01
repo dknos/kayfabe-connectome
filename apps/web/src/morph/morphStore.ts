@@ -7,7 +7,8 @@ import {
   type MorphTier,
   type MorphView,
 } from "@kayfabe/morph-renderer";
-import { loadChampionships, loadPersonDossier } from "../data/loader";
+import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
+import { pairKey } from "@kayfabe/graph-contract";
 import { loadAtlasCore, loadPersonRoutes, loadPromotionDetail, type AtlasData } from "../atlas/atlasLoader";
 import type { AtlasPersonRoutes, AtlasPromotionDetail } from "@kayfabe/graph-contract";
 import { useStore } from "../state/store";
@@ -17,6 +18,7 @@ import { buildOrganic } from "./layouts/organicLayout";
 import { buildMotherboard } from "./layouts/promotionMotherboard";
 import { buildCareer } from "./layouts/careerCircuit";
 import { buildLineage } from "./layouts/championshipLineage";
+import { buildHeadToHead } from "./layouts/headToHead";
 import { DEFAULT_MORPH_CONTROLS, type MorphControlsState } from "./layouts/layoutTypes";
 
 /**
@@ -31,6 +33,18 @@ import { DEFAULT_MORPH_CONTROLS, type MorphControlsState } from "./layouts/layou
 
 export type MorphModeOverride = "auto" | MorphMode;
 
+/** the two people head-to-head would compare, if the reader has chosen them */
+export const h2hPair = (): [string, string] | null => {
+  const s = useStore.getState();
+  const a = s.pathA;
+  const b = s.pathB;
+  if (a?.startsWith("p:") && b?.startsWith("p:") && a !== b) return [a, b];
+  const sel = s.selection?.kind === "node" ? s.selection.id : null;
+  const pin = s.pinned.find((p) => p.startsWith("p:") && p !== sel);
+  if (sel?.startsWith("p:") && pin) return [sel, pin];
+  return null;
+};
+
 export const morphModeFor = (
   id: string | null,
   override: MorphModeOverride,
@@ -43,6 +57,7 @@ export const morphModeFor = (
       (override === "career" && id?.startsWith("p:")) ||
       (override === "motherboard" && id?.startsWith("pr:")) ||
       (override === "lineage" && id?.startsWith("t:")) ||
+      (override === "h2h" && h2hPair() !== null) ||
       override === "organic";
     if (ok) return override;
   }
@@ -257,6 +272,19 @@ export const useMorph = create<MorphStore>((set, get) => ({
         if (token !== buildToken) return;
         set({ layout, dossier, personRoutes: routes, promotion: null, building: false });
         return;
+      }
+
+      if (mode === "h2h") {
+        const pair = h2hPair();
+        if (pair) {
+          const key = pairKey(pair[0], pair[1]);
+          const bucket = await loadEvidenceForPair(key).catch(() => null);
+          if (token !== buildToken) return;
+          const layout = buildHeadToHead(data, pair[0], pair[1], bucket?.[key] ?? []);
+          if (token !== buildToken) return;
+          set({ layout, dossier: null, promotion: null, personRoutes: null, building: false });
+          return;
+        }
       }
 
       if (mode === "lineage" && id) {

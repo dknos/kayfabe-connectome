@@ -104,6 +104,9 @@ export class MorphTraces {
       depthTest: false,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      // ribbon winding flips with travel direction — single-sided culling
+      // silently erases every upward segment
+      side: THREE.DoubleSide,
       uniforms: {
         uMorph: { value: 1 },
         uWorldPerPixel: { value: 1 },
@@ -136,8 +139,6 @@ export class MorphTraces {
         varying vec3 vColor;
         varying float vAlpha, vSide, vAlong, vKind;
         void main() {
-          // a 2px ribbon rasterises pixels near |vSide|≈1 — a falloff that
-          // starts at 0.45 erases thin traces entirely
           float edge = 1.0 - smoothstep(0.62, 1.0, abs(vSide));
           float a = vAlpha * edge;
           // contextual links are dashed — they must never read as match fibers

@@ -1,0 +1,15 @@
+import { chromium } from "@playwright/test";
+const browser = await chromium.launch({ args: ["--use-gl=angle", "--enable-webgl"] });
+const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
+await page.goto("http://127.0.0.1:9460");
+await page.waitForSelector("canvas.gl", { timeout: 30000 });
+await page.waitForTimeout(3500);
+await page.getByRole("button", { name: "Morph Lab β" }).click();
+await page.waitForSelector(".morph-gl", { timeout: 20000 });
+await page.waitForTimeout(2500);
+await page.getByRole("combobox", { name: /Search/ }).fill("Undertaker");
+await page.waitForTimeout(700);
+await page.getByRole("option").first().click({ force: true });
+await page.waitForTimeout(2500);
+await page.screenshot({ path: process.argv[2] });
+await browser.close();

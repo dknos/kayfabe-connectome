@@ -225,9 +225,10 @@ export function buildLoom(
       const portY = -LOOM.centerH / 2 + 5 + (order % 8) * ((LOOM.centerH - 10) / 7);
       const side = chip.x < 0 ? -1 : 1;
       const laneX = side * (LOOM.railX - 74 - (order % 9) * 7);
+      const brPortX = Math.max(-LOOM.centerW / 2 + 8, Math.min(LOOM.centerW / 2 - 8, chip.x * 0.12));
       const target =
         chip.category === "br"
-          ? routeOrthoV(0, -LOOM.centerH / 2, chip.x, chip.y + LOOM.chipH / 2, LOOM.brY / 2 - (order % 7) * 6, Z.trace)
+          ? routeOrthoV(brPortX, -LOOM.centerH / 2, chip.x, chip.y + LOOM.chipH / 2, LOOM.brY / 2 - (order % 7) * 6, Z.trace)
           : routeOrtho(side * (LOOM.centerW / 2), portY, chip.x - side * (LOOM.chipW / 2 - 16), chip.y, laneX, Z.trace);
       routes.push({
         key: pairKey(selectedId, r.id),
@@ -296,9 +297,12 @@ export function buildLoom(
       tone: "promotion",
       pick: prId,
     });
+    // exit ports fan across the top edge — stacked identical segments would
+    // sum additively into a white column through the processor
+    const portX = Math.max(-LOOM.centerW / 2 + 8, Math.min(LOOM.centerW / 2 - 8, x * 0.18));
     routes.push({
       key: `ctx:${selectedId}:${prId}`,
-      points: routeOrthoV(0, LOOM.centerH / 2, x, LOOM.busY - 8, LOOM.busY - 52 - (i % 5) * 7, Z.trace),
+      points: routeOrthoV(portX, LOOM.centerH / 2, x, LOOM.busY - 8, LOOM.busY - 52 - (i % 5) * 7, Z.trace),
       color: rgb(M.promotion),
       width: 2,
       alpha: 0.4,
@@ -387,9 +391,10 @@ export function buildLoom(
       tone: "gold",
       pick: t.id,
     });
+    const goldPortX = Math.max(-LOOM.centerW / 2 + 8, Math.min(LOOM.centerW / 2 - 8, x * 0.22));
     routes.push({
       key: `ctx:${selectedId}:${t.id}`,
-      points: routeOrthoV(0, LOOM.centerH / 2, x, LOOM.goldY - 9, LOOM.goldY - 40 - (i % 4) * 6, Z.trace),
+      points: routeOrthoV(goldPortX, LOOM.centerH / 2, x, LOOM.goldY - 9, LOOM.goldY - 40 - (i % 4) * 6, Z.trace),
       color: rgb(M.gold),
       width: 2.2,
       alpha: 0.45,
