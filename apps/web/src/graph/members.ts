@@ -1,5 +1,5 @@
 import type { ChampionshipsFile, Manifest, SearchEntity } from "@kayfabe/graph-contract";
-import type { GraphModel } from "./model";
+import { EF, type GraphModel } from "./model";
 
 /**
  * Who lights up when you select something.
@@ -28,6 +28,21 @@ export interface MemberResult {
   basis: string;
   /** Set when the corpus cannot answer precisely, and why. */
   caveat?: string;
+  /** For a wrestler: the same connections split by what KIND of connection it
+   * is. Opponent and tag partner are different relationships and a reader
+   * asking "who did Evan Bourne team with" is not asking who he fought. */
+  groups?: MemberGroup[];
+}
+
+export type GroupKey = "all" | "opposed" | "same" | "br" | "promotions" | "titles";
+
+export interface MemberGroup {
+  key: GroupKey;
+  label: string;
+  ids: string[];
+  /** Matches the fiber colour for that relationship, so the chip and the
+   * thing it selects read as the same object. */
+  tone: "neutral" | "opposed" | "same" | "br" | "gold";
 }
 
 const EMPTY: MemberResult = { ids: [], basis: "" };
@@ -44,25 +59,58 @@ export function resolveMembers(
   if (i === undefined) return EMPTY;
   const type = model.nodes.type[i];
 
-  if (type === 0) return peopleFor(model, i);
+  if (type === 0) return peopleFor(model, i, search);
   if (type === 1) return promotionMembers(model, manifest, search, selectedId);
   if (type === 2) return titleHolders(model, selectedId, championships);
   return EMPTY;
 }
 
-/** A wrestler: everyone they share a documented match with. */
-function peopleFor(model: GraphModel, node: number): MemberResult {
+/**
+ * A wrestler: everyone they share a documented match with, split by relation.
+ *
+ * The split is not cosmetic. Opposed, same-side and battle-royal are three
+ * different documented relationships with three different evidence bases —
+ * battle-royal opposition in particular is a weak, many-to-many signal the
+ * canonical model deliberately keeps in its own class rather than mixing into
+ * "opponents".
+ */
+function peopleFor(
+  model: GraphModel,
+  node: number,
+  search: SearchEntity[],
+): MemberResult {
   // model.neighbors walks the FULL adjacency, not the drawn subset. The
   // renderer caps how many ribbons it draws, but capping who is *lit* would
   // mean a wrestler with 500 opponents silently shows 160 of them.
-  const ids: string[] = [];
-  for (const { node: n } of model.neighbors(node)) {
+  const all: string[] = [];
+  const opposed: string[] = [];
+  const same: string[] = [];
+  const br: string[] = [];
+  for (const { node: n, edge } of model.neighbors(node)) {
     const id = model.nodes.id[n];
-    if (id) ids.push(id);
+    if (!id) continue;
+    all.push(id);
+    if (model.edgeField(edge, EF.opposed) > 0) opposed.push(id);
+    if (model.edgeField(edge, EF.same) > 0) same.push(id);
+    if (model.edgeField(edge, EF.br) > 0) br.push(id);
+  }
+  const self = model.nodes.id[node]!;
+  const entity = search.find((e) => e.id === self);
+  const promotions: string[] = [];
+  for (const p of entity?.pm ?? []) {
+    const idx = model.nodes.name.findIndex((n, i) => n === p && model.nodes.type[i] === 1);
+    if (idx >= 0) promotions.push(model.nodes.id[idx]!);
   }
   return {
-    ids,
-    basis: `${ids.length.toLocaleString()} wrestlers share a documented match`,
+    ids: all,
+    basis: `${all.length.toLocaleString()} wrestlers share a documented match`,
+    groups: [
+      { key: "all", label: "All", ids: all, tone: "neutral" },
+      { key: "opposed", label: "Opponents", ids: opposed, tone: "opposed" },
+      { key: "same", label: "Tag partners", ids: same, tone: "same" },
+      { key: "br", label: "Battle royal", ids: br, tone: "br" },
+      { key: "promotions", label: "Promotions", ids: promotions, tone: "gold" },
+    ],
   };
 }
 

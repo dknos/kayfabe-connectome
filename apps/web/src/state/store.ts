@@ -4,7 +4,7 @@ import type { TimelineEvent } from "@kayfabe/graph-contract";
 import { loadCore, loadYear, type CoreData } from "../data/loader";
 import type { Tissue } from "@kayfabe/renderer";
 import { GraphModel, type FilteredView, type Filters } from "../graph/model";
-import { resolveMembers, type MemberResult } from "../graph/members";
+import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships } from "../data/loader";
 
 export type Lens = "connectome" | "table" | "geo" | "geoTable";
@@ -38,6 +38,10 @@ interface AppState {
   selection: Selection;
   /** Who lights up for the current selection, and what that set means. */
   members: MemberResult;
+  /** Which relation category is being read. */
+  memberGroup: GroupKey;
+  /** Hide everything outside the lit set instead of dimming it. */
+  isolate: boolean;
   focusId: string | null;
   hoverId: string | null;
   pinned: string[];
@@ -76,6 +80,8 @@ interface AppState {
   setShowLabels(v: boolean): void;
   announce(msg: string): void;
   resolveSelectionMembers(): Promise<void>;
+  setMemberGroup(g: GroupKey): void;
+  setIsolate(v: boolean): void;
 }
 
 const prefersReduced =
@@ -110,6 +116,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   selection: null,
   members: { ids: [], basis: "" },
+  memberGroup: "all",
+  isolate: true,
   focusId: null,
   hoverId: null,
   pinned: [],
@@ -194,7 +202,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   select(selection) {
-    set({ selection });
+    // A new selection starts from the whole connection set; the reader narrows
+    // from there rather than inheriting the last node's category.
+    set({ selection, memberGroup: "all" });
     void get().resolveSelectionMembers();
     writeUrl();
     const { model } = get();
@@ -286,6 +296,15 @@ export const useStore = create<AppState>((set, get) => ({
    * Championship membership needs the reign records, which load lazily — so
    * this resolves once without them (lighting nothing) and again once they
    * arrive, rather than leaving a selected title permanently dark. */
+  setMemberGroup(memberGroup) {
+    set({ memberGroup });
+    writeUrl();
+  },
+
+  setIsolate(isolate) {
+    set({ isolate });
+  },
+
   async resolveSelectionMembers() {
     const { model, core, selection } = get();
     if (!model || !core) return;

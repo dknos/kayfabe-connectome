@@ -9,10 +9,43 @@ import { GeoHandoffActions } from "../geo/GeoHandoff";
  * between a reading and a decoration. */
 function LitSetNote() {
   const members = useStore((s) => s.members);
+  const group = useStore((s) => s.memberGroup);
+  const setGroup = useStore((s) => s.setMemberGroup);
+  const isolate = useStore((s) => s.isolate);
+  const setIsolate = useStore((s) => s.setIsolate);
   if (!members.basis) return null;
+  const active = members.groups?.find((g) => g.key === group);
   return (
     <>
-      <p className="micro" data-testid="lit-basis">{members.basis}</p>
+      {members.groups && (
+        <div className="checks relation-groups" role="radiogroup" aria-label="Connection kind">
+          {members.groups.map((g) => (
+            <button
+              key={g.key}
+              role="radio"
+              aria-checked={group === g.key}
+              disabled={g.ids.length === 0}
+              className={`chip tone-${g.tone} ${group === g.key ? "on" : ""}`}
+              onClick={() => setGroup(g.key)}
+              data-testid={`group-${g.key}`}
+            >
+              {g.label} <b className="num">{g.ids.length.toLocaleString()}</b>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="micro" data-testid="lit-basis">
+        {active && active.key !== "all"
+          ? `${active.ids.length.toLocaleString()} ${active.label.toLowerCase()}`
+          : members.basis}
+      </p>
+      <label className="micro isolate-toggle">
+        <input
+          type="checkbox" checked={isolate}
+          onChange={(e) => setIsolate(e.target.checked)}
+        />{" "}
+        Isolate — hide everything else
+      </label>
       {members.caveat && <p className="derivation-note">{members.caveat}</p>}
     </>
   );

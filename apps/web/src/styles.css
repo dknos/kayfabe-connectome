@@ -499,3 +499,14 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
 .app[data-lens="connectome"] .rail.left > .panel { flex: 0 0 auto; }
 /* The Filters panel is the one that should absorb slack when there is any. */
 .app[data-lens="connectome"] .rail.left > .panel:nth-of-type(2) { min-height: 0; }
+
+/* Relation categories. Each chip carries the fiber colour of the relationship
+   it selects, so the control and the thing it reveals read as one object. */
+.relation-groups { margin: 8px 0 6px; }
+.relation-groups .chip b { font-weight: 600; margin-left: 3px; opacity: 0.8; }
+.relation-groups .chip:disabled { opacity: 0.35; cursor: default; }
+.chip.tone-opposed.on { border-color: var(--opposed); color: var(--opposed-soft); }
+.chip.tone-same.on { border-color: var(--same); color: var(--same-soft); }
+.chip.tone-br.on { border-color: var(--caution); color: var(--caution); }
+.chip.tone-gold.on { border-color: var(--gold); color: var(--gold); }
+.isolate-toggle { display: block; margin: 6px 0 2px; cursor: pointer; text-transform: none; letter-spacing: 0; }

@@ -245,6 +245,29 @@ export function StageCanvas({
     };
   }, [model]);
 
+  // ---------- isolate to the selected relation ----------
+  const members = useStore((s) => s.members);
+  const memberGroup = useStore((s) => s.memberGroup);
+  const isolate = useStore((s) => s.isolate);
+  const selection = useStore((s) => s.selection);
+  useEffect(() => {
+    const r = rendererRef.current;
+    if (!r || !model) return;
+    const selId = selection?.kind === "node" ? selection.id : null;
+    const group = members.groups?.find((g) => g.key === memberGroup);
+    const ids = group ? group.ids : members.ids;
+    if (!isolate || !selId || !ids.length) {
+      r.setIsolate(null);
+      return;
+    }
+    // The selection itself stays visible — isolating a wrestler and then
+    // hiding the wrestler would be a strange reading.
+    const idx = [selId, ...ids]
+      .map((id) => model.indexOfId.get(id))
+      .filter((v): v is number => v !== undefined);
+    r.setIsolate(idx);
+  }, [model, members, memberGroup, isolate, selection]);
+
   // ---------- tissue treatment ----------
   const tissue = useStore((s) => s.tissue);
   const showHaze = useStore((s) => s.showHaze);

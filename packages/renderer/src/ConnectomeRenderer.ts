@@ -144,6 +144,11 @@ export class ConnectomeRenderer {
     pathNodes: [], pathEdges: [], pinned: [],
   };
   private visFactor: Float32Array;
+  /** When set, ONLY these nodes are drawn and only fibers between them.
+   * Dimming everything else still leaves 30,000 points on screen; the reading
+   * the user wants is "just this wrestler and their opponents", which means
+   * the rest has to be gone, not quiet. */
+  private isolateSet: Set<number> | null = null;
   private hotNodes = new Set<number>();
   private clock = new THREE.Clock();
   private raf = 0;
@@ -305,15 +310,24 @@ export class ConnectomeRenderer {
     this.view = view;
     const cap = this.governor.settings.edgeCap;
     let shown = view.edges;
+    const iso = this.isolateSet;
+    if (iso) {
+      // Both endpoints must be in the set, so an isolated wrestler shows their
+      // own fibers and not their opponents' fibers to everyone else.
+      shown = shown.filter((e) => iso.has(view.a(e)) && iso.has(view.b(e)));
+    }
     this.droppedEdges = 0;
-    if (view.edges.length > cap) {
-      const scored = [...view.edges].sort((x, y) => {
+    // The cap applies to what is ACTUALLY being drawn. Scoring from
+    // view.edges here instead of from `shown` silently discarded the isolate
+    // filter and put all 24,000 fibers back on screen.
+    if (shown.length > cap) {
+      const scored = [...shown].sort((x, y) => {
         const wx = view.weights(x);
         const wy = view.weights(y);
         return wy.same + wy.opposed + wy.br - (wx.same + wx.opposed + wx.br);
       });
+      this.droppedEdges = shown.length - cap;
       shown = scored.slice(0, cap);
-      this.droppedEdges = view.edges.length - cap;
     }
     this.shownEdges = shown;
     this.onDropChange?.(this.droppedEdges, shown.length);
@@ -425,8 +439,13 @@ export class ConnectomeRenderer {
     }
     this.ribbons.rebuild(fibers);
 
+    const iso = this.isolateSet;
     for (let i = 0; i < this.g.count; i++) {
-      let v = anyFocus ? 0.24 : 1;
+      if (iso && !iso.has(i)) {
+        em[i] = 0;
+        continue;
+      }
+      let v = anyFocus ? (iso ? 0.85 : 0.24) : 1;
       if (neighbor.has(i)) v = 0.95;
       if (st.pinned.includes(i)) v = Math.max(v, 1.15);
       if (st.pathNodes.includes(i)) v = 1.45;
@@ -442,6 +461,21 @@ export class ConnectomeRenderer {
   }
 
   /* ---------- timeline ---------- */
+
+  /**
+   * Isolate to a set of nodes, or pass null to show the whole corpus again.
+   * Rebuilds the fiber set, because hiding nodes without hiding the fibers
+   * that reach them leaves lines running off into nothing.
+   */
+  setIsolate(nodes: number[] | null): void {
+    this.isolateSet = nodes && nodes.length ? new Set(nodes) : null;
+    if (this.view) this.setView(this.view);
+    this.applyEmphasis(this.emphasisState);
+  }
+
+  get isolated(): boolean {
+    return this.isolateSet !== null;
+  }
 
   setTimeVisibility(tv: TimeVisibility): void {
     const { mode, day, windowDays } = tv;

@@ -6,6 +6,7 @@ import { clampToRange, readCard } from "../geo/geoAdapter";
 import { GeoScheduler } from "../geo/GeoScheduler";
 import { comparePlaces, computeFootprint, greatCircleKm } from "../geo/geoAnalytics";
 import { resolveMembers } from "../graph/members";
+import { EF } from "../graph/model";
 
 /**
  * A hand-built projection. Small enough to reason about by hand, which is the
@@ -337,6 +338,7 @@ describe("who lights up", () => {
     indexOfId: new Map(["p:1", "p:2", "p:3", "pr:big", "pr:small", "t:9"].map((id, i) => [id, i])),
     // Flair wrestled Steamboat and Muta.
     neighbors: (n: number) => (n === 0 ? [{ node: 1, edge: 0 }, { node: 2, edge: 1 }] : []),
+    edgeField: () => 0,
   } as never;
   const manifest = { promo_bits: { big: 0 } } as never;
   const search = [
@@ -348,6 +350,26 @@ describe("who lights up", () => {
              reigns: [{ holders: ["p:2"], s: "1", e: null, m: "m:1" },
                       { holders: ["p:3"], s: "2", e: null, m: "m:2" }] },
   } as never;
+
+  it("splits a wrestler's connections by what KIND of connection it is", () => {
+    // p:1 opposed p:2 and teamed with p:3. Opponent and tag partner are
+    // different documented relationships, not one blurred set.
+    const m = {
+      ...(model as never),
+      neighbors: (n: number) => (n === 0 ? [{ node: 1, edge: 0 }, { node: 2, edge: 1 }] : []),
+      edgeField: (e: number, f: number) =>
+        f === EF.opposed ? (e === 0 ? 4 : 0) : f === EF.same ? (e === 1 ? 2 : 0) : 0,
+    } as never;
+    const r = resolveMembers(m, manifest, search, "p:1", null);
+    const g = (k: string) => r.groups!.find((x) => x.key === k)!;
+    expect(g("opposed").ids).toEqual(["p:2"]);
+    expect(g("same").ids).toEqual(["p:3"]);
+    expect(g("br").ids).toEqual([]);
+    expect(g("all").ids.sort()).toEqual(["p:2", "p:3"]);
+    // every group carries the fiber tone of the relationship it selects
+    expect(g("opposed").tone).toBe("opposed");
+    expect(g("same").tone).toBe("same");
+  });
 
   it("lights everyone a wrestler shares a documented match with", () => {
     const r = resolveMembers(model, manifest, search, "p:1", null);
