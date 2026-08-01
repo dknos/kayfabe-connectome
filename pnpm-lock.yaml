@@ -14,12 +14,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@kayfabe/atlas-renderer':
+        specifier: workspace:*
+        version: link:../../packages/atlas-renderer
       '@kayfabe/geo-renderer':
         specifier: workspace:*
         version: link:../../packages/geo-renderer
       '@kayfabe/graph-contract':
         specifier: workspace:*
         version: link:../../packages/graph-contract
+      '@kayfabe/morph-renderer':
+        specifier: workspace:*
+        version: link:../../packages/morph-renderer
       '@kayfabe/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
@@ -67,6 +73,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/atlas-renderer:
+    dependencies:
+      '@kayfabe/graph-contract':
+        specifier: workspace:*
+        version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+
   packages/geo-renderer:
     dependencies:
       cesium:
@@ -74,6 +93,19 @@ importers:
         version: 1.143.0
 
   packages/graph-contract: {}
+
+  packages/morph-renderer:
+    dependencies:
+      '@kayfabe/graph-contract':
+        specifier: workspace:*
+        version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
 
   packages/renderer:
     dependencies:

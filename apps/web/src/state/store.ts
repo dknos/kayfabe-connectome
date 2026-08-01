@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "atlas" | "table" | "geo" | "geoTable";
+export type Lens = "connectome" | "atlas" | "morph" | "table" | "geo" | "geoTable";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -179,7 +179,9 @@ export const useStore = create<AppState>((set, get) => ({
             ? "Geo table view"
             : lens === "atlas"
               ? "Atlas — chronological archive. Promotions are lanes on a time axis."
-              : "Connectome view",
+              : lens === "morph"
+                ? "Morph Lab — the tissue reorganises around whatever you select."
+                : "Connectome view",
     );
   },
 
@@ -409,6 +411,9 @@ export function registerGeoUrl(serialize: UrlSerializer, restore: UrlRestorer): 
 export function registerAtlasUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("atlas", { serialize, restore });
 }
+export function registerMorphUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("morph", { serialize, restore });
+}
 
 // v2: day numbers re-based to the 1900 epoch, promo bits widened — old
 // v1 fragments are ignored safely rather than restored wrong.
@@ -433,6 +438,10 @@ export function writeUrl(): void {
     if (s.lens === "atlas") {
       const a = lensUrl.get("atlas")?.serialize();
       if (a) for (const [k, v] of Object.entries(a)) push(k, v);
+    }
+    if (s.lens === "morph") {
+      const m = lensUrl.get("morph")?.serialize();
+      if (m) for (const [k, v] of Object.entries(m)) push(k, v);
     }
     push("focus", s.focusId);
     if (s.selection?.kind === "node") push("sel", s.selection.id);
@@ -515,7 +524,7 @@ export function restoreFromUrl(): void {
 
   const lensParam = kv.get("lens");
   for (const { restore } of lensUrl.values()) restore(kv);
-  const LENSES: Lens[] = ["table", "geo", "geoTable", "atlas"];
+  const LENSES: Lens[] = ["table", "geo", "geoTable", "atlas", "morph"];
   useStore.setState((prev) => ({
     lens: LENSES.includes(lensParam as Lens) ? (lensParam as Lens) : "connectome",
     focusId: valid(kv.get("focus")),

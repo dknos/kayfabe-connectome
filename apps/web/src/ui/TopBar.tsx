@@ -30,6 +30,9 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
         <button className={lens === "atlas" ? "active" : ""} onClick={() => setLens("atlas")}>
           Atlas
         </button>{" "}
+        <button className={lens === "morph" ? "active" : ""} onClick={() => setLens("morph")}>
+          Morph Lab β
+        </button>{" "}
         <button className={lens === "geo" ? "active" : ""} onClick={() => setLens("geo")}>
           Geo Replay
         </button>{" "}

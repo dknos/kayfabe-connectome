@@ -19,6 +19,9 @@ import { scheduler, useGeo } from "./geo/geoStore";
 import { AtlasLens } from "./atlas/AtlasLens";
 import { useAtlas } from "./atlas/atlasStore";
 import { installAtlasUrl } from "./atlas/atlasUrl";
+import { MorphLab } from "./morph/MorphLab";
+import { useMorph } from "./morph/morphStore";
+import { installMorphUrl } from "./morph/morphUrl";
 
 export function App() {
   const bootError = useStore((s) => s.bootError);
@@ -34,11 +37,11 @@ export function App() {
 
   // Playback follows the selection: choosing a wrestler and pressing play
   // replays that career.
-  // The ATLAS lens owns the scope while it is mounted (a promotion lane and a
-  // title lineage are scopes too), and restores this one on the way out.
+  // The ATLAS and MORPH lenses own the scope while mounted (a promotion lane
+  // and a title lineage are scopes too), and restore this one on the way out.
   const selection = useStore((s) => s.selection);
   useEffect(() => {
-    if (lens === "atlas") return;
+    if (lens === "atlas" || lens === "morph") return;
     const id = selection?.kind === "node" && selection.id.startsWith("p:") ? selection.id : null;
     engineRef.current.setParticipant(id);
   }, [selection, lens]);
@@ -46,6 +49,7 @@ export function App() {
   useEffect(() => {
     installGeoUrl();
     installAtlasUrl();
+    installMorphUrl();
     void useStore.getState().boot();
   }, []);
 
@@ -54,6 +58,7 @@ export function App() {
   const geoActive = lens === "geo" || lens === "geoTable";
   const geoSheet = useGeo((s) => s.sheet);
   const atlasSheet = useAtlas((s) => s.sheet);
+  const morphSheet = useMorph((s) => s.sheet);
   useEffect(() => {
     if (!geoActive) return;
     void useGeo.getState().boot().then(() => applyPendingGeoUrl());
@@ -164,7 +169,7 @@ export function App() {
   }
 
   return (
-    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-atlas-sheet={atlasSheet}>
+    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-atlas-sheet={atlasSheet} data-morph-sheet={morphSheet}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
@@ -173,6 +178,7 @@ export function App() {
         )}
         {model && lens === "connectome" && <RightPanel />}
         {model && lens === "atlas" && <AtlasLens engine={engineRef.current} />}
+        {model && lens === "morph" && <MorphLab engine={engineRef.current} />}
         {model && lens === "table" && <TableView />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
