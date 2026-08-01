@@ -55,6 +55,11 @@ export class GeoReplayEngine {
   governor: GeoQualityGovernor;
 
   private places: GeoPlace[] = [];
+  /** GLOBAL place index -> place. The scope's array is a filtered subset, so
+   * its positions are not place indices; every public method here takes the
+   * global index the app and the projection use. Indexing the array directly
+   * made a click on one city select a different one. */
+  private placeByIndex = new Map<number, GeoPlace>();
   private raf = 0;
   private lastFrame = 0;
   private animating = false;
@@ -260,6 +265,7 @@ export class GeoReplayEngine {
    * a new scope must never inherit the previous scope's footprint. */
   setPlaces(places: GeoPlace[]): void {
     this.places = places;
+    this.placeByIndex = new Map(places.map((p) => [p.index, p]));
     this.heat.setPlaces(places, this.governor.settings.heatCap);
     this.beacons.clear();
     this.arcs.clear();
@@ -353,7 +359,7 @@ export class GeoReplayEngine {
   }
 
   focusPlace(placeIdx: number): void {
-    const p = this.places[placeIdx];
+    const p = this.placeByIndex.get(placeIdx);
     if (!p) return;
     this.camera.focus(p.latitude, p.longitude);
     this.startAnimation();
@@ -362,7 +368,7 @@ export class GeoReplayEngine {
   fitPlaces(indices: number[]): void {
     const coords: Array<[number, number]> = [];
     for (const i of indices) {
-      const p = this.places[i];
+      const p = this.placeByIndex.get(i);
       if (p) coords.push([p.latitude, p.longitude]);
     }
     this.camera.fit(coords);
@@ -375,7 +381,7 @@ export class GeoReplayEngine {
   }
 
   followEvent(placeIdx: number, eventsPerSecond: number): void {
-    const p = this.places[placeIdx];
+    const p = this.placeByIndex.get(placeIdx);
     if (!p) return;
     if (this.camera.onEvent(p.latitude, p.longitude, eventsPerSecond)) this.startAnimation();
   }
@@ -477,6 +483,31 @@ export class GeoReplayEngine {
     } catch { /* race on unmount */ }
     this.viewer = null;
     this.places = [];
+    this.placeByIndex.clear();
+  }
+
+  /**
+   * Where a place currently projects on the canvas, in CSS pixels, or null if
+   * it is behind the globe or off screen.
+   *
+   * A QA seam. Hit-testing a 6px point by guessing coordinates is flaky, but
+   * the click path itself — scene.pick -> onPick -> selectPlace — is exactly
+   * what a reader uses, so it has to be exercised for real rather than routed
+   * around. This lets a test click the precise pixel.
+   */
+  windowCoordinatesOf(placeIdx: number): { x: number; y: number } | null {
+    const p = this.placeByIndex.get(placeIdx);
+    if (!p || !this.viewer || this.viewer.isDestroyed()) return null;
+    const C = this.Cesium;
+    const world = C.Cartesian3.fromDegrees(p.longitude, p.latitude);
+    const win = C.SceneTransforms.worldToWindowCoordinates(this.viewer.scene, world);
+    if (!win) return null;
+    // Reject the far hemisphere: a point behind the globe still projects.
+    const occluder = new C.EllipsoidalOccluder(
+      this.viewer.scene.globe.ellipsoid, this.viewer.camera.positionWC,
+    );
+    if (!occluder.isPointVisible(world)) return null;
+    return { x: win.x, y: win.y };
   }
 
   /** Test/QA seam: lifecycle counters survive engine instances, so a Playwright

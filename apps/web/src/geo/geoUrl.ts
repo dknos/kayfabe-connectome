@@ -1,5 +1,6 @@
 import type { AfterglowMode, CameraMode } from "@kayfabe/geo-renderer";
-import { registerGeoUrl, writeUrl } from "../state/store";
+import { registerGeoUrl, useStore, writeUrl } from "../state/store";
+import { pairCardIds } from "./GeoHandoff";
 import { scheduler, useGeo } from "./geoStore";
 import type { ClockKind, GeoScope, GeoScopeKind, HeatMetric } from "./geoTypes";
 
@@ -96,7 +97,11 @@ export async function applyPendingGeoUrl(): Promise<void> {
   const firstId = ids[0];
   if (kind && KINDS.includes(kind) && (firstId !== undefined || kind === "corpus")) {
     const scope: GeoScope = { kind, ids, label: labelFor(kind, ids) };
-    await useGeo.getState().setScope(scope);
+    // A pair scope has no index — its cards live in the evidence store, so a
+    // restored link has to rebuild the same list the dossier handoff built.
+    await useGeo.getState().setScope(
+      scope, kind === "pair" ? await pairCardIds(ids) : undefined,
+    );
   }
 
   const pos = num("gp");
@@ -127,11 +132,9 @@ function labelFor(kind: GeoScopeKind, ids: string[]): string {
 }
 
 function searchName(id: string): string | null {
-  // Read the already-loaded search index directly; this runs outside React.
-  const search = (globalThis as any).__kayfabeSearch as
-    | Array<{ id: string; n: string }>
-    | undefined;
-  return search?.find((e) => e.id === id)?.n ?? null;
+  // The corpus search index is already loaded in the connectome store; read it
+  // there rather than through a global, which nothing assigns.
+  return useStore.getState().core?.search.find((e) => e.id === id)?.n ?? null;
 }
 
 let installed = false;

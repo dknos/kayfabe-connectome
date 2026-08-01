@@ -35,6 +35,10 @@ export interface GeoState {
   error: string | null;
 
   scope: GeoScope;
+  /** A pair's cards come from the evidence store, not from an index, so they
+   * are cached here. `setScope` is re-entered whenever the date range moves,
+   * and without this the pair would silently resolve to zero cards. */
+  scopeCardIds: string[] | null;
   scopeIndices: number[];
   scopePlaces: number[];
   scopeTotals: GeoCounters | null;
@@ -99,6 +103,7 @@ export const useGeo = create<GeoState>((set, get) => ({
   error: null,
 
   scope: { kind: "corpus", ids: [], label: "Entire filtered corpus" },
+  scopeCardIds: null,
   scopeIndices: [],
   scopePlaces: [],
   scopeTotals: null,
@@ -148,15 +153,21 @@ export const useGeo = create<GeoState>((set, get) => ({
 
   async setScope(scope, pairCardIds) {
     const { data, dayMin, dayMax } = get();
+    // A re-resolve of the SAME scope reuses the cached card list; a new scope
+    // starts from whatever the caller supplied (null for every kind but pair).
+    const sameScope =
+      get().scope.kind === scope.kind && get().scope.ids.join() === scope.ids.join();
+    const cardIds = pairCardIds ?? (sameScope ? get().scopeCardIds : null);
     if (!data || !scheduler) {
-      set({ scope });
+      set({ scope, scopeCardIds: cardIds });
       return;
     }
-    const all = await resolveScope(data, scope, pairCardIds);
+    const all = await resolveScope(data, scope, cardIds ?? undefined);
     const indices = clampToRange(data, all, dayMin, dayMax);
     scheduler.setScope(indices);
     set({
       scope,
+      scopeCardIds: cardIds,
       scopeIndices: indices,
       scopePlaces: scheduler.scopePlaces(),
       scopeTotals: scheduler.scopeTotals(),

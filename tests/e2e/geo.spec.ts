@@ -91,13 +91,33 @@ test.describe("geo replay", () => {
     await rows.first().click();
     await expect(page.getByTestId("geo-current-card")).toBeVisible();
 
-    // share and reload restores lens, scope and selection
+    // Set every serialised control to a non-default before sharing, so the
+    // reload proves the whole analysis restores and not merely the lens.
+    await page.getByLabel("Camera").selectOption("smart");
+    await page.getByLabel("Chronological record arcs").check();
+    await page.getByLabel("Afterglow").selectOption("window");
+    await page.getByLabel("Metric").selectOption("matches");
+    await page.waitForTimeout(700);
+
     const url = page.url();
     expect(url).toContain("lens=geo");
     expect(url).toContain("gs=promotion");
+    expect(url).toContain("gcam=smart");
+    expect(url).toContain("gar=1");
+    expect(url).toContain("gag=window");
+    expect(url).toContain("ghm=matches");
+    expect(url).toContain("gpl=");
+
     await page.goto(url);
     await page.waitForFunction(() => !!(window as any).__kayfabeGeo, null, { timeout: 90000 });
     await expect(page.getByTestId("geo-scope-label")).toContainText("3,066", { timeout: 40000 });
+    await expect(page.getByLabel("Camera")).toHaveValue("smart");
+    await expect(page.getByLabel("Afterglow")).toHaveValue("window");
+    await expect(page.getByLabel("Metric")).toHaveValue("matches");
+    await expect(page.getByLabel("Chronological record arcs")).toBeChecked();
+    // the selected city and the playback position come back too
+    await expect(page.getByTestId("geo-place-inspector")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("geo-progress")).toContainText("processed");
 
     expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
     void later;
@@ -306,6 +326,97 @@ test.describe("geo replay", () => {
     // one live context; every earlier viewer was destroyed
     expect(life.webglContexts).toBe(1);
     expect(life.viewersCreated - life.viewersDestroyed).toBe(1);
+    expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
+  });
+
+  test("clicking a beacon on the globe opens that city", async ({ page, isMobile }) => {
+    test.skip(!!isMobile, "desktop journey");
+    const errors = await openGeo(page);
+    await selectPromotion(page, "WWF");
+    await page.getByRole("button", { name: "Next card" }).click();
+    await expect(page.getByTestId("geo-current-card")).toBeVisible({ timeout: 20000 });
+
+    // Frame the current card's city, then click the exact pixel the engine
+    // says it projects to. This exercises the real path a reader uses —
+    // scene.pick -> onPick -> selectPlace — rather than routing around it.
+    const target = await page.evaluate(async () => {
+      const engine = (window as any).__kayfabeGeo;
+      const res = await fetch("/data/geo/places.json");
+      const places = await res.json();
+      const label = document.querySelector('[data-testid="geo-location"]')?.textContent ?? "";
+      const idx = places.displayName.findIndex(
+        (d: string) => d && label.includes(d),
+      );
+      if (idx < 0) return null;
+      engine.focusPlace(idx);
+      await new Promise((r) => setTimeout(r, 3000));
+      return { idx, displayName: places.displayName[idx] as string,
+               at: engine.windowCoordinatesOf(idx) };
+    });
+    expect(target, "no plotted place on the current card").not.toBeNull();
+    expect(target!.at, "place did not project onto the canvas").not.toBeNull();
+
+    const box = (await page.locator(".geo-globe canvas").boundingBox())!;
+    await page.mouse.click(box.x + target!.at!.x, box.y + target!.at!.y);
+
+    await expect(page.getByTestId("geo-place-inspector")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("geo-place-inspector")).toContainText(target!.displayName);
+    await expect(page.getByTestId("geo-city-card-row").first()).toBeVisible({ timeout: 15000 });
+    expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
+  });
+
+  test("pair geography survives a date-range change and a reload", async ({
+    page, isMobile,
+  }) => {
+    test.skip(!!isMobile, "desktop journey");
+    const errors = await openGeo(page);
+    await page.getByRole("button", { name: "Connectome" }).click();
+    await page.getByRole("combobox", { name: /Search/ }).fill("Ric Flair");
+    await page.getByRole("option").first().click({ force: true });
+    await expect(page.getByText("Person dossier")).toBeVisible({ timeout: 20000 });
+    // open a relationship from the dossier, then send it to GEO
+    await page.locator(".ev-row.search-row").first().click();
+    await expect(page.getByText("Relationship dossier")).toBeVisible({ timeout: 20000 });
+    await page.getByTestId("geo-handoff-pair").click();
+
+    await expect(page.getByTestId("geo-scope-summary")).toBeVisible({ timeout: 30000 });
+    const cards = async () =>
+      Number((await page.getByTestId("geo-total-cards").textContent())?.replace(/[^\d]/g, "") ?? "0");
+    const before = await cards();
+    expect(before).toBeGreaterThan(0);
+
+    // A pair has no scope index — its cards come from the evidence store. Any
+    // re-resolve must reuse them rather than silently emptying the scope.
+    await page.getByRole("slider", { name: "To" }).fill(String(46000));
+    await page.waitForTimeout(1500);
+    await page.getByRole("slider", { name: "To" }).fill(String(46020));
+    await page.waitForTimeout(1500);
+    expect(await cards()).toBeGreaterThan(0);
+
+    const url = page.url();
+    expect(url).toContain("gs=pair");
+    await page.goto(url);
+    await page.waitForFunction(() => !!(window as any).__kayfabeGeo, null, { timeout: 90000 });
+    await expect(page.getByTestId("geo-scope-summary")).toBeVisible({ timeout: 40000 });
+    expect(await cards()).toBeGreaterThan(0);
+    expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
+  });
+
+  test("event-series geography plays a documented series", async ({ page, isMobile }) => {
+    test.skip(!!isMobile, "desktop journey");
+    const errors = await openGeo(page);
+    await page.getByLabel("Scope", { exact: true }).selectOption("event");
+    await page.getByLabel("Search event").fill("WrestleMania");
+    const opt = optionsFor(page, "event").first();
+    await expect(opt).toBeVisible({ timeout: 20000 });
+    await opt.click();
+    await expect(page.getByTestId("geo-scope-label")).toContainText("cards in scope");
+    const cards = Number(
+      (await page.getByTestId("geo-total-cards").textContent())?.replace(/[^\d]/g, "") ?? "0",
+    );
+    expect(cards).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Next card" }).click();
+    await expect(page.getByTestId("geo-current-card")).toBeVisible({ timeout: 20000 });
     expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
   });
 

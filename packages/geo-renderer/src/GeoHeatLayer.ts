@@ -38,26 +38,31 @@ export class GeoHeatLayer {
   setPlaces(places: GeoPlace[], cap: number): void {
     const C = this.Cesium;
     this.places = places;
-    this.weights = new Float64Array(places.length);
+    // Sized and keyed by GLOBAL place index. The scope's array is a filtered
+    // subset, so its positions are not place indices — mixing the two makes a
+    // click on one city select a different one, and makes an externally
+    // supplied weight array (sliding window) land on the wrong places.
+    let maxIndex = -1;
+    for (const p of places) if (p.index > maxIndex) maxIndex = p.index;
+    this.weights = new Float64Array(maxIndex + 1);
     this.slotOf.clear();
     this.points.removeAll();
     // Densest places first, so a cap trims the tail rather than an arbitrary
     // slice — the places a reader would notice missing survive.
-    const order = places
-      .map((_p, i) => i)
-      .sort((a, b) => (places[b]?.cards ?? 0) - (places[a]?.cards ?? 0) || a - b)
+    const drawn = places
+      .slice()
+      .sort((a, b) => b.cards - a.cards || a.index - b.index)
       .slice(0, cap);
-    for (const i of order) {
-      const p = places[i]!;
+    for (const p of drawn) {
       const slot = this.points.length;
       this.points.add({
         position: C.Cartesian3.fromDegrees(p.longitude, p.latitude),
         color: C.Color.TRANSPARENT,
         pixelSize: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        id: { kind: "place", placeIdx: i },
+        id: { kind: "place", placeIdx: p.index },
       });
-      this.slotOf.set(i, slot);
+      this.slotOf.set(p.index, slot);
     }
     this.peak = 1;
     this.redraw();

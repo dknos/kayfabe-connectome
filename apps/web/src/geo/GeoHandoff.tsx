@@ -12,17 +12,29 @@ import type { GeoScopeKind } from "./geoTypes";
  * nothing can drift between the two views.
  */
 
+/**
+ * The cards a pair's encounters happened on.
+ *
+ * A pair's geography IS its evidence: every supporting match names the card it
+ * happened on, so the list comes straight out of the evidence store rather
+ * than a parallel index that could disagree with it. Shared by the dossier
+ * handoff and by URL restore, because a `gs=pair` link has to rebuild exactly
+ * the same list the handoff produced.
+ */
+export async function pairCardIds(ids: string[]): Promise<string[]> {
+  if (ids.length !== 2) return [];
+  const key = pairKey(ids[0]!, ids[1]!);
+  const bucket = await loadEvidenceForPair(key);
+  return Array.from(new Set((bucket[key] ?? []).map((e) => e.c)));
+}
+
 export async function sendToGeo(kind: GeoScopeKind, ids: string[], label: string): Promise<void> {
   const g = useGeo.getState();
   await g.boot();
-  if (kind === "pair" && ids.length === 2) {
-    // The pair's geography IS its evidence: every supporting match names the
-    // card it happened on, so the card list comes straight out of the evidence
-    // store rather than from a parallel index that could disagree with it.
-    const key = pairKey(ids[0]!, ids[1]!);
-    const bucket = await loadEvidenceForPair(key);
-    const cardIds = Array.from(new Set((bucket[key] ?? []).map((e) => e.c)));
-    await useGeo.getState().setScope({ kind, ids, label }, cardIds);
+  if (kind === "pair") {
+    // Passing the list here caches it, so nudging the date range later
+    // re-resolves the pair instead of emptying it.
+    await useGeo.getState().setScope({ kind, ids, label }, await pairCardIds(ids));
   } else {
     await useGeo.getState().setScope({ kind, ids, label });
   }
