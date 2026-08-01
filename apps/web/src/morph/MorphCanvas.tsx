@@ -99,6 +99,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         r.fitLayout(0.7);
         markMorphCameraTouched(false);
       }
+      // re-derive emphasis once a rebuild lands: the dim was suspended while
+      // roles belonged to the outgoing layout
+      if (s.building !== prev.building && !s.building) applyEmphasisFrom(r);
     });
     return unsub;
   }, []);
@@ -122,27 +125,39 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   }, []);
 
   // ---------- playhead follows the timeline on time-axis modes ----------
+  // Subscribed to BOTH stores: a new layout carries a new day→x mapping, and
+  // a playhead cached against the old axis would strand at the previous
+  // board's coordinates until the day crossed a month boundary.
   useEffect(() => {
     let lastMonth = -1;
-    const unsub = useStore.subscribe((s) => {
+    let lastAxis: object | undefined;
+    const sync = () => {
       const r = rendererRef.current;
       if (!r) return;
+      const s = useStore.getState();
       const axis = useMorph.getState().layout?.timeAxis;
       if (!axis || s.timeline.mode === "off") {
-        if (lastMonth !== -1) {
+        if (lastMonth !== -1 || lastAxis) {
           r.setPlayhead(null);
           lastMonth = -1;
+          lastAxis = undefined;
         }
         return;
       }
       const month = Math.floor(s.timeline.day / 30);
-      if (month === lastMonth) return;
+      if (month === lastMonth && axis === lastAxis) return;
       lastMonth = month;
+      lastAxis = axis;
       const day = Math.max(axis.dayMin, Math.min(axis.dayMax, s.timeline.day));
       const x = axis.x0 + ((day - axis.dayMin) / Math.max(1, axis.dayMax - axis.dayMin)) * (axis.x1 - axis.x0);
       r.setPlayhead(x, axis.y0, axis.y1);
-    });
-    return unsub;
+    };
+    const u1 = useStore.subscribe(sync);
+    const u2 = useMorph.subscribe(sync);
+    return () => {
+      u1();
+      u2();
+    };
   }, []);
 
   // ---------- timeline playback pulses ----------
@@ -264,6 +279,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   }, []);
 
   // ---------- mobile sheet insets ----------
+  // keyed on morphData too: on cold entry the renderer is created AFTER this
+  // effect's first run, and without the extra dep the insets never apply
+  // until the user toggles the sheet
   const sheet = useMorph((s) => s.sheet);
   useEffect(() => {
     const r = rendererRef.current;
@@ -272,7 +290,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
     r.labels.setPinInset(narrow ? 8 : 316);
     r.cam.setBottomInset(narrow && sheet !== "hidden" ? Math.round(window.innerHeight * 0.42) : 0);
     if (narrow) r.fitLayout(0.4);
-  }, [sheet]);
+  }, [sheet, morphData]);
 
   return (
     <>
@@ -299,5 +317,6 @@ function applyEmphasisFrom(r: MorphRenderer): void {
     hoveredId: st.hoverId && idx(st.hoverId) < 0 ? st.hoverId : null,
     pinned: st.pinned.map(idx).filter((v) => v >= 0),
     pathNodes: (st.pathResult?.nodes ?? []).map(idx).filter((v) => v >= 0),
+    dimBackground: !useMorph.getState().building,
   });
 }

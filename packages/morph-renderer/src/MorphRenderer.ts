@@ -84,6 +84,7 @@ export class MorphRenderer {
     hoveredId: null,
     pinned: [],
     pathNodes: [],
+    dimBackground: false,
   };
 
   constructor(canvas: HTMLCanvasElement, labelHost: HTMLElement) {
@@ -214,7 +215,7 @@ export class MorphRenderer {
     if (!this.nodes || !this.layout) return;
     const nd = this.nodes;
     const roles = this.layout.nodeRole;
-    const anyFocus = em.selected >= 0 || em.selectedId !== null || em.pathNodes.length > 0;
+    const anyFocus = (em.selected >= 0 || em.selectedId !== null || em.pathNodes.length > 0) && em.dimBackground;
     for (let i = 0; i < this.corpusCount; i++) {
       nd.emph[i] = roles[i] === 0 && anyFocus ? 0.3 : 1;
     }

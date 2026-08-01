@@ -149,7 +149,12 @@ export class MorphLabels {
         l.cls = cls;
         l.el.className = cls;
       }
-      const lx = Math.max(this.pinInset - w, Math.round(spec.anchor === "left" ? p.x : p.x - tw / 2));
+      let lx = Math.round(spec.anchor === "left" ? p.x : p.x - tw / 2);
+      if (spec.force) {
+        // a forced label (the selection) must stay readable on screen even
+        // when its anchor drifts past the edge during a morph
+        lx = Math.min(w - tw - this.pinInset, Math.max(this.pinInset, lx));
+      }
       l.el.style.transform = `translate3d(${lx}px, ${Math.round(box.y0)}px, 0)`;
       l.el.style.opacity = String(globalOpacity);
     }

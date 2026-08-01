@@ -195,6 +195,10 @@ export interface MorphEmphasis {
   hoveredId: string | null;
   pinned: number[];
   pathNodes: number[];
+  /** dim background-role nodes. The app clears this while a rebuild is in
+   *  flight — roles still belong to the OUTGOING layout, and dimming the
+   *  incoming neighbourhood against them reads as flicker. */
+  dimBackground: boolean;
 }
 
 /** Static per-corpus node data the renderer bakes once. */

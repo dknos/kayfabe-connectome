@@ -20,7 +20,7 @@ export function pickAt(
 ): MorphPickResult | null {
   // nearest node within slop, screen-space, destination positions
   let bestSlot = -1;
-  let bestD = slopPx;
+  let bestD = slopPx * 1.6;
   for (let i = 0; i < nodes.total; i++) {
     if (nodes.alphaTo[i]! < 0.02) continue;
     const p = cam.worldToScreen(nodes.to[i * 3]!, nodes.to[i * 3 + 1]!, nodes.to[i * 3 + 2]!);
@@ -28,7 +28,7 @@ export function pickAt(
     const d = Math.hypot(p.x - px, p.y - py);
     // generous slop for emphasized chips, tight for background dust
     const allow = nodes.alphaTo[i]! > 0.5 ? slopPx * 1.6 : slopPx;
-    if (d < Math.min(bestD, allow)) {
+    if (d < allow && d < bestD) {
       bestD = d;
       bestSlot = i;
     }

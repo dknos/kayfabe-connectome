@@ -193,8 +193,13 @@ export class MorphCamera {
     return [ndc.x + dir.x * t, ndc.y + dir.y * t];
   }
 
+  private projTmp = new THREE.Vector3();
+
   worldToScreen(x: number, y: number, z = 0): { x: number; y: number; front: boolean } {
-    const v = new THREE.Vector3(x, y, z).project(this.camera);
+    // reused temp: picking projects every corpus slot per call and labels
+    // project every candidate per frame — a fresh Vector3 each time is
+    // avoidable churn on the hot path
+    const v = this.projTmp.set(x, y, z).project(this.camera);
     return {
       x: ((v.x + 1) / 2) * this.vw,
       y: ((1 - v.y) / 2) * this.vh,

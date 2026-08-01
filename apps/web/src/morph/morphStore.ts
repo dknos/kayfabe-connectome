@@ -180,9 +180,15 @@ export const useMorph = create<MorphStore>((set, get) => ({
   },
 
   setTier(tier) {
-    if (get().tier === tier) return;
+    const prev = get().tier;
+    if (prev === tier) return;
     set({ tier });
-    void get().rebuild();
+    // Rebuild only when stepping DOWN (the trace budget shrank). An upstep
+    // rebuild replays a full 920 ms morph of an unchanged board, and that
+    // morph is itself the expensive event that re-triggers the downstep —
+    // borderline hardware would oscillate forever.
+    const order = ["low", "medium", "high"] as const;
+    if (order.indexOf(tier) < order.indexOf(prev)) void get().rebuild();
   },
 
   setCamera(camera) {
@@ -229,9 +235,17 @@ export const useMorph = create<MorphStore>((set, get) => ({
     const mode = morphModeFor(id, s.modeOverride, s.tissue);
     const traceCap = MORPH_TIERS[s.tier].traceCap;
 
+    // A selectable person is not always a corpus node (a csv-belt holder can
+    // be picked from a lineage board): person boards need a node, and the
+    // honest fallback is the organic reading with the selection retained —
+    // never the boot-error screen.
+    const personBoard = (mode === "loom" || mode === "career" || mode === "h2h") && id?.startsWith("p:");
+    const hasNode = id ? data.indexOf(id) !== undefined : false;
+    const effMode = personBoard && !hasNode ? "organic" : mode;
+
     set({ building: true, error: null });
     try {
-      if (mode === "loom" && id) {
+      if (effMode === "loom" && id) {
         const bucket = await loadPersonDossier(id).catch(() => null);
         if (token !== buildToken) return;
         const dossier = bucket?.[id] ?? null;
@@ -252,16 +266,24 @@ export const useMorph = create<MorphStore>((set, get) => ({
         return;
       }
 
-      if (mode === "motherboard" && id) {
-        const detail = await loadPromotionDetail(id).catch(() => null);
+      if (effMode === "motherboard" && id) {
+        // a failed fetch and a still-loading shard are different truths —
+        // "loading…" forever on a 404 is a lying label
+        let detail: AtlasPromotionDetail | null = null;
+        let shardFailed = false;
+        try {
+          detail = await loadPromotionDetail(id);
+        } catch {
+          shardFailed = true;
+        }
         if (token !== buildToken) return;
-        const layout = buildMotherboard(data, id, detail, s.atlas, s.controls);
+        const layout = buildMotherboard(data, id, detail, s.atlas, s.controls, shardFailed);
         if (token !== buildToken) return;
         set({ layout, promotion: detail, dossier: null, personRoutes: null, building: false });
         return;
       }
 
-      if (mode === "career" && id) {
+      if (effMode === "career" && id) {
         const [routes, bucket] = await Promise.all([
           loadPersonRoutes(id).catch(() => null),
           loadPersonDossier(id).catch(() => null),
@@ -274,7 +296,7 @@ export const useMorph = create<MorphStore>((set, get) => ({
         return;
       }
 
-      if (mode === "h2h") {
+      if (effMode === "h2h") {
         const pair = h2hPair();
         if (pair) {
           const key = pairKey(pair[0], pair[1]);
@@ -287,7 +309,7 @@ export const useMorph = create<MorphStore>((set, get) => ({
         }
       }
 
-      if (mode === "lineage" && id) {
+      if (effMode === "lineage" && id) {
         const champs = await loadChampionships().catch(() => null);
         if (token !== buildToken) return;
         const layout = buildLineage(data, id, champs?.[id] ?? null, s.atlas);

@@ -24,6 +24,9 @@ export class MorphRegions {
 
   /** the regions currently fading in — becomes the outgoing set next swap */
   private current: MorphRegion[] = [];
+  /** the previous generation, still fading down; kept one more swap so a
+   *  rapid double-retarget fades instead of popping */
+  private outgoing: { region: MorphRegion; aFrom: number }[] = [];
 
   constructor() {
     this.geo = new THREE.InstancedBufferGeometry();
@@ -138,24 +141,33 @@ export class MorphRegions {
 
   /** Swap to a new region set: incoming fades up, outgoing fades down. */
   setRegions(next: MorphRegion[], currentAlphaAt: number): void {
-    const outgoing = this.current;
-    const total = next.length + outgoing.length;
+    const nextOutgoing = [
+      // the set that was fading in, at the opacity it reached
+      ...this.current.map((r) => ({ region: r, aFrom: r.alpha * currentAlphaAt })),
+      // the set that was still fading down — carry its remaining light
+      ...this.outgoing
+        .map((o) => ({ region: o.region, aFrom: o.aFrom * (1 - currentAlphaAt) }))
+        .filter((o) => o.aFrom > 0.01),
+    ];
+    const total = next.length + nextOutgoing.length;
     if (total > this.cap) this.grow(total);
     let w = 0;
     for (const r of next) {
       this.writeInstance(w++, r, 0, r.alpha);
     }
-    for (const r of outgoing) {
-      this.writeInstance(w++, r, r.alpha * currentAlphaAt, 0);
+    for (const o of nextOutgoing) {
+      this.writeInstance(w++, o.region, o.aFrom, 0);
     }
     this.geo.instanceCount = w;
     this.current = next;
+    this.outgoing = nextOutgoing;
     this.commit();
   }
 
-  /** Drop the faded-out generation once a transition completes. */
+  /** Drop the faded-out generations once a transition completes. */
   truncateToCurrent(): void {
     this.geo.instanceCount = this.current.length;
+    this.outgoing = [];
   }
 
   private writeInstance(i: number, r: MorphRegion, aFrom: number, aTo: number): void {

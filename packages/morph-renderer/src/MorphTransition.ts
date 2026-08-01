@@ -199,7 +199,10 @@ export class MorphTransition {
     regions.setRegions(layout.regions, snap ? 1 : raw);
 
     // ---- clock ----
-    this.durMs = this.reducedMotion ? MORPH_REDUCED_MS : snap ? 0 : MORPH_MS;
+    // snap wins over reduced motion: a snap means "land now" (first layout,
+    // context restore) and animating 190 ms from stale from-buffers is the
+    // exact motion the preference asks to remove
+    this.durMs = snap ? 0 : this.reducedMotion ? MORPH_REDUCED_MS : MORPH_MS;
     if (this.reducedMotion && !snap) {
       // geometry lands at once; only light crossfades
       nodes.from.set(nodes.to);

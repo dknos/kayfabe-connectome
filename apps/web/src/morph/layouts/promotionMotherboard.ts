@@ -37,6 +37,7 @@ export function buildMotherboard(
   detail: AtlasPromotionDetail | null,
   atlas: AtlasData | null,
   controls: MorphControlsState,
+  shardFailed = false,
 ): MorphLayoutResult {
   const n = data.count;
   const nodeTargets = new Float32Array(n * 3);
@@ -84,7 +85,9 @@ export function buildMotherboard(
     text: name,
     sub: d
       ? `documented record ${fmtDay(d.firstDay)} → ${fmtDay(d.lastDay)} · source: ${d.src}`
-      : "loading promotion detail…",
+      : shardFailed
+        ? "promotion shard unavailable — registry data only"
+        : "loading promotion detail…",
     detail: d
       ? `${d.cards.toLocaleString()} documented cards · ${d.matches.toLocaleString()} documented matches · ${d.people.toLocaleString()} documented participants · ${d.titles.length} associated championships`
       : undefined,
@@ -260,7 +263,13 @@ export function buildMotherboard(
     growBounds(board, 0, bankY - h, BOARD_W / 2 + 10);
     bankY -= h + 18;
   }
-  if (!d) notes.push("promotion shard still loading — banks appear when it lands");
+  if (!d) {
+    notes.push(
+      shardFailed
+        ? "promotion shard failed to load — port banks and title modules unavailable"
+        : "promotion shard still loading — banks appear when it lands",
+    );
+  }
 
   const fitBounds = { ...board };
   const bounds = { ...board };
