@@ -15,25 +15,30 @@ not directly from the private CSV or source database.
 - **y / vertical:** the exact reported rating on a linear scale, with zero as
   the baseline. Negative values extend below it; values above five extend past
   the five-star threshold plane.
-- **z / depth:** promotion context in overview and title modes, opponent/
-  team context in a career mode, or the two selected subjects in comparison.
+- **z / depth:** neutral on the landing chronology. Promotion does not sort or
+  separate that view. Focused promotion/title, opponent/team career, and A/B
+  comparison modes may use disclosed context tracks in depth.
 
 An individual peak is one canonical match with a present `mr`. Its height is
-the unrounded reported value. Peaks from the same day share the date position
-but are offset in depth by documented card placement where it exists; otherwise
-the offset is a deterministic opaque-ID fallback. That makes overlaps legible
-without inventing chronology.
+the unrounded reported value. On the landing chronology every peak has `z=0`,
+so position is determined only by date and rating. Focused semantic views may
+separate same-day matches in depth by documented card placement where it
+exists; otherwise they use a deterministic opaque-ID fallback.
 
-The gray coverage rail is the count of all documented canonical matches in a
-lane and time cell. Its warm overlay is the subset carrying a reported rating.
+The landing view has one global gray coverage rail containing all documented
+canonical matches in a time cell. Its warm overlay is the subset carrying a
+reported rating. Focused promotion views use the same encoding per lane.
 An empty or faint warm rail therefore means sparse reporting, **not** a poor
-rating. Missing is not zero. Only canonical promotion lanes claim a per-lane
-source denominator; derived opponent/comparison lanes label that denominator
-as unavailable and use the complete current-scope ledger instead of inventing
+rating. Missing is not zero. The landing rail claims the materialized global
+denominator, while canonical promotion lanes may claim a per-promotion source
+denominator. Derived opponent/comparison lanes label a lane denominator as
+unavailable and use the complete current-scope ledger instead of inventing
 opponent-lane coverage.
 
 Aggregate ridges are time bins, not matches: height is the bin maximum, the
-thin trace is the exact median, and width reflects reported-match count.
+thin trace is the exact median, and width is the chronological bin span. Depth
+is neutral in the global chronology; sample and coverage counts remain
+inspectable rather than becoming an undeclared positional variable.
 Clicking one narrows the shared time filter to that bin. Statistics are direct
 sample statistics: medians sort the actual ratings (even counts average the two
 middle values), and means use the actual ratings. They are never computed by
@@ -44,12 +49,13 @@ averaging lower-level medians.
 For the active rated-date interval `[d0,d1]`, a match day `d` maps to
 `x = -560 + clamp((d-d0)/(d1-d0),0,1) * 1120`. Reported rating `r` maps to
 `height = r * 42`; the mesh grows upward for positive values and downward for
-negative values from the same zero baseline. Default promotion lanes are 42
-world units apart; focused semantic lanes use 58 units where added separation
-is useful. A documented card placement uses `((placement mod 9)-4)*1.7` as its
-same-day depth offset. Without placement, the offset is a deterministic FNV-1a
-hash of the opaque match id plus a bounded stable ordinal. None of these
-offsets changes time or height.
+negative values from the same zero baseline. The landing chronology fixes
+every exact peak and global aggregate at `z=0`. Focused context lanes are 42
+world units apart and may use 58 units where added separation is useful. In
+those focused views, a documented card placement uses
+`((placement mod 9)-4)*1.7` as its same-day depth offset. Without placement,
+the offset is a deterministic FNV-1a hash of the opaque match id plus a bounded
+stable ordinal. None of these offsets changes time or height.
 
 Exact peaks and aggregate ridges overlap through a real dolly crossfade from
 camera distance 620 through 1180; point tips remain as the intermediate/distant
@@ -88,7 +94,8 @@ claims that no wrestling occurred.
 
 The controls provide five scopes:
 
-- **Promotion ridges:** the global promotion overview.
+- **Time + rating:** the global landing chronology. Time controls x, exact
+  reported rating controls y, and promotion does not determine position.
 - **Promotion:** one selected promotion.
 - **Career:** a selected person, with named singles opponents, an “other
   opponents” lane when needed, and a team/multi-person context lane.
@@ -105,15 +112,17 @@ rail stays the all-match denominator for its time and lane. At a partial-month
 date boundary, coverage uses complete calendar months and says so in the
 layout notes.
 
-Lanes can be ordered by stable whole-corpus order, rated or total count,
-coverage, median, mean, 4-star or 5-star count, maximum, or name. “Stable” is
-intentionally based on the full rated corpus; analytical ordering uses the
-active time window. Individual peaks, aggregate ridges, median traces, and
-context intensity can be toggled independently.
+Focused lanes can be ordered by stable whole-corpus order, rated or total
+count, coverage, median, mean, 4-star or 5-star count, maximum, or name.
+“Stable” is intentionally based on the full rated corpus; analytical ordering
+uses the active time window. Lane-order and context controls are hidden on the
+global chronology because they cannot change its time/rating-only position.
+Individual peaks, aggregate ridges, and median traces remain independently
+toggleable.
 
 To stay interactive, the renderer applies quality-tier caps:
 
-| Tier | Exact peaks | Promotion lanes | Labels |
+| Tier | Exact peaks | Focused lanes | Labels |
 | --- | ---: | ---: | ---: |
 | High | 18,000 | 48 | 126 |
 | Medium | 10,000 | 32 | 78 |
@@ -122,8 +131,9 @@ To stay interactive, the renderer applies quality-tier caps:
 Kept exact peaks are selected deterministically by required state, rating,
 date, and opaque match ID. A locked, hovered, playback-current, or pinned
 match survives an ordinary cap even when it falls outside active filters. The
-ledger and notes disclose summarized peaks and omitted lanes; search can still
-reach an omitted promotion.
+global chronology intentionally reports zero omitted promotion lanes because
+it does not create them. Focused views disclose summarized peaks and omitted
+lanes; search can still reach an omitted promotion.
 
 In automatic quality mode, a frame-interval EMA over 30ms accumulates downgrade
 pressure (faster above 50ms); 600ms of sustained pressure can step the renderer
@@ -133,8 +143,8 @@ diagnostics-only override is intentionally not a normal reader control.
 
 ## Interaction, accessibility, and sharing
 
-Pointer hover opens an evidence card for a peak, aggregate bin, or coverage
-lane. An exact card can lock or pin the match, focus its peak, set comparison
+Pointer hover opens an evidence card for a peak, aggregate bin, or focused
+coverage lane. An exact card can lock or pin the match, focus its peak, set comparison
 A/B, open related Connectome or Morph Lab context, or copy a deep link. The
 inspector’s exact-match ledger is a virtualized keyboard-accessible listbox;
 selecting an item locks its canonical match and exposes available event,
@@ -142,7 +152,8 @@ location, participants, form, result, title, duration, and identifier fields.
 Unavailable source fields remain “Not reported.”
 
 The WebGL canvas is intentionally `aria-hidden`; an accompanying accessible
-description states the axes, date/rating range, lane count, and rail meaning.
+description states the axes, date/rating range, whether depth has a semantic
+role, and the rail meaning.
 Visible labels and the ledger provide non-canvas reading and keyboard paths.
 On narrow screens, selecting a peak opens the inspector sheet, while controls,
 details, and map are exposed as panel tabs. Global search occupies its own
@@ -166,14 +177,17 @@ and disposal clear transient ownership. Locked inspector selection is separate
 and persists.
 
 Lens-scoped keyboard commands are `R` fit visible, `F` focus selection, `O` or
-`1` return to promotion ridges, `2` enter a valid selected career, `C` enter a
+`1` return to the global time/rating chronology, `2` enter a valid selected career, `C` enter a
 valid comparison, Space play/pause, brackets previous/next rated record, and
 Escape clear hover, then lock, then ascend scope. Inputs, selects, editable
 content, buttons, links, summaries, and tabs retain native ownership. Projected
 labels use roving arrow-key focus without transferring focus when pooled labels
 change identity.
 
-Camera actions include fit-visible, focus-selection, and a top/analyst view.
+The default global fit uses a near-frontal profile so chronology reads
+left-to-right and rating reads vertically. Focused semantic views retain the
+three-quarter perspective needed to separate context tracks. Camera actions
+include fit-visible, focus-selection, and a top/analyst view.
 Double-clicking a match focuses it. The active shared timeline can ignite
 visual pulses for its rated canonical events; this does not create records or
 alter their ratings. Reduced-motion mode lands transitions immediately and
@@ -185,7 +199,7 @@ Ratings URL state uses `rtv=1`. Its stable fields are:
 | --- | --- |
 | `rtm`, `rts`, `rtid` | layout mode, stable scope id, stable selected match id |
 | `rtmin`, `rtmax`, `rtth` | rating range and threshold plane |
-| `rtord`, `rtcov`, `rtctx` | lane order, coverage minimum, context amount |
+| `rtord`, `rtcov`, `rtctx` | focused lane order, coverage minimum, focused context amount |
 | `rttr`, `rtag`, `rtex` | trend, aggregates, and exact visibility |
 | `rtpr`, `rtform`, `rtppv`, `rttm`, `rttc`, `rtexd`, `rtapx` | evidence filters |
 | `rta`, `rtb` | comparison A/B stable ids |

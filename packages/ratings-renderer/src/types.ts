@@ -40,7 +40,8 @@ export interface RatingLabel {
 
 export interface RatingAggregateVisual {
   key: string;
-  promotionId: string;
+  /** Promotion identity for promotion-backed bins; null for global/derived bins. */
+  promotionId: string | null;
   startDay: number;
   endDay: number;
   x: number;
@@ -53,7 +54,7 @@ export interface RatingAggregateVisual {
   /** Source-rated numerator for a matching documented denominator, when one exists. */
   coverageRatedCount: number | null;
   totalCount: number;
-  coverageBasis: "promotion-denominator" | "derived-context-no-denominator";
+  coverageBasis: "global-denominator" | "promotion-denominator" | "derived-context-no-denominator";
   min: number;
   median: number;
   mean: number;
@@ -66,7 +67,7 @@ export interface RatingAggregateVisual {
 
 export interface RatingCoverageCell {
   key: string;
-  promotionId: string;
+  promotionId: string | null;
   x: number;
   z: number;
   width: number;
@@ -80,11 +81,11 @@ export interface RatingLaneVisual {
   id: string;
   name: string;
   z: number;
-  /** Source-rated numerator for promotion coverage; otherwise the derived sample. */
+  /** Source-rated numerator for global/promotion coverage; otherwise the derived sample. */
   ratedCount: number;
   totalCount: number;
   visibleRatedCount: number;
-  coverageBasis: "promotion-denominator" | "derived-context-no-denominator";
+  coverageBasis: "global-denominator" | "promotion-denominator" | "derived-context-no-denominator";
   selected: boolean;
 }
 

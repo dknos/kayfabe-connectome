@@ -55,7 +55,7 @@ export class RatingCoverageRails {
     const dark = new THREE.Color(RATING_PALETTE.railDark);
     const warm = new THREE.Color(RATING_PALETTE.ratedWarm);
     // A continuous quiet bed makes a truly empty interval visible as a gap in
-    // density, rather than silently removing the promotion lane itself.
+    // density, rather than silently removing the global/focused rail itself.
     for (const lane of lanes) {
       pushQuad(positions, colors, xRange[0], xRange[1], lane.z - 3.0, lane.z + 3.0, -1.3, dark, 0.32);
     }

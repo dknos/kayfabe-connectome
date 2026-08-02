@@ -59,13 +59,15 @@ export function RatingsControls() {
       <div className="ratings-masthead">
         <span className="ratings-kicker">Reported ratings across wrestling history</span>
         <h1><span>Meltzer</span><span>Ridge</span></h1>
-        <p>Time runs left to right. Exact reported rating rises vertically. Promotion or match context occupies depth.</p>
+        <p>{scope.mode === "promotions"
+          ? "Time runs left to right. Exact reported rating rises vertically. The opening chronology does not sort by promotion."
+          : "Time runs left to right. Exact reported rating rises vertically. Focused match context occupies depth."}</p>
       </div>
 
       <section className="ratings-control-section" aria-labelledby="ratings-view-heading">
         <h2 id="ratings-view-heading">Reading</h2>
         <div className="ratings-mode-grid" role="group" aria-label="Ratings arrangement">
-          <button type="button" className={scope.mode === "promotions" ? "active" : ""} onClick={() => useRatings.getState().returnGlobal()}>1 · Promotion ridges</button>
+          <button type="button" className={scope.mode === "promotions" ? "active" : ""} onClick={() => useRatings.getState().returnGlobal()}>1 · Time + rating</button>
           <button
             type="button"
             className={scope.mode === "career" ? "active" : ""}
@@ -126,7 +128,7 @@ export function RatingsControls() {
         </label>
         <label className="ratings-field">Promotion
           <select value={controls.filters.promotionId ?? ""} onChange={(event) => useRatings.getState().setFilters({ promotionId: event.target.value || null })}>
-            <option value="">All visible promotions</option>
+            <option value="">All promotions</option>
             {matchingPromotions.map((promotion) => <option key={promotion.id} value={promotion.id}>{promotion.name} · {promotion.count}</option>)}
           </select>
         </label>
@@ -151,20 +153,24 @@ export function RatingsControls() {
 
       <section className="ratings-control-section" aria-labelledby="ratings-structure-heading">
         <h2 id="ratings-structure-heading">Structure</h2>
-        <label className="ratings-field">Lane ordering
-          <select value={controls.laneOrder} onChange={(event) => useRatings.getState().setControls({ laneOrder: event.target.value as RatingLaneOrder })}>
-            {ORDERS.map((order) => <option key={order.value} value={order.value}>{order.label}</option>)}
-          </select>
-        </label>
+        {scope.mode !== "promotions" && (
+          <label className="ratings-field">Lane ordering
+            <select value={controls.laneOrder} onChange={(event) => useRatings.getState().setControls({ laneOrder: event.target.value as RatingLaneOrder })}>
+              {ORDERS.map((order) => <option key={order.value} value={order.value}>{order.label}</option>)}
+            </select>
+          </label>
+        )}
         <div className="ratings-check-grid">
           <Check label="Individual peaks" value={controls.showExact} onChange={(showExact) => useRatings.getState().setControls({ showExact })} />
           <Check label="Aggregate ridges" value={controls.showAggregates} onChange={(showAggregates) => useRatings.getState().setControls({ showAggregates })} />
           <Check label="Median trend · n≥3" value={controls.showTrend} onChange={(showTrend) => useRatings.getState().setControls({ showTrend })} />
         </div>
-        <label className="ratings-range-field">
-          <span>Context amount <b className="num">{Math.round(controls.context * 100)}%</b></span>
-          <input type="range" min="0" max="1" step="0.05" value={controls.context} onChange={(event) => useRatings.getState().setControls({ context: Number(event.target.value) })} />
-        </label>
+        {scope.mode !== "promotions" && (
+          <label className="ratings-range-field">
+            <span>Context amount <b className="num">{Math.round(controls.context * 100)}%</b></span>
+            <input type="range" min="0" max="1" step="0.05" value={controls.context} onChange={(event) => useRatings.getState().setControls({ context: Number(event.target.value) })} />
+          </label>
+        )}
         <div className="ratings-camera-actions">
           <button type="button" onClick={() => useRatings.getState().requestFit()}>Fit visible</button>
           <button type="button" onClick={() => useRatings.getState().requestFocus()} disabled={!useRatings.getState().selectedMatchId}>Focus selection</button>
@@ -246,5 +252,8 @@ export function ratingsAnnouncement(): string {
   const layout = state.layout;
   if (!stats || !layout) return "Meltzer Ratings is loading.";
   const years = `${dayToDate(layout.dayRange[0]).getUTCFullYear()} through ${dayToDate(layout.dayRange[1]).getUTCFullYear()}`;
-  return `Meltzer Ratings — ${state.scopeLabel}. Time runs left to right, reported rating runs vertically from ${layout.ratingRange[0]} to ${layout.ratingRange[1]}, and ${layout.lanes.length} context lanes occupy depth. ${stats.ratedMatches.toLocaleString()} rated matches are visible from ${years}, covering ${(stats.coverage * 100).toFixed(1)} percent of documented matches in this scope.`;
+  const spatial = layout.mode === "promotions"
+    ? "Promotion does not determine position in this chronology."
+    : `${layout.lanes.length} context lanes occupy depth.`;
+  return `Meltzer Ratings — ${state.scopeLabel}. Time runs left to right and reported rating runs vertically from ${layout.ratingRange[0]} to ${layout.ratingRange[1]}. ${spatial} ${stats.ratedMatches.toLocaleString()} rated matches are visible from ${years}, covering ${(stats.coverage * 100).toFixed(1)} percent of documented matches in this scope.`;
 }

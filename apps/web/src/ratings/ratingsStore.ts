@@ -85,7 +85,7 @@ export const useRatings = create<RatingsState>((set, get) => ({
   layout: null,
   stats: null,
   scope: { mode: "promotions", id: null },
-  scopeLabel: "All rated promotions",
+  scopeLabel: "All reported ratings",
   controls: DEFAULT_RATING_CONTROLS,
   tier: "high",
   qualityOverride: "auto",

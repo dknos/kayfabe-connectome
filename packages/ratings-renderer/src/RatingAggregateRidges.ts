@@ -5,7 +5,7 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 import { RATING_PALETTE } from "./palette";
 import { ratingTrendEligible, type RatingAggregateVisual } from "./types";
 
-/** Materialized promotion/time summaries. One instance is one disclosed bin. */
+/** Materialized global/promotion time summaries. One instance is one disclosed bin. */
 export class RatingAggregateRidges {
   readonly mesh: THREE.InstancedMesh;
   readonly medianTrace: LineSegments2;
@@ -58,7 +58,10 @@ export class RatingAggregateRidges {
       const b = this.bins[i]!;
       const h = b.maxHeight;
       this.position.set(b.x, h * 0.5, b.z);
-      this.scale.set(Math.max(0.5, b.width), Math.max(0.001, Math.abs(h)), Math.max(1.4, Math.sqrt(b.ratedCount) * 0.32));
+      const depth = b.coverageBasis === "global-denominator"
+        ? 2.4
+        : Math.max(1.4, Math.sqrt(b.ratedCount) * 0.32);
+      this.scale.set(Math.max(0.5, b.width), Math.max(0.001, Math.abs(h)), depth);
       this.matrix.compose(this.position, h < 0 ? this.negativeQ : this.positiveQ, this.scale);
       this.mesh.setMatrixAt(i, this.matrix);
       const heat = Math.max(0, Math.min(1, (b.max + 1) / 8));

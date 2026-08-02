@@ -4,6 +4,7 @@ import { isoToDay } from "@kayfabe/graph-contract";
 import { MIN_RATING_TREND_SAMPLES, ratingTrendEligible } from "@kayfabe/ratings-renderer";
 import { buildRatingLayout, dayToWorldX, exactMedian, RATING_WORLD, ratingToHeight, sameDaySublaneOffset, trendSegments } from "../ratings/layouts";
 import { DEFAULT_RATING_CONTROLS, type RatingLayoutBuildInput } from "../ratings/layouts/layoutTypes";
+import { GLOBAL_SUBJECT } from "../ratings/ratingsAdapter";
 import type { RatingsData } from "../ratings/ratingsLoader";
 
 type Row = {
@@ -16,7 +17,7 @@ type Row = {
 };
 
 type LodRow = {
-  promotion: "pr:a" | "pr:b";
+  promotion: "global" | "pr:a" | "pr:b";
   year: number;
   start: string;
   end: string;
@@ -100,17 +101,18 @@ function makeRatings(rows: readonly Row[], lodRows: readonly LodRow[] = []): Rat
     return [first, end];
   };
 
-  const materialized = [...lodRows].sort((a, b) => PROMOTIONS.indexOf(a.promotion) - PROMOTIONS.indexOf(b.promotion) || a.year - b.year);
+  const lodSubject = (row: LodRow) => row.promotion === "global" ? GLOBAL_SUBJECT : PROMOTIONS.indexOf(row.promotion);
+  const materialized = [...lodRows].sort((a, b) => lodSubject(a) - lodSubject(b) || a.year - b.year);
   const ratings = rows.map((row) => row.rating);
   const ratingRange: [number, number] | null = ratings.length
     ? [Math.min(...ratings), Math.max(...ratings)]
     : null;
   const lodRange = (promotionIndex: number, resolution: number): readonly [number, number] => {
     if (resolution !== 0) return [0, 0];
-    const first = materialized.findIndex((row) => PROMOTIONS.indexOf(row.promotion) === promotionIndex);
+    const first = materialized.findIndex((row) => lodSubject(row) === promotionIndex);
     if (first < 0) return [0, 0];
     let end = first;
-    while (end < materialized.length && PROMOTIONS.indexOf(materialized[end]!.promotion) === promotionIndex) end++;
+    while (end < materialized.length && lodSubject(materialized[end]!) === promotionIndex) end++;
     return [first, end];
   };
 
@@ -184,7 +186,7 @@ function makeRatings(rows: readonly Row[], lodRows: readonly LodRow[] = []): Rat
       titleChanges: new Uint32Array(coverageRows.length), approximate: new Uint32Array(coverageRows.length),
     },
     lod: {
-      count: materialized.length, promotion: Uint32Array.from(materialized.map((row) => PROMOTIONS.indexOf(row.promotion))), resolution: new Uint8Array(materialized.length),
+      count: materialized.length, promotion: Uint32Array.from(materialized.map(lodSubject)), resolution: new Uint8Array(materialized.length),
       startDay: Int32Array.from(materialized.map((row) => isoToDay(row.start))), endDay: Int32Array.from(materialized.map((row) => isoToDay(row.end))), periodKey: Uint32Array.from(materialized.map((row) => row.year)),
       total: Uint32Array.from(materialized.map((row) => row.total)), rated: Uint32Array.from(materialized.map((row) => row.rated)),
       min: Float64Array.from(materialized.map((row) => row.min)), max: Float64Array.from(materialized.map((row) => row.max)), sum: Float64Array.from(materialized.map((row) => row.sum)), median: Float64Array.from(materialized.map((row) => row.median)),
@@ -219,7 +221,7 @@ describe("ratings layout arithmetic and identity", () => {
     expect(() => ratingToHeight(Number.POSITIVE_INFINITY)).toThrow(/finite/i);
   });
 
-  it("preserves missing-vs-zero evidence, lane order, and same-day placement deterministically", () => {
+  it("preserves missing-vs-zero evidence in one promotion-neutral time/rating chronology", () => {
     const data = makeRatings(fixtureRows);
     const first = build(data);
     const second = build(data);
@@ -232,30 +234,53 @@ describe("ratings layout arithmetic and identity", () => {
     expect(first.layout.heights[zero]).toBe(0);
     expect(first.layout.heights[negative]).toBeLessThan(0);
     expect(first.layout.heights[overFive]).toBeGreaterThan(ratingToHeight(5));
-    expect(first.layout.lanes.map((lane) => lane.id)).toEqual(["pr:a", "pr:b"]);
+    expect(first.layout.lanes.map((lane) => lane.id)).toEqual(["global:chronology"]);
     expect(second.layout.lanes.map((lane) => lane.id)).toEqual(first.layout.lanes.map((lane) => lane.id));
-    expect(first.layout.positions[zero * 3 + 2]).not.toBe(first.layout.positions[negative * 3 + 2]);
+    expect(first.layout.positions[zero * 3 + 2]).toBe(0);
+    expect(first.layout.positions[negative * 3 + 2]).toBe(0);
+    expect(first.layout.positions[overFive * 3 + 2]).toBe(0);
+    expect(first.layout.omittedPromotions).toBe(0);
+    expect(first.stats.omittedLanes).toBe(0);
+    expect(first.layout.coverage.some((cell) => cell.promotionId === null && cell.totalCount > cell.ratedCount)).toBe(true);
+
+    const reorderedControls = structuredClone(DEFAULT_RATING_CONTROLS);
+    reorderedControls.laneOrder = "alphabetical";
+    reorderedControls.context = 0;
+    const reordered = build(data, { controls: reorderedControls });
+    expect(Array.from(reordered.layout.positions)).toEqual(Array.from(first.layout.positions));
+    expect(reordered.layout.lanes.map((lane) => lane.id)).toEqual(["global:chronology"]);
     expect(sameDaySublaneOffset("m:opaque", null, 2)).toBe(sameDaySublaneOffset("m:opaque", null, 2));
     expect(sameDaySublaneOffset("m:any", 0)).toBe(-6.8);
     expect(sameDaySublaneOffset("m:any", 8)).toBe(6.8);
   });
 
   it("uses materialized full-year aggregates and exact partial-window aggregates without changing the rating scale", () => {
-    const data = makeRatings(fixtureRows, [{
-      promotion: "pr:a", year: 2000, start: "2000-01-01", end: "2000-12-31", total: 3, rated: 3,
-      min: -1, max: 5, sum: 4, median: 0, fourPlus: 1, fivePlus: 1,
-    }]);
+    const data = makeRatings(fixtureRows, [
+      {
+        promotion: "global", year: 2000, start: "2000-01-01", end: "2000-12-31", total: 4, rated: 3,
+        min: -1, max: 5, sum: 4, median: 0, fourPlus: 1, fivePlus: 1,
+      },
+      {
+        promotion: "pr:a", year: 2000, start: "2000-01-01", end: "2000-12-31", total: 3, rated: 3,
+        min: -1, max: 5, sum: 4, median: 0, fourPlus: 1, fivePlus: 1,
+      },
+    ]);
     const full = build(data);
-    const materialized = full.layout.aggregates.find((bin) => bin.key === "bin:pr:a:2000")!;
-    expect(materialized).toMatchObject({ ratedCount: 3, totalCount: 3, min: -1, median: 0, max: 5, fourPlus: 1, fivePlus: 1 });
+    const materialized = full.layout.aggregates.find((bin) => bin.key === "bin:global:chronology:2000")!;
+    expect(materialized).toMatchObject({ promotionId: null, coverageBasis: "global-denominator", ratedCount: 3, totalCount: 4, min: -1, median: 0, max: 5, fourPlus: 1, fivePlus: 1 });
     expect(materialized.mean).toBeCloseTo(4 / 3);
     expect(materialized.maxHeight).toBe(ratingToHeight(5));
     expect(materialized.medianHeight).toBe(0);
 
+    const promotion = build(data, { scope: { mode: "promotion", id: "pr:a" } });
+    expect(promotion.layout.aggregates.find((bin) => bin.key === "bin:pr:a:2000")).toMatchObject({
+      promotionId: "pr:a", coverageBasis: "promotion-denominator", ratedCount: 3, totalCount: 3,
+    });
+
     const partial = build(data, { dayMin: isoToDay("2000-01-15") });
-    const exact = partial.layout.aggregates.find((bin) => bin.key === "bin:pr:a:2000")!;
+    const exact = partial.layout.aggregates.find((bin) => bin.key === "bin:global:chronology:2000")!;
     expect(exact).toMatchObject({ ratedCount: 1, min: 5, median: 5, mean: 5, max: 5 });
-    expect(exact.totalCount).toBe(3); // documented denominator still includes the calendar-month boundary
+    expect(exact.totalCount).toBe(4); // documented denominator still includes the calendar-month boundary
     expect(exact.medianHeight).toBe(ratingToHeight(5));
     expect(exactMedian([5, -1, 0])).toBe(0);
   });

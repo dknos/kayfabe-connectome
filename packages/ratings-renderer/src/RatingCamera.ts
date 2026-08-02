@@ -29,6 +29,13 @@ export class RatingCamera extends MorphCamera {
     });
   }
 
+  chronology(bounds: RatingBounds, durationS = 0.7): void {
+    this.fit(bounds, 0.075, durationS, {
+      theta: THREE.MathUtils.degToRad(0.01),
+      phi: THREE.MathUtils.degToRad(76),
+    });
+  }
+
   analyst(bounds: RatingBounds, durationS = 0.65): void {
     this.fit(bounds, 0.06, durationS, {
       theta: THREE.MathUtils.degToRad(0.01),

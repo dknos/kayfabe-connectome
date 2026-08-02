@@ -77,6 +77,11 @@ including zero, negative, and above-five values; missing `mr` is never a
 zero-rating observation. Sparse all-canonical coverage rows provide the
 denominator for every reported coverage claim.
 
+The global landing view maps only canonical date to x and exact reported
+rating to y; every exact peak has neutral depth and promotion does not sort or
+separate the field. It consumes the projection's global coverage and LOD rows.
+Promotion/context tracks appear only after an explicit focused arrangement.
+
 The wire is fixed, checksummed, and deterministic: 48-byte exact match
 records retain opaque canonical IDs, participants, complete ordered title
 sets, card/event identity, and placement; direct-sample LOD records must not
