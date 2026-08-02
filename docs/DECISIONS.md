@@ -66,3 +66,26 @@ codec to v2 (stale v1 fragments are ignored safely, never restored wrong).
 Promotion bitmask widened: family bits 0-5 fixed, top-24 csv promotions get
 bits 6-29 by kept-match count, everything else shares other-bit 30 (bit 31
 left unused so JS int32 bitwise stays positive).
+
+## D-009 — Ratings are a canonical coverage-aware projection (2026-08-02)
+
+MELTZER RIDGE reads a separate `meltzer-ratings@2` projection from the
+already-materialized canonical timeline; it never reads the private CSV or
+source database in the browser or projection producer. Only events with a
+present `mr` become exact match records. Present values are retained exactly,
+including zero, negative, and above-five values; missing `mr` is never a
+zero-rating observation. Sparse all-canonical coverage rows provide the
+denominator for every reported coverage claim.
+
+The wire is fixed, checksummed, and deterministic: 48-byte exact match
+records retain opaque canonical IDs, participants, complete ordered title
+sets, card/event identity, and placement; direct-sample LOD records must not
+be derived from child aggregates. The projection binds to a normalized
+canonical-manifest fingerprint and uses the latest canonical date as its data
+clock, avoiding wall-clock-only rebuild churn. The client rejects unsupported
+versions, failed validation, checksum mismatches, and malformed lengths.
+
+This keeps rating evidence attributable to canonical matches, preserves D-007
+crosswalk limits, and makes missingness visible rather than visually converting
+source sparsity into a quality judgment. See [MELTZER RIDGE](MELTZER-RIDGE.md)
+and the [wire format](../packages/graph-contract/MATERIALIZED-FORMAT.md#ratings-projection--ratings-meltzer-ratings2).

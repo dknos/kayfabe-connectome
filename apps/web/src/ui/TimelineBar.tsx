@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { dayToDate } from "@kayfabe/graph-contract";
 import { fmtDay, isoToDay, useStore, type TimelineMode } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
+import { useRatings } from "../ratings/ratingsStore";
 
 const MODES: { id: TimelineMode; label: string }[] = [
   { id: "off", label: "All history" },
@@ -20,8 +21,9 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
   const timeline = useStore((s) => s.timeline);
   const currentEvent = useStore((s) => s.currentEvent);
   const setTimeline = useStore((s) => s.setTimeline);
-  const reducedMotion = useStore((s) => s.reducedMotion);
   const pulseScope = useStore((s) => s.pulseScope);
+  const lens = useStore((s) => s.lens);
+  const ratingsData = useRatings((s) => s.data);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -36,11 +38,18 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
-    const years = Object.keys(core.density.years).map(Number).sort((a, b) => a - b);
+    const ratingsMode = lens === "ratings" && !!ratingsData?.histograms;
+    const ratingsRange = ratingsData?.manifest.date_ranges.rated ?? ratingsData?.manifest.date_ranges.canonical;
+    const years = ratingsMode
+      ? inclusiveYears(ratingsRange!)
+      : Object.keys(core.density.years).map(Number).sort((a, b) => a - b);
     if (!years.length) return;
     const y0 = years[0]!;
     const y1 = years[years.length - 1]!;
-    const maxM = Math.max(...years.map((y) => core.density.years[String(y)]!.matches));
+    const countAt = (year: number) => ratingsMode
+      ? ratingsData!.histograms!.by_year[String(year)]?.rated ?? 0
+      : core.density.years[String(year)]!.matches;
+    const maxM = Math.max(1, ...years.map(countAt));
     const x = (year: number) => ((year - y0) / Math.max(1, y1 - y0)) * (w - 2) + 1;
     const bw = Math.max(1.5, (w - 2) / (y1 - y0 + 1) - 1);
 
@@ -53,11 +62,11 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
       ? Math.max(1, ...Object.values(pulseScope.years))
       : 0;
     for (const y of years) {
-      const d = core.density.years[String(y)]!;
-      const hh = Math.sqrt(d.matches / maxM) * (h - 18);
-      ctx.fillStyle = pulseScope ? "rgba(63, 211, 255, 0.09)" : "rgba(63, 211, 255, 0.34)";
+      const d = core.density.years[String(y)];
+      const hh = Math.sqrt(countAt(y) / maxM) * (h - 18);
+      ctx.fillStyle = ratingsMode ? "rgba(193, 123, 67, 0.62)" : pulseScope ? "rgba(63, 211, 255, 0.09)" : "rgba(63, 211, 255, 0.34)";
       ctx.fillRect(x(y), h - 12 - hh, bw, hh);
-      if (pulseScope) {
+      if (pulseScope && !ratingsMode) {
         const n = pulseScope.years[String(y)] ?? 0;
         if (n > 0) {
           const sh = Math.sqrt(n / scopeMax) * (h - 18);
@@ -65,7 +74,7 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
           ctx.fillRect(x(y), h - 12 - sh, bw, sh);
         }
       }
-      if (!pulseScope && d.titleChanges > 0) {
+      if (!ratingsMode && !pulseScope && d && d.titleChanges > 0) {
         const th = Math.min(1, d.titleChanges / 40) * (h - 26) + 4;
         ctx.fillStyle = "rgba(255, 209, 102, 0.8)";
         ctx.fillRect(x(y) + bw / 2 - 0.5, h - 12 - th, 1, th);
@@ -88,14 +97,16 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
       ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.fillRect(hx - 3, 2, 7, h - 14);
     }
-  }, [core, model, timeline.day, timeline.mode, pulseScope]);
+  }, [core, model, timeline.day, timeline.mode, pulseScope, lens, ratingsData]);
 
   if (!core || !model) return <div className="pulsebar" />;
 
   const scrub = (clientX: number, el: HTMLCanvasElement) => {
     const r = el.getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-    const years = Object.keys(core.density.years).map(Number).sort((a, b) => a - b);
+    const years = lens === "ratings" && ratingsData?.histograms
+      ? inclusiveYears(ratingsData.manifest.date_ranges.rated ?? ratingsData.manifest.date_ranges.canonical)
+      : Object.keys(core.density.years).map(Number).sort((a, b) => a - b);
     const yearF = years[0]! + frac * (years[years.length - 1]! - years[0]!);
     const day = isoToDay(`${Math.floor(yearF)}-01-01`) + Math.round((yearF % 1) * 365);
     if (timeline.mode === "off") setTimeline({ mode: "accumulate", day });
@@ -111,8 +122,8 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
     }
     const mode = timeline.mode === "off" ? "playback" : timeline.mode;
     // at the end of history there is nothing left to fire — restart from the range start
-    const { filters, model: m } = useStore.getState();
-    const day = timeline.day >= (m?.fullDayRange[1] ?? Infinity) - 1 ? filters.dayMin : timeline.day;
+    const [rangeMin, rangeMax] = engine.activeDayRange;
+    const day = timeline.day >= rangeMax - 1 || timeline.day < rangeMin ? rangeMin : timeline.day;
     setTimeline({ playing: true, mode, day });
     engine.scrubTo(day);
     const y = dayToDate(day).getUTCFullYear();
@@ -173,7 +184,7 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
       <div className="pulse-canvas-wrap">
         <canvas
           ref={canvasRef}
-          aria-label="Match density per year; gold ticks mark championship changes. Click to scrub."
+          aria-label={lens === "ratings" ? "Rated-match density per year. Click to scrub the reported-rating timeline." : "Match density per year; gold ticks mark championship changes. Click to scrub."}
           role="slider"
           aria-valuetext={fmtDay(timeline.day)}
           tabIndex={0}
@@ -196,15 +207,25 @@ export function TimelineBar({ engine }: { engine: TimelineEngine }) {
             {pulseScope.label} · career
           </div>
         )}
-        <div className="date">{timeline.mode === "off" ? `${core.manifest.date_range[0]} → ${core.manifest.date_range[1]}` : fmtDay(timeline.day)}</div>
+        <div className="date">{timeline.mode === "off" ? (lens === "ratings" && ratingsData ? formatRatingsRange(ratingsData.manifest.date_ranges.rated, ratingsData.manifest.date_ranges.canonical) : `${core.manifest.date_range[0]} → ${core.manifest.date_range[1]}`) : fmtDay(timeline.day)}</div>
         <div className="evt" aria-live="off">
-          {currentEvent
-            ? `${currentEvent.en} · ${currentEvent.res}${currentEvent.tc ? " · TITLE CHANGE" : ""}${reducedMotion ? "" : ""}`
-            : timeline.mode === "off"
-              ? "full corpus"
+          {timeline.mode === "off"
+            ? lens === "ratings" ? "reported-rating timeline · missing is not zero" : "full corpus"
+            : currentEvent
+              ? `${currentEvent.en} · ${currentEvent.res}${currentEvent.tc ? " · TITLE CHANGE" : ""}`
               : "—"}
         </div>
       </div>
     </div>
   );
+}
+
+function inclusiveYears(range: readonly [string, string]): number[] {
+  const first = Number(range[0].slice(0, 4));
+  const last = Number(range[1].slice(0, 4));
+  return Array.from({ length: Math.max(0, last - first + 1) }, (_, index) => first + index);
+}
+
+function formatRatingsRange(rated: readonly [string, string] | null, canonical: readonly [string, string]): string {
+  return rated ? `${rated[0]} → ${rated[1]}` : `${canonical[0]} → ${canonical[1]} · no reported ratings`;
 }

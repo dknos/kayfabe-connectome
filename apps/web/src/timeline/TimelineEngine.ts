@@ -20,9 +20,10 @@ export interface FiredEvent {
  */
 export type TimelineScope =
   | null
-  | { kind: "person"; id: string }
-  | { kind: "promotion"; id: string }
-  | { kind: "title"; id: string };
+  | { kind: "person"; id: string; ratedOnly?: boolean }
+  | { kind: "promotion"; id: string; ratedOnly?: boolean }
+  | { kind: "title"; id: string; ratedOnly?: boolean }
+  | { kind: "ratings"; ratedOnly: true };
 
 export type FireListener = (f: FiredEvent) => void;
 
@@ -44,6 +45,7 @@ export class TimelineEngine {
   private lastTs = 0;
   private listeners = new Set<FireListener>();
   private scope: TimelineScope = null;
+  private rangeOverride: readonly [number, number] | null = null;
 
   /** Subscribe a renderer. Returns the unsubscribe. */
   addListener(fn: FireListener): () => void {
@@ -61,7 +63,9 @@ export class TimelineEngine {
     const prev = this.scope;
     const same =
       (prev === null && scope === null) ||
-      (prev !== null && scope !== null && prev.kind === scope.kind && prev.id === scope.id);
+      (prev !== null && scope !== null && prev.kind === scope.kind &&
+        ("id" in prev ? prev.id : null) === ("id" in scope ? scope.id : null) &&
+        prev.ratedOnly === scope.ratedOnly);
     if (same) return;
     this.scope = scope;
     // The cursor was placed under the old scope's filter; re-seat it on the
@@ -73,6 +77,23 @@ export class TimelineEngine {
     return this.scope;
   }
 
+  setRangeOverride(range: readonly [number, number] | null): void {
+    this.rangeOverride = range ? [range[0], range[1]] : null;
+    // The override defines this lens' playback/scrub domain. It must not move
+    // the shared playhead merely because a lens mounted: Connectome, Morph and
+    // Geo all expect their exact timeline state to survive a round trip. The
+    // ratings TimelineBar moves an out-of-range head to the rated start only
+    // when the reader explicitly presses Play or scrubs.
+  }
+
+  get currentRangeOverride(): readonly [number, number] | null {
+    return this.rangeOverride ? [this.rangeOverride[0], this.rangeOverride[1]] : null;
+  }
+
+  get activeDayRange(): readonly [number, number] {
+    return this.rangeOverride ?? useStore.getState().model?.fullDayRange ?? [0, 0];
+  }
+
   /** Back-compat shim for the connectome's person playback. */
   setParticipant(id: string | null): void {
     this.setScope(id ? { kind: "person", id } : null);
@@ -81,9 +102,11 @@ export class TimelineEngine {
   private inScope(ev: TimelineEvent): boolean {
     const s = this.scope;
     if (!s) return true;
+    if (s.ratedOnly && ev.mr === undefined) return false;
+    if (s.kind === "ratings") return true;
     if (s.kind === "person") return ev.w.includes(s.id) || ev.l.includes(s.id);
     if (s.kind === "promotion") return ev.pr === s.id;
-    return ev.t === s.id;
+    return ev.ts?.includes(s.id) ?? ev.t === s.id;
   }
 
   async ensureRange(y0: number, y1: number): Promise<void> {
@@ -217,7 +240,7 @@ export class TimelineEngine {
       const dt = Math.min(0.25, (ts - this.lastTs) / 1000);
       this.lastTs = ts;
       const day = st.timeline.day + st.timeline.speed * dt;
-      const [_, dMax] = st.model?.fullDayRange ?? [0, 0];
+      const [, dMax] = this.activeDayRange;
       if (day >= dMax) {
         st.setTimeline({ day: dMax, playing: false });
         return;

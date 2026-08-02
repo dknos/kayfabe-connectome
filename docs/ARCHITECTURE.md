@@ -12,6 +12,7 @@ source SQLite (read-only, private copy)
    → wrestlingdb staging + crosswalk (when key present)
    → conflict detection → identity resolution → validation
    → graph projections (versioned recipes)
+   → ratings projection (canonical timeline → exact ratings, coverage, LOD)
    → analytics (communities, centrality — igraph/rustworkx)
    → offline global layout (community-level + intra-community, deterministic)
    → materialized chunks (Parquet/Arrow/typed binary + manifest + checksums)
@@ -25,6 +26,8 @@ source SQLite (read-only, private copy)
 - `packages/graph-contract` (TS): projection/chunk/manifest wire formats.
 - `packages/graph-engine` (TS): browser graph state, workers, local layouts.
 - `packages/renderer` (TS): Three.js WebGPU/WebGL2 connectome renderer. No React inside.
+- `packages/ratings-renderer` (TS): Three.js WebGL MELTZER RIDGE renderer;
+  consumes only the validated ratings projection.
 - `packages/state` (TS): Zustand stores — selection, timeline, filters, URL codec.
 - `apps/web`: shell, panels, lenses. React never owns per-node rendering.
 - `apps/api`: narrow typed FastAPI surface over materialized data.

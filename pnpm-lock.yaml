@@ -23,6 +23,9 @@ importers:
       '@kayfabe/morph-renderer':
         specifier: workspace:*
         version: link:../../packages/morph-renderer
+      '@kayfabe/ratings-renderer':
+        specifier: workspace:*
+        version: link:../../packages/ratings-renderer
       '@kayfabe/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
@@ -83,6 +86,19 @@ importers:
       '@kayfabe/graph-contract':
         specifier: workspace:*
         version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+
+  packages/ratings-renderer:
+    dependencies:
+      '@kayfabe/morph-renderer':
+        specifier: workspace:*
+        version: link:../morph-renderer
       three:
         specifier: ^0.182.0
         version: 0.182.0
