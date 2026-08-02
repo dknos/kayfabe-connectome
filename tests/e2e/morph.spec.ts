@@ -387,9 +387,11 @@ test.describe("morph lab lens", () => {
     // no unexpected fit-all: the framing came back as it was
     expect(Math.abs(after.dist - before.dist)).toBeLessThan(0.5);
 
-    // the production lens set is deliberately narrow after a lab visit
+    // The production lens set remains stable after a lab visit, including the
+    // independent ratings renderer added as the fourth lens.
     const lenses = page.getByRole("group", { name: "Lens" });
-    await expect(lenses.getByRole("button")).toHaveCount(3);
+    await expect(lenses.getByRole("button")).toHaveCount(4);
+    await expect(lenses.getByRole("button", { name: "Meltzer Ratings", exact: true })).toBeVisible();
     await expect(lenses.getByRole("button", { name: "Atlas", exact: true })).toHaveCount(0);
     await expect(lenses.getByRole("button", { name: "Table", exact: true })).toHaveCount(0);
 

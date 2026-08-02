@@ -27,6 +27,7 @@ from .layout import compute_layout
 from .merge import merge_csv
 from .normalize import FORM_BITS, bucket_of, day_to_iso, iso_to_day
 from .project import PairAggregator, derive_reigns
+from .ratings_project import build as build_ratings
 from .source_db import source_db_path
 from .validate import run_checks
 
@@ -51,6 +52,7 @@ _MANAGED = (
     "entities",
     "reconciliation",
     "quality",
+    "ratings",
 )
 
 
@@ -257,6 +259,10 @@ def build(out: Path | None = None) -> dict:
             "l": list(rec["sides"][1]["members"]),
             "unk": rec["sides"][0]["has_unknown"] or rec["sides"][1]["has_unknown"],
             "t": f"t:{t_first}" if t_first is not None else None,
+            # `t` remains the legacy primary title. `ts` is the complete,
+            # ordered and de-duplicated canonical title set for multi-belt
+            # matches, including [] for a non-title match.
+            "ts": [f"t:{tid}" for tid in dict.fromkeys(comp)],
             # tc only meaningful with a real belt — keeps by-year sums equal
             # to density.titleChanges (raw count stays in quality metrics)
             "tc": rec["title_change"] if t_first is not None else 0,
@@ -272,6 +278,8 @@ def build(out: Path | None = None) -> dict:
             ev["mr"] = rec["_mr"]
         if rec.get("_ppv"):
             ev["ppv"] = 1
+        if rec.get("_placement") is not None:
+            ev["placement"] = rec["_placement"]
         if rec.get("apx"):
             ev["apx"] = 1
         timeline.setdefault(year, []).append(ev)
@@ -866,6 +874,11 @@ def build(out: Path | None = None) -> dict:
     }
     (out / "manifest.json").write_bytes(dumps(manifest))
 
+    # Ratings is a managed projection of the canonical timeline. Its builder
+    # re-validates the emitted bytes and raises on any failure, so a normal
+    # full materialization cannot publish a stale or corrupt ratings tree.
+    ratings_summary = build_ratings(out, out / "ratings")
+
     wall = time.monotonic() - t_start
     return {
         "out": str(out),
@@ -873,7 +886,9 @@ def build(out: Path | None = None) -> dict:
         "passed": passed,
         "counts": manifest["counts"],
         "reigns_total": total_reigns,
-        "files": len(w.checksums) + 1,
+        # Primary-manifest files plus the separately checksummed ratings tree.
+        "files": len(w.checksums) + 1 + ratings_summary["files"],
+        "ratings": ratings_summary,
     }
 
 

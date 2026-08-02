@@ -108,9 +108,14 @@ export interface TimelineEvent {
   wu?: string[][];
   lu?: string[][];
   unk: boolean;
+  /** Complete ordered canonical title set; emitted by current materializer.
+   * Optional only so consumers can still read older materialized trees. */
+  ts?: string[];
   t: string | null;
   tc: 0 | 1;
   dur: number | null;
+  /** Canonical CSV card position, when available through the exact crosswalk. */
+  placement?: number;
   /** Meltzer star rating, PPV flag, approximate-date flag (csv enrichment) */
   mr?: number;
   ppv?: 1;
@@ -143,6 +148,248 @@ export type ChampionshipsFile = Record<string, ChampionshipRecord>;
 
 export interface DensityFile {
   years: Record<string, { matches: number; titleChanges: number }>;
+}
+
+/* --------------------------------------------------------------- RATINGS
+ *
+ * data/materialized/ratings/ is a deterministic, read-only projection of the
+ * canonical timeline. It is deliberately not another imported match corpus:
+ * `matches.bin` contains only canonical timeline records for which `mr` is
+ * present. See MATERIALIZED-FORMAT.md for byte offsets and provenance rules.
+ */
+
+/** `mr` absent means the canonical record has no reported rating. It is not a
+ * zero-star rating. Present values, including -1 and 0, are real values. */
+export type MeltzerRating = number;
+
+/** Sentinel used by coverage and LOD records for the corpus-wide subject. */
+export const RATINGS_GLOBAL_SUBJECT = 0xffffffff;
+
+export const RATINGS_COVERAGE_KIND = {
+  global: 0,
+  promotion: 1,
+  person: 2,
+  title: 3,
+} as const;
+export type RatingsCoverageKind = (typeof RATINGS_COVERAGE_KIND)[keyof typeof RATINGS_COVERAGE_KIND];
+
+export const RATINGS_PERIOD_RESOLUTION = {
+  year: 0,
+  quarter: 1,
+  month: 2,
+} as const;
+export type RatingsPeriodResolution = (typeof RATINGS_PERIOD_RESOLUTION)[keyof typeof RATINGS_PERIOD_RESOLUTION];
+
+/** Form codes in `ratings/dictionaries.json.forms` and `matches.bin.form`. */
+export const RATINGS_FORM_CODE: Record<MatchForm, number> = {
+  singles: 0,
+  tag_team: 1,
+  multi_way: 2,
+  battle_royal: 3,
+  team_implied: 4,
+  unknown: 5,
+};
+
+/** Bitfield carried by each decoded RatingsMatchRecord.flags value. */
+export const RATINGS_MATCH_FLAG = {
+  ppv: 1 << 0,
+  approximateDate: 1 << 1,
+  hasTitle: 1 << 2,
+  titleChange: 1 << 3,
+  hasPlacement: 1 << 4,
+} as const;
+export const RATINGS_MATCH_KNOWN_FLAGS =
+  RATINGS_MATCH_FLAG.ppv |
+  RATINGS_MATCH_FLAG.approximateDate |
+  RATINGS_MATCH_FLAG.hasTitle |
+  RATINGS_MATCH_FLAG.titleChange |
+  RATINGS_MATCH_FLAG.hasPlacement;
+
+/** Exact little-endian byte layouts advertised by RatingsManifest.binary. */
+export const RATINGS_MATCH_STRIDE = 48;
+export const RATINGS_MATCH_OFFSETS = {
+  day: 0, rating: 4, promotion: 12, participantOffset: 16, participantCount: 20,
+  flags: 22, form: 24, eventIndex: 26, title: 28, placement: 32, matchIdIndex: 36,
+  titleOffset: 40, titleCount: 44, reserved: 46,
+} as const;
+export const RATINGS_PARTICIPANT_STRIDE = 4;
+export const RATINGS_PARTICIPANT_OFFSETS = { participantIndex: 0 } as const;
+export const RATINGS_TITLE_STRIDE = 4;
+export const RATINGS_TITLE_OFFSETS = { titleIndex: 0 } as const;
+export const RATINGS_COVERAGE_STRIDE = 28;
+export const RATINGS_COVERAGE_OFFSETS = {
+  kind: 0, resolution: 1, subject: 4, periodKey: 8, total: 12, rated: 16,
+  titleChanges: 20, approximate: 24,
+} as const;
+export const RATINGS_LOD_STRIDE = 72;
+export const RATINGS_LOD_OFFSETS = {
+  promotion: 0, resolution: 4, periodStartDay: 8, periodEndDay: 12, periodKey: 16,
+  total: 20, rated: 24, min: 28, max: 36, sum: 44, median: 52, fourPlus: 60,
+  fivePlus: 64, approximate: 68,
+} as const;
+
+export interface RatingsDictionaryEntries {
+  /** Opaque canonical IDs, lexicographically sorted; index is the binary key. */
+  id: string[];
+  name?: string[];
+}
+
+/** ratings/dictionaries.json */
+export interface RatingsDictionaries {
+  schema_version: string;
+  /** "opaque ids sorted lexicographically by Python Unicode code point" */
+  ordering: string;
+  /** Indexed by the codes in RATINGS_FORM_CODE. */
+  forms: MatchForm[];
+  participants: RatingsDictionaryEntries & { name: string[] };
+  promotions: RatingsDictionaryEntries & { name: string[] };
+  titles: RatingsDictionaryEntries & { name: string[] };
+  matches: RatingsDictionaryEntries;
+  /** Canonical card ids, with the card's canonical event display name. */
+  events: RatingsDictionaryEntries & { name: string[] };
+}
+
+export interface RatingsBinaryFile<Offsets extends Record<string, number>> {
+  file: string;
+  record_count: number;
+  stride: number;
+  offsets: Offsets;
+}
+
+export interface RatingsBinaryContract {
+  endianness: "little";
+  matches: RatingsBinaryFile<{
+    day: number; rating: number; promotion: number; participantOffset: number;
+    participantCount: number; flags: number; form: number; eventIndex: number;
+    title: number; placement: number; matchIdIndex: number; titleOffset: number;
+    titleCount: number; reserved: number;
+  }>;
+  participants: RatingsBinaryFile<{ participantIndex: number }>;
+  titles: RatingsBinaryFile<{ titleIndex: number }>;
+  coverage: RatingsBinaryFile<{
+    kind: number; resolution: number; subject: number; periodKey: number;
+    total: number; rated: number; titleChanges: number; approximate: number;
+  }>;
+  lod: RatingsBinaryFile<{
+    promotion: number; resolution: number; periodStartDay: number; periodEndDay: number;
+    periodKey: number; total: number; rated: number; min: number; max: number;
+    sum: number; median: number; fourPlus: number; fivePlus: number; approximate: number;
+  }>;
+}
+
+/** ratings/manifest.json */
+export interface RatingsManifest {
+  schema_version: string;
+  projection_version: string;
+  /** Deterministic data-clock timestamp; never a wall-clock build timestamp. */
+  built_at: string;
+  built_at_policy: string;
+  source_fingerprint: string;
+  source_schema_version: string;
+  source_projection_version: string;
+  source_manifest_sha256: string;
+  source_manifest_sha256_policy: string;
+  date_ranges: { canonical: [string, string]; rated: [string, string] | null };
+  rating_value_range: [number, number] | null;
+  overall_coverage: {
+    rated_matches: number;
+    total_documented_matches: number;
+    fraction: number;
+  };
+  promotions_with_ratings: number;
+  aggregate_bin_sizes: Record<"year" | "quarter" | "month", {
+    resolution_code: number;
+    calendar_months: number;
+  }>;
+  counts: {
+    canonical_matches: number;
+    rated_matches: number;
+    participant_values: number;
+    title_values: number;
+    coverage_records: number;
+    lod_records: number;
+  };
+  dictionary_counts: {
+    matches: number;
+    participants: number;
+    promotions: number;
+    titles: number;
+    events: number;
+  };
+  algorithms: Record<string, string>;
+  binary: RatingsBinaryContract;
+  checksums: Record<string, string>;
+  validation: { passed: boolean; checks: Record<string, boolean> };
+}
+
+/** Decoded 48-byte `ratings/matches.bin` record. Each record is a canonical
+ * match with present `mr`, in canonical (date, card id, match id) order. */
+export interface RatingsMatchRecord {
+  day: number;
+  rating: MeltzerRating;
+  promotion: number;
+  participantOffset: number;
+  participantCount: number;
+  flags: number;
+  form: number;
+  /** Canonical card/event dictionary index. */
+  eventIndex: number;
+  /** Dictionary title index, or -1 when RATINGS_MATCH_FLAG.hasTitle is clear. */
+  title: number;
+  /** Canonical card placement, or -1 when hasPlacement is clear. */
+  placement: number;
+  matchIdIndex: number;
+  titleOffset: number;
+  titleCount: number;
+  reserved: number;
+}
+
+/** Decoded 4-byte `ratings/participants.bin` value. A match owns the range
+ * [participantOffset, participantOffset + participantCount), ordered w then l. */
+export interface RatingsParticipantRecord {
+  participantIndex: number;
+}
+
+/** Decoded 4-byte `ratings/titles.bin` value. */
+export interface RatingsTitleRecord {
+  titleIndex: number;
+}
+
+/** Decoded 28-byte sparse denominator record from `ratings/coverage.bin`.
+ * Persons count a participant at most once per match. `total` includes all
+ * canonical matches, whereas `rated` counts only matches whose `mr` is present. */
+export interface RatingsCoverageRecord {
+  kind: RatingsCoverageKind;
+  resolution: RatingsPeriodResolution;
+  reserved: number;
+  /** Dictionary index for kind, or RATINGS_GLOBAL_SUBJECT for global. */
+  subject: number;
+  periodKey: number;
+  total: number;
+  rated: number;
+  titleChanges: number;
+  approximate: number;
+}
+
+/** Decoded 72-byte sparse global/promotion aggregate from `ratings/lod.bin`.
+ * Its min/max/sum/median are direct match-sample statistics, never rollups of
+ * child aggregates. If rated is 0, all four floating values are exactly 0. */
+export interface RatingsLodRecord {
+  /** Promotion dictionary index, or RATINGS_GLOBAL_SUBJECT for global. */
+  promotion: number;
+  resolution: RatingsPeriodResolution;
+  periodStartDay: number;
+  periodEndDay: number;
+  periodKey: number;
+  total: number;
+  rated: number;
+  min: MeltzerRating;
+  max: MeltzerRating;
+  sum: number;
+  median: MeltzerRating;
+  fourPlus: number;
+  fivePlus: number;
+  approximate: number;
 }
 
 /* ------------------------------------------------------------- CHRONOLOGY

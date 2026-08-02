@@ -28,6 +28,7 @@
     "../../packages/graph-contract/src",
     "../../packages/renderer/src",
     "../../packages/geo-renderer/src",
-    "../../packages/morph-renderer/src"
+    "../../packages/morph-renderer/src",
+    "../../packages/ratings-renderer/src"
   ]
 }

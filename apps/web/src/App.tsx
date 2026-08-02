@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectomeRenderer } from "@kayfabe/renderer";
+import { dayToDate } from "@kayfabe/graph-contract";
 import { restoreFromUrl, useStore } from "./state/store";
 import { TimelineEngine } from "./timeline/TimelineEngine";
 import { LeftPanel } from "./ui/LeftPanel";
@@ -17,6 +18,9 @@ import { scheduler, useGeo } from "./geo/geoStore";
 import { MorphLab } from "./morph/MorphLab";
 import { useMorph } from "./morph/morphStore";
 import { applyPendingMorphUrl, installMorphUrl } from "./morph/morphUrl";
+import { RatingsLab } from "./ratings/RatingsLab";
+import { useRatings } from "./ratings/ratingsStore";
+import { applyPendingRatingsUrl, installRatingsUrl } from "./ratings/ratingsUrl";
 
 export function App() {
   const bootError = useStore((s) => s.bootError);
@@ -32,11 +36,10 @@ export function App() {
 
   // Playback follows the selection: choosing a wrestler and pressing play
   // replays that career.
-  // Morph owns the scope while mounted (a promotion network and a title
-  // lineage are scopes too), and restores this one on the way out.
+  // The semantic lenses own the scope while mounted and restore it on exit.
   const selection = useStore((s) => s.selection);
   useEffect(() => {
-    if (lens === "morph") return;
+    if (lens === "morph" || lens === "ratings") return;
     const id = selection?.kind === "node" && selection.id.startsWith("p:") ? selection.id : null;
     engineRef.current.setParticipant(id);
   }, [selection, lens]);
@@ -44,6 +47,7 @@ export function App() {
   useEffect(() => {
     installGeoUrl();
     installMorphUrl();
+    installRatingsUrl();
     void useStore.getState().boot();
     // Opening or pasting an old shared fragment into an already-running tab
     // is a same-document navigation, so boot does not run again. Restore it
@@ -59,6 +63,7 @@ export function App() {
       // restore the shared selection and silently ignore its camera/scope.
       if (activeLens === "morph") void applyPendingMorphUrl();
       else if (activeLens === "geo") void applyPendingGeoUrl();
+      else if (activeLens === "ratings") void applyPendingRatingsUrl();
       void useStore.getState().applyView();
     };
     window.addEventListener("hashchange", onHashChange);
@@ -70,6 +75,7 @@ export function App() {
   const geoActive = lens === "geo";
   const geoSheet = useGeo((s) => s.sheet);
   const morphSheet = useMorph((s) => s.sheet);
+  const ratingsSheet = useRatings((s) => s.sheet);
   useEffect(() => {
     if (!geoActive) return;
     void useGeo.getState().boot().then(() => applyPendingGeoUrl());
@@ -133,35 +139,59 @@ export function App() {
   }, []);
 
   const screenshot = useCallback(() => {
-    const r = rendererRef.current;
     const st = useStore.getState();
-    if (!r || !st.core) return;
-    const src = new Image();
-    src.onload = () => {
+    if (!st.core) return;
+    const yr = (d: number) => dayToDate(d).getUTCFullYear();
+    let capture: string | null = null;
+    let filename = "kayfabe-connectome.png";
+    let metadata = "";
+    if (st.lens === "ratings") {
+      const ratings = useRatings.getState();
+      capture = window.__kayfabeRatings?.screenshot() ?? null;
+      filename = "meltzer-ridge.png";
+      metadata = `MELTZER RATINGS · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ` +
+        `${ratings.controls.filters.ratingMin}–${ratings.controls.filters.ratingMax} reported rating · ` +
+        `${ratings.stats?.ratedMatches ?? 0} rated / ${(ratings.stats?.totalDocumentedMatches ?? 0).toLocaleString()} documented · ` +
+        `${((ratings.stats?.coverage ?? 0) * 100).toFixed(1)}% coverage · ${ratings.scopeLabel}`;
+    } else if (st.lens === "morph") {
+      capture = (window as typeof window & { __kayfabeMorph?: { screenshot(): string } }).__kayfabeMorph?.screenshot() ?? null;
+      filename = "kayfabe-morph-lab.png";
+      metadata = `MORPH LAB · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ${st.selection?.kind === "node" ? st.selection.id : "global tissue"}`;
+    } else if (st.lens === "geo") {
+      capture = (window as typeof window & { __kayfabeGeo?: { screenshot(): string } }).__kayfabeGeo?.screenshot() ?? null;
+      filename = "kayfabe-geo-replay.png";
+      metadata = `GEO REPLAY · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · local corpus geography`;
+    } else {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      capture = renderer.screenshot();
+      metadata = `KAYFABE CONNECTOME · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ` +
+        `${st.view?.visibleNodeCount ?? 0} entities / ${st.view?.visible.length ?? 0} relationships · ` +
+        `opposed=ember same-side=cyan title=gold · source: local corpus`;
+    }
+    if (!capture) {
+      st.announce("The active lens is still preparing its screenshot surface.");
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
       const c = document.createElement("canvas");
-      c.width = src.width;
-      c.height = src.height + 44;
+      c.width = image.width;
+      c.height = image.height + 44;
       const ctx = c.getContext("2d")!;
       ctx.fillStyle = "#04060b";
       ctx.fillRect(0, 0, c.width, c.height);
-      ctx.drawImage(src, 0, 0);
+      ctx.drawImage(image, 0, 0);
       ctx.fillStyle = "#8494ab";
       ctx.font = "12px ui-monospace, monospace";
-      const yr = (d: number) => new Date(Date.UTC(1950, 0, 1) + d * 86400000).getUTCFullYear();
-      ctx.fillText(
-        `KAYFABE CONNECTOME · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ` +
-          `${st.view?.visibleNodeCount ?? 0} entities / ${st.view?.visible.length ?? 0} relationships · ` +
-          `opposed=ember same-side=cyan title=gold · source: local corpus`,
-        12,
-        src.height + 27,
-      );
+      ctx.fillText(metadata, 12, image.height + 27, Math.max(1, c.width - 24));
       const a = document.createElement("a");
-      a.download = "kayfabe-connectome.png";
+      a.download = filename;
       a.href = c.toDataURL("image/png");
       a.click();
       st.announce("Screenshot downloaded.");
     };
-    src.src = r.screenshot();
+    image.src = capture;
   }, []);
 
   if (bootError) {
@@ -181,7 +211,7 @@ export function App() {
   }
 
   return (
-    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-morph-sheet={morphSheet}>
+    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-morph-sheet={morphSheet} data-ratings-sheet={ratingsSheet}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
@@ -190,6 +220,7 @@ export function App() {
         )}
         {model && lens === "connectome" && <RightPanel />}
         {model && lens === "morph" && <MorphLab engine={engineRef.current} />}
+        {model && lens === "ratings" && <RatingsLab engine={engineRef.current} />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
         {model && lens === "geo" && <GeoInspector />}

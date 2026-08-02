@@ -28,7 +28,8 @@ test.describe("vertical slice journey", () => {
     await expect(page.getByRole("complementary", { name: "Semantic inspector" })).toBeVisible();
     await page.getByRole("button", { name: "Close dossier" }).click();
     const lenses = page.getByRole("group", { name: "Lens" }).getByRole("button");
-    await expect(lenses).toHaveCount(3);
+    await expect(lenses).toHaveCount(4);
+    await expect(page.getByRole("button", { name: "Meltzer Ratings", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Atlas", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Table", exact: true })).toHaveCount(0);
   });
@@ -126,7 +127,8 @@ test.describe("vertical slice journey", () => {
     for (const [legacy, expected] of migrations) {
       await page.goto(`/#2/lens=${legacy}`);
       await expect(page.locator(".app")).toHaveAttribute("data-lens", expected, { timeout: 90000 });
-      await expect(page.getByRole("group", { name: "Lens" }).getByRole("button")).toHaveCount(3);
+      await expect(page.getByRole("group", { name: "Lens" }).getByRole("button")).toHaveCount(4);
+      await expect(page.getByRole("button", { name: "Meltzer Ratings", exact: true })).toBeVisible();
     }
   });
 });

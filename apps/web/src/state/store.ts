@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "morph" | "geo";
+export type Lens = "connectome" | "morph" | "geo" | "ratings";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -178,6 +178,8 @@ export const useStore = create<AppState>((set, get) => ({
     get().announce(
       lens === "geo"
         ? "Geo Replay beta — territory globe"
+        : lens === "ratings"
+          ? "Meltzer Ratings — reported ratings across wrestling history. Missing is not zero."
         : lens === "morph"
           ? "Morph Lab — the tissue reorganises around whatever you select."
           : "Connectome view",
@@ -427,6 +429,9 @@ export function registerGeoUrl(serialize: UrlSerializer, restore: UrlRestorer): 
 export function registerMorphUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("morph", { serialize, restore });
 }
+export function registerRatingsUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("ratings", { serialize, restore });
+}
 
 // v2: day numbers re-based to the 1900 epoch, promo bits widened — old
 // v1 fragments are ignored safely rather than restored wrong.
@@ -452,6 +457,10 @@ export function writeUrl(): void {
     if (s.lens === "morph") {
       const m = lensUrl.get("morph")?.serialize();
       if (m) for (const [k, v] of Object.entries(m)) push(k, v);
+    }
+    if (s.lens === "ratings") {
+      const r = lensUrl.get("ratings")?.serialize();
+      if (r) for (const [k, v] of Object.entries(r)) push(k, v);
     }
     push("focus", s.focusId);
     if (s.selection?.kind === "node") push("sel", s.selection.id);
@@ -545,7 +554,7 @@ export function restoreFromUrl(explicitHash?: string): void {
   // closest to Morph, tabular links return to Connectome, and geographic
   // tabular links remain in Geo Replay. Unknown values fail closed to Connectome.
   const restoredLens: Lens =
-    lensParam === "morph" || lensParam === "geo"
+    lensParam === "morph" || lensParam === "geo" || lensParam === "ratings"
       ? lensParam
       : lensParam === "atlas"
         ? "morph"

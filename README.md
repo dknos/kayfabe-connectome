@@ -3,6 +3,10 @@
 A database-first, time-aware, three-dimensional network of professional
 wrestling history, rendered as a living biological connectome.
 
+The production shell has four interoperable lenses: Connectome, Morph Lab,
+MELTZER RIDGE (`Meltzer Ratings`), and Geo Replay. Each secondary lens owns its
+renderer and camera while preserving the parked Connectome state.
+
 Clean-room fresh build. This repository does not reuse, copy, or extend any prior
 visualization project.
 
@@ -18,6 +22,10 @@ Merged corpus: **365,485 matches · 30,291 people · 571 promotions ·
 1947–2026**. Family csv rows crosswalk against the sqlite (98.7% hit) instead
 of duplicating it; misses are ledgered, never guessed (docs/DECISIONS.md
 D-007). No scraping. No other sources. Missing fields stay missing.
+
+Reported rating coverage is a separate deterministic canonical projection for
+the MELTZER RIDGE lens; it preserves present values exactly and never treats a
+missing rating as zero. See [MELTZER RIDGE](docs/MELTZER-RIDGE.md).
 
 ## Layout
 
@@ -39,6 +47,8 @@ pnpm db:doctor            Read-only audit of the source SQL database
 pnpm wrestlingdb:doctor   WrestlingDB API contract audit (redacted)
 pnpm data:materialize     Full materialization pipeline (~6s, deterministic)
 pnpm data:validate        Re-validate an existing materialized tree
+pnpm ratings:materialize  Rebuild only the MELTZER RIDGE projection
+pnpm ratings:validate     Validate the MELTZER RIDGE ratings projection
 pnpm dev                  Web app → http://127.0.0.1:9460
 pnpm test                 Vitest + pytest suites
 npx playwright test       Full journey suite (desktop / mobile / reduced-motion)

@@ -65,6 +65,8 @@ export function SearchBox() {
       announce(`Focused ${e.n} (${KIND_LABEL[e.t]})`);
     } else if (lens === "morph") {
       announce(`Organizing Morph Lab around ${e.n} (${KIND_LABEL[e.t]}).`);
+    } else if (lens === "ratings") {
+      announce(`Organizing Meltzer Ratings around ${e.n} (${KIND_LABEL[e.t]}). Ratings are reported where present; missing is not zero.`);
     } else if (lens === "connectome") {
       announce(`${e.n} (${KIND_LABEL[e.t]}) has no resident Connectome node; inspect it in Morph Lab.`);
     } else {

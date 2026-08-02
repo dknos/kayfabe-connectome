@@ -467,6 +467,13 @@ export class GeoReplayEngine {
     this.intentsDropped = 0;
   }
 
+  /** Capture the active globe, keeping screenshot routing lens-local. */
+  screenshot(): string {
+    if (this.destroyed || !this.viewer || this.viewer.isDestroyed()) return "";
+    this.viewer.scene.render();
+    return this.viewer.scene.canvas.toDataURL("image/png");
+  }
+
   /** Full teardown. Order matters: the app-created input handler first (the
    * canvas must still be attached), then the layers, then the viewer. */
   destroy(): void {
