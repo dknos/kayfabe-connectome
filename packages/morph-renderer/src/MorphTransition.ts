@@ -4,6 +4,7 @@ import type { MorphTraces } from "./MorphTraces";
 import {
   MORPH_MS,
   MORPH_REDUCED_MS,
+  TK,
   TRACE_SAMPLES,
   type MorphLayoutResult,
   type MorphRoute,
@@ -289,7 +290,9 @@ function overwriteSlotTarget(traces: MorphTraces, slot: number, route: MorphRout
       traces.color[v3] = route.color[0];
       traces.color[v3 + 1] = route.color[1];
       traces.color[v3 + 2] = route.color[2];
-      traces.width[v] = route.kind === 1 || route.kind === 2 ? -route.width : route.width;
+      traces.width[v] = route.kind === TK.CONTEXT_PROMO || route.kind === TK.CONTEXT_TITLE || route.kind === TK.BRIDGE
+        ? -route.width
+        : route.width;
       traces.kind[v] = route.kind;
       traces.delay[v] = 0.3;
     }

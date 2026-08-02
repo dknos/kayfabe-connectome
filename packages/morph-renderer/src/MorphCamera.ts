@@ -76,6 +76,8 @@ export class MorphCamera {
   onChange: (() => void) | null = null;
   /** fires when user input cancels an automated camera flight */
   onUserInput: (() => void) | null = null;
+  /** fires only when camera drag crosses its movement threshold or ends */
+  onDragChange: ((dragging: boolean) => void) | null = null;
 
   private view: MorphView = { ...DEFAULT_VIEW };
   private vw = 2;
@@ -86,6 +88,7 @@ export class MorphCamera {
   private pointers = new Map<number, PointerState>();
   private downAt: [number, number] | null = null;
   private dragDist = 0;
+  private dragReported = false;
   private pinchBase: { distancePx: number; cameraDistance: number; cx: number; cy: number } | null = null;
   private keys = new Set<string>();
 
@@ -96,6 +99,10 @@ export class MorphCamera {
   private right = new THREE.Vector3();
   private up = new THREE.Vector3();
   private forward = new THREE.Vector3();
+
+  get viewportHeight(): number {
+    return this.vh;
+  }
 
   constructor(el: HTMLElement) {
     this.el = el;
@@ -174,6 +181,7 @@ export class MorphCamera {
     if (!v) {
       this.keys.clear();
       this.pointers.clear();
+      this.setDragReported(false);
     }
   }
 
@@ -479,6 +487,7 @@ export class MorphCamera {
     p.x = e.clientX;
     p.y = e.clientY;
     if (this.downAt) this.dragDist = Math.max(this.dragDist, Math.hypot(e.clientX - this.downAt[0], e.clientY - this.downAt[1]));
+    if (this.dragDist > 2) this.setDragReported(true);
 
     if (this.pointers.size >= 2 && this.pinchBase) {
       const [a, b] = [...this.pointers.values()];
@@ -508,6 +517,7 @@ export class MorphCamera {
     if (this.pointers.size < 2) this.pinchBase = null;
     if (this.pointers.size === 0) {
       this.downAt = null;
+      this.setDragReported(false);
     }
   };
 
@@ -545,7 +555,19 @@ export class MorphCamera {
     e.stopPropagation();
   };
 
-  private onBlur = (): void => this.keys.clear();
+  private onBlur = (): void => {
+    this.keys.clear();
+    this.pointers.clear();
+    this.downAt = null;
+    this.pinchBase = null;
+    this.setDragReported(false);
+  };
+
+  private setDragReported(dragging: boolean): void {
+    if (this.dragReported === dragging) return;
+    this.dragReported = dragging;
+    this.onDragChange?.(dragging);
+  }
 }
 
 function editableTarget(t: EventTarget | null): boolean {

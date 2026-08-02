@@ -436,6 +436,7 @@ let urlWriteTimer: ReturnType<typeof setTimeout> | null = null;
 export function writeUrl(): void {
   if (urlWriteTimer) clearTimeout(urlWriteTimer);
   urlWriteTimer = setTimeout(() => {
+    urlWriteTimer = null;
     const s = useStore.getState();
     if (!s.model) return;
     const p: string[] = [URL_VERSION];
@@ -475,8 +476,15 @@ export function writeUrl(): void {
   }, 150);
 }
 
-export function restoreFromUrl(): void {
-  const hash = location.hash.replace(/^#/, "");
+export function restoreFromUrl(explicitHash?: string): void {
+  // A pasted/back-forward fragment is authoritative. Cancel a debounced write
+  // from the topology being left, otherwise it can replace the new fragment
+  // before the hashchange task gets to restore it.
+  if (urlWriteTimer) {
+    clearTimeout(urlWriteTimer);
+    urlWriteTimer = null;
+  }
+  const hash = (explicitHash ?? location.hash).replace(/^#/, "");
   if (!hash) return;
   const parts = hash.split("/");
   if (parts[0] !== URL_VERSION) return; // unknown version: ignore safely

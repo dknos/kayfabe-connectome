@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TRACE_SAMPLES, easeQuintic, elementProgress } from "./types";
+import { TK, TRACE_SAMPLES, easeQuintic, elementProgress } from "./types";
 
 /**
  * Active traces — organic fibers that become routed board traces.
@@ -255,7 +255,9 @@ export class MorphTraces {
         this.color[v3] = color[0];
         this.color[v3 + 1] = color[1];
         this.color[v3 + 2] = color[2];
-        this.width[v] = kind === 1 || kind === 2 ? -widthPx : widthPx;
+        this.width[v] = kind === TK.CONTEXT_PROMO || kind === TK.CONTEXT_TITLE || kind === TK.BRIDGE
+          ? -widthPx
+          : widthPx;
         this.alphaFrom[v] = alphaFrom;
         this.alphaTo[v] = alphaTo;
         this.kind[v] = kind;

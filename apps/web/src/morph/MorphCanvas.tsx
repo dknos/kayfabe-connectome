@@ -6,6 +6,7 @@ import { loadChampionships } from "../data/loader";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
 import { markMorphCameraTouched } from "./morphUrl";
+import { MorphHoverCard } from "./MorphHoverCard";
 import { useMorph } from "./morphStore";
 
 /**
@@ -52,10 +53,17 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
       hoverRelatedRef.current = [];
       useMorph.getState().leaveTissue();
       useStore.getState().select({ kind: "node", id: hit.id });
+      if (window.innerWidth <= 820) useMorph.getState().setSheet("inspector");
     };
     r.onHover = (id) => {
       const token = ++hoverResolveToken;
-      hoverRelatedRef.current = [];
+      const activeLayout = useMorph.getState().layout;
+      const hoveredBridge = activeLayout?.mode === "orbit"
+        ? activeLayout.orbitDetails?.bridges.find((bridge) => bridge.id === id)
+        : null;
+      hoverRelatedRef.current = hoveredBridge
+        ? hoveredBridge.supports.filter((support) => support.displayed).map((support) => support.intermediaryId)
+        : [];
       const shared = useStore.getState();
       shared.hover(id);
       const selected = shared.selection?.kind === "node" ? shared.selection.id : null;
@@ -81,7 +89,8 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
     };
     r.labels.onAction = (id, action) => {
       const st = useStore.getState();
-      if (action === "pin") st.togglePin(id);
+      if (action === "focus") r.focusId(id);
+      else if (action === "pin") st.togglePin(id);
       else if (action === "a") st.setPathEndpoint("a", st.pathA === id ? null : id);
       else if (action === "b") st.setPathEndpoint("b", st.pathB === id ? null : id);
       else {
@@ -89,6 +98,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         st.setLens("connectome");
         if (st.model?.indexOfId.has(id)) st.focus(id);
       }
+    };
+    r.labels.onFocusRestoreRequested = () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Fit active structure"]')?.focus({ preventScroll: true });
     };
     r.onLabelReport = (rep) => useMorph.getState().setLabelReport(rep.shown, rep.wanted);
     r.onTierChange = (t) => useMorph.getState().setTier(t);
@@ -264,35 +276,44 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
-    let hoverPending = false;
+    let pointerX = Number.NaN;
+    let pointerY = Number.NaN;
     const onMove = (e: PointerEvent) => {
-      if (hoverPending || e.buttons !== 0 || rendererRef.current?.cam.isDragging) return;
-      hoverPending = true;
-      requestAnimationFrame(() => {
-        hoverPending = false;
-        const r = rendererRef.current;
-        if (!r) return;
-        const rect = cv.getBoundingClientRect();
-        const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top);
-        r.onHover?.(hit?.id ?? null);
-        cv.style.cursor = hit ? "pointer" : "default";
-      });
+      const r = rendererRef.current;
+      if (!r) return;
+      const rect = cv.getBoundingClientRect();
+      pointerX = e.clientX - rect.left;
+      pointerY = e.clientY - rect.top;
+      if (e.pointerType === "touch") {
+        r.setTouchActive(true);
+        return;
+      }
+      r.setTouchActive(false);
+      const pointerType = e.pointerType === "pen" ? "pen" : "mouse";
+      r.requestHoverPick(pointerX, pointerY, pointerType);
     };
     let downAt: [number, number] | null = null;
     const onDown = (e: PointerEvent) => {
       downAt = [e.clientX, e.clientY];
+      const r = rendererRef.current;
+      if (e.pointerType === "touch") r?.setTouchActive(true);
     };
     const onUp = (e: PointerEvent) => {
       if (!downAt) return;
       const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
       downAt = null;
-      if (moved > 5 || e.button !== 0) return; // drag/right-pan = camera, not selection
       const r = rendererRef.current;
       const st = useStore.getState();
       if (!r) return;
       const rect = cv.getBoundingClientRect();
+      pointerX = e.clientX - rect.left;
+      pointerY = e.clientY - rect.top;
+      if (moved > 5 || e.button !== 0) {
+        if (e.pointerType !== "touch") r.requestHoverPick(pointerX, pointerY, e.pointerType === "pen" ? "pen" : "mouse");
+        return; // drag/right-pan = camera, not selection
+      }
       const slop = e.pointerType === "touch" ? 14 : 8;
-      const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top, slop);
+      const hit = r.pick(pointerX, pointerY, slop, e.pointerType === "touch" ? "touch" : "canvas");
       if (!hit) {
         // background: one semantic level up, never a history wipe
         useMorph.getState().ascend();
@@ -310,28 +331,46 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
       }
       useMorph.getState().leaveTissue();
       st.select({ kind: "node", id: hit.id });
+      if (e.pointerType === "touch") useMorph.getState().setSheet("inspector");
     };
     const onDbl = (e: MouseEvent) => {
       const r = rendererRef.current;
       const st = useStore.getState();
       if (!r) return;
       const rect = cv.getBoundingClientRect();
-      const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top);
+      const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top, 8, "canvas");
       if (hit) {
         // Double click is a Morph camera action; switching lenses is explicit.
         st.select({ kind: "node", id: hit.id });
         r.focusId(hit.id);
       }
     };
+    const onLeave = () => {
+      rendererRef.current?.leaveCanvasHover();
+      cv.style.cursor = "default";
+    };
+    const onCancel = () => {
+      downAt = null;
+      rendererRef.current?.cancelHover("cancel");
+      cv.style.cursor = "default";
+    };
+    const onBlur = () => rendererRef.current?.cancelHover("blur");
     cv.addEventListener("pointermove", onMove);
     cv.addEventListener("pointerdown", onDown);
     cv.addEventListener("pointerup", onUp);
+    cv.addEventListener("pointerleave", onLeave);
+    cv.addEventListener("pointercancel", onCancel);
     cv.addEventListener("dblclick", onDbl);
+    window.addEventListener("blur", onBlur);
     return () => {
       cv.removeEventListener("pointermove", onMove);
       cv.removeEventListener("pointerdown", onDown);
       cv.removeEventListener("pointerup", onUp);
+      cv.removeEventListener("pointerleave", onLeave);
+      cv.removeEventListener("pointercancel", onCancel);
       cv.removeEventListener("dblclick", onDbl);
+      window.removeEventListener("blur", onBlur);
+      rendererRef.current?.cancelHover("lens");
     };
   }, []);
 
@@ -348,8 +387,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
 
   return (
     <>
-      <canvas ref={canvasRef} className="morph-gl" aria-hidden="true" data-testid="morph-canvas" />
+      <canvas id="morph-map-surface" ref={canvasRef} className="morph-gl" aria-hidden="true" data-testid="morph-canvas" />
       <div ref={labelsRef} className="morph-labels" aria-label="Interactive Morph Lab labels" />
+      <MorphHoverCard rendererRef={rendererRef} />
       {rendererFailure && (
         <div className="boot morph-overlay morph-webgl-fallback" role="alert">
           <div className="inner">
@@ -375,12 +415,20 @@ function applyMorphViewport(
 ): void {
   renderer.resize();
   const narrow = window.innerWidth <= 820;
+  let bottomInset = 0;
+  if (narrow && sheet !== "hidden") {
+    const selector = sheet === "controls" ? "#morph-controls-panel" : "#morph-inspector-panel";
+    const panel = document.querySelector<HTMLElement>(selector);
+    const canvasRect = renderer.canvas.getBoundingClientRect();
+    const panelRect = panel?.getBoundingClientRect();
+    bottomInset = panelRect ? Math.max(0, Math.round(canvasRect.bottom - panelRect.top)) : Math.round(renderer.canvas.clientHeight * 0.46);
+  }
   renderer.labels.setPinInset(narrow ? 8 : 316);
   renderer.cam.setInsets({
     left: narrow ? 0 : 292,
     right: narrow ? 0 : 316,
     top: 0,
-    bottom: narrow && sheet !== "hidden" ? Math.round(window.innerHeight * 0.42) : 0,
+    bottom: bottomInset,
   });
   if (refit) {
     renderer.fitLayout(0.4);
@@ -410,13 +458,15 @@ function applyEmphasisFrom(r: MorphRenderer, hoverRelatedIds: readonly string[] 
   };
   const members = slotsAndVirtuals(semantic.members);
   const anchors = slotsAndVirtuals(semantic.anchors);
+  const pinned = slotsAndVirtuals(semantic.pinned);
   const selId = semantic.selected;
   r.applyEmphasis({
     selected: idx(selId),
     hovered: idx(semantic.hovered),
     selectedId: selId && idx(selId) < 0 ? selId : null,
     hoveredId: semantic.hovered && idx(semantic.hovered) < 0 ? semantic.hovered : null,
-    pinned: semantic.pinned.map(idx).filter((v) => v >= 0),
+    pinned: pinned.slots,
+    virtualPinned: pinned.virtuals,
     pathNodes: semantic.pathNodes.map(idx).filter((v) => v >= 0),
     hoverMembers: hoverRelatedIds.map(idx).filter((v) => v >= 0),
     members: members.slots,

@@ -48,8 +48,10 @@ export function App() {
     // Opening or pasting an old shared fragment into an already-running tab
     // is a same-document navigation, so boot does not run again. Restore it
     // here as well as at startup; replaceState writes do not emit hashchange.
-    const onHashChange = () => {
-      restoreFromUrl();
+    const onHashChange = (event: HashChangeEvent) => {
+      // Read the immutable event URL: an outgoing lens may still have a
+      // debounced replaceState queued when this same-document navigation fires.
+      restoreFromUrl(new URL(event.newURL).hash);
       const activeLens = useStore.getState().lens;
       // Lens restorers stage their own namespaced state because cold links may
       // arrive before lazy data. If the lens is already mounted, consume that

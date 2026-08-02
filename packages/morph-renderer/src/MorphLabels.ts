@@ -19,11 +19,12 @@ export interface MorphLabelReport {
 
 const CHAR_PX = 6.0;
 /** px-per-world thresholds where label content deepens */
-const ZOOM_SUB = 0.5;
-const ZOOM_DETAIL = 1.35;
+const ZOOM_SUB = 0.78;
+const ZOOM_DETAIL = 1.55;
 
 interface Live {
   el: HTMLDivElement;
+  primary: HTMLButtonElement | HTMLDivElement;
   name: HTMLSpanElement;
   sub: HTMLSpanElement;
   detail: HTMLSpanElement;
@@ -34,17 +35,23 @@ interface Live {
   detailText: string;
   badgeText: string;
   cls: string;
+  id: string | null;
 }
 
 export class MorphLabels {
   onPick: ((id: string) => void) | null = null;
-  onHover: ((id: string | null) => void) | null = null;
-  onAction: ((id: string, action: "pin" | "a" | "b" | "open") => void) | null = null;
+  onHoverSurface: ((id: string, source: "label" | "keyboard", phase: "enter" | "leave") => void) | null = null;
+  onTouch: (() => void) | null = null;
+  onAction: ((id: string, action: "focus" | "pin" | "a" | "b" | "open") => void) | null = null;
+  /** Fired before a topology change removes the currently focused label. */
+  onFocusRestoreRequested: ((removedId: string) => void) | null = null;
 
   private host: HTMLElement;
   private live = new Map<string, Live>();
   private pinInset = 12;
   private hoveredKey: string | null = null;
+  private rovingKey: string | null = null;
+  private suppressFocusHoverUntil = 0;
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -52,6 +59,13 @@ export class MorphLabels {
 
   setPinInset(px: number): void {
     this.pinInset = px;
+  }
+
+  /** Called once per topology generation so an old hovered pool entry cannot
+   * survive merely because its pointerleave event vanished with the layout. */
+  setLayoutKeys(specs: readonly MorphLabel[]): void {
+    if (this.hoveredKey && !specs.some((spec) => spec.key === this.hoveredKey)) this.hoveredKey = null;
+    if (this.rovingKey && !specs.some((spec) => spec.key === this.rovingKey)) this.rovingKey = null;
   }
 
   render(
@@ -67,6 +81,7 @@ export class MorphLabels {
 
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
     const used = new Set<string>();
+    const available = new Set(specs.map((spec) => spec.key));
     let shown = 0;
 
     for (const spec of sorted) {
@@ -116,6 +131,14 @@ export class MorphLabels {
       let l = this.live.get(spec.key);
       if (!l) {
         const el = document.createElement("div");
+        el.setAttribute("role", "group");
+        const primary = spec.pick ? document.createElement("button") : document.createElement("div");
+        primary.className = "mlabel-primary";
+        if (primary instanceof HTMLButtonElement) {
+          primary.type = "button";
+          primary.dataset.morphLabelPrimary = "true";
+          primary.tabIndex = -1;
+        }
         const name = document.createElement("span");
         name.className = "mlabel-name";
         const sub = document.createElement("span");
@@ -126,25 +149,66 @@ export class MorphLabels {
         badge.className = "mlabel-badge";
         const actions = document.createElement("div");
         actions.className = "mlabel-actions";
-        el.append(name, badge, sub, detail, actions);
+        primary.append(name, badge, sub, detail);
+        el.append(primary, actions);
         this.host.appendChild(el);
-        l = { el, name, sub, detail, badge, actions, text: "", subText: "", detailText: "", badgeText: "", cls: "" };
+        l = { el, primary, name, sub, detail, badge, actions, text: "", subText: "", detailText: "", badgeText: "", cls: "", id: spec.pick ?? null };
         this.live.set(spec.key, l);
         if (spec.pick) {
-          const id = spec.pick;
-          el.addEventListener("click", (e) => {
+          primary.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.onPick?.(id);
+            if (l?.id) this.onPick?.(l.id);
           });
-          el.addEventListener("pointerenter", () => {
+          el.addEventListener("pointerenter", (event) => {
+            if (event.pointerType === "touch") return;
             this.hoveredKey = spec.key;
-            this.onHover?.(id);
+            if (l?.id) this.onHoverSurface?.(l.id, "label", "enter");
           });
-          el.addEventListener("pointerleave", () => {
+          el.addEventListener("pointerleave", (event) => {
+            if (event.pointerType === "touch") return;
             this.hoveredKey = null;
-            this.onHover?.(null);
+            if (l?.id) this.onHoverSurface?.(l.id, "label", "leave");
+          });
+          el.addEventListener("pointerdown", (event) => {
+            if (event.pointerType === "touch") {
+              this.suppressFocusHoverUntil = performance.now() + 500;
+              this.onTouch?.();
+            }
+          });
+          el.addEventListener("pointerup", (event) => {
+            if (event.pointerType === "touch") this.suppressFocusHoverUntil = 0;
+          });
+          el.addEventListener("focusin", () => {
+            this.rovingKey = spec.key;
+            if (performance.now() < this.suppressFocusHoverUntil) {
+              this.suppressFocusHoverUntil = 0;
+              return;
+            }
+            if (l?.id) this.onHoverSurface?.(l.id, "keyboard", "enter");
+          });
+          el.addEventListener("focusout", (event) => {
+            if (event.relatedTarget instanceof Node && el.contains(event.relatedTarget)) return;
+            if (l?.id) this.onHoverSurface?.(l.id, "keyboard", "leave");
+          });
+          primary.addEventListener("keydown", (event) => {
+            const key = (event as KeyboardEvent).key;
+            if (key.toLowerCase() === "f" && !(event as KeyboardEvent).ctrlKey && !(event as KeyboardEvent).metaKey && !(event as KeyboardEvent).altKey) {
+              event.preventDefault();
+              if (l?.id) this.onAction?.(l.id, "focus");
+              return;
+            }
+            if (key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              primary.blur();
+              return;
+            }
+            if (key !== "ArrowLeft" && key !== "ArrowUp" && key !== "ArrowRight" && key !== "ArrowDown") return;
+            event.preventDefault();
+            this.moveRoving(spec.key, key === "ArrowLeft" || key === "ArrowUp" ? -1 : 1);
           });
           for (const [text, action, title] of [
+            ["FOCUS", "focus", "Focus camera on entity"],
             ["PIN", "pin", "Pin entity"],
             ["A", "a", "Set comparison A"],
             ["B", "b", "Set comparison B"],
@@ -153,19 +217,33 @@ export class MorphLabels {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "mlabel-action";
+            button.dataset.action = action;
             button.textContent = text;
             button.title = title;
             button.setAttribute("aria-label", title);
-            button.addEventListener("pointerdown", (event) => event.stopPropagation());
+            button.addEventListener("pointerdown", (event) => {
+              if (event.pointerType === "touch") {
+                this.suppressFocusHoverUntil = performance.now() + 500;
+                this.onTouch?.();
+              }
+              event.stopPropagation();
+            });
             button.addEventListener("click", (event) => {
               event.preventDefault();
               event.stopPropagation();
-              this.onAction?.(id, action);
+              if (l?.id) this.onAction?.(l.id, action);
             });
             actions.appendChild(button);
           }
         }
       }
+      l.id = spec.pick ?? null;
+      const personActions = !!spec.pick?.startsWith("p:");
+      for (const button of l.actions.querySelectorAll<HTMLButtonElement>("button[data-action='a'], button[data-action='b']")) {
+        button.hidden = !personActions;
+      }
+      if (spec.pick) l.el.dataset.morphId = spec.pick;
+      else delete l.el.dataset.morphId;
       if (l.text !== spec.text) {
         l.text = spec.text;
         l.name.textContent = spec.text;
@@ -191,6 +269,9 @@ export class MorphLabels {
         l.cls = cls;
         l.el.className = cls;
       }
+      if (l.primary instanceof HTMLButtonElement) {
+        l.primary.setAttribute("aria-label", labelAccessibleName(spec));
+      }
       // Pinning happened before collision testing, so the box we reserve is
       // exactly where the stable pooled element is drawn.
       const lx = Math.round(box.x0);
@@ -199,11 +280,18 @@ export class MorphLabels {
     }
 
     for (const [key, l] of this.live) {
-      if (!used.has(key) && key !== this.hoveredKey) {
+      if (!used.has(key) && (key !== this.hoveredKey || !available.has(key))) {
+        if (l.el.contains(document.activeElement)) {
+          if (l.id) this.onFocusRestoreRequested?.(l.id);
+          if (!this.host.hasAttribute("tabindex")) this.host.tabIndex = -1;
+          if (l.el.contains(document.activeElement)) this.host.focus({ preventScroll: true });
+          this.rovingKey = null;
+        }
         l.el.remove();
         this.live.delete(key);
       }
     }
+    this.updateRovingTabIndex(used);
     return { shown, wanted: specs.length };
   }
 
@@ -211,5 +299,40 @@ export class MorphLabels {
     for (const l of this.live.values()) l.el.remove();
     this.live.clear();
     this.hoveredKey = null;
+    this.rovingKey = null;
   }
+
+  private updateRovingTabIndex(used: ReadonlySet<string>): void {
+    if (!this.rovingKey || !used.has(this.rovingKey)) {
+      this.rovingKey = [...used].find((key) => this.live.get(key)?.primary instanceof HTMLButtonElement) ?? null;
+    }
+    for (const [key, live] of this.live) {
+      if (live.primary instanceof HTMLButtonElement) live.primary.tabIndex = key === this.rovingKey ? 0 : -1;
+    }
+  }
+
+  private moveRoving(fromKey: string, delta: -1 | 1): void {
+    const keys = [...this.live]
+      .filter(([, live]) => live.primary instanceof HTMLButtonElement && live.el.isConnected && live.el.style.opacity !== "0")
+      .map(([key]) => key);
+    const from = keys.indexOf(fromKey);
+    if (from < 0 || keys.length < 2) return;
+    const next = keys[(from + delta + keys.length) % keys.length]!;
+    this.rovingKey = next;
+    this.updateRovingTabIndex(new Set(keys));
+    const primary = this.live.get(next)?.primary;
+    if (primary instanceof HTMLButtonElement) primary.focus({ preventScroll: true });
+  }
+}
+
+function labelAccessibleName(spec: MorphLabel): string {
+  if (spec.accessibleName) return spec.accessibleName;
+  const entityType = spec.pick?.startsWith("p:") ? "person" :
+    spec.pick?.startsWith("pr:") ? "promotion" :
+    spec.pick?.startsWith("t:") ? "championship" : spec.badge || (
+    spec.tone === "promotion" ? "promotion" :
+    spec.tone === "gold" ? "championship" :
+    spec.tone === "person" || spec.tone === "cyan" || spec.tone === "ember" ? "person" : "entity"
+  );
+  return [spec.text, entityType, spec.roleDescription, spec.sub].filter(Boolean).join(", ");
 }

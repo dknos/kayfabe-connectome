@@ -934,6 +934,8 @@ describe("morph mode routing", () => {
     expect(morphModeFor("p:hero", "lineage", false)).toBe("loom"); // lineage needs a title
     expect(morphModeFor("t:1", "motherboard", false)).toBe("lineage");
     expect(morphModeFor("p:hero", "career", false)).toBe("career"); // valid override applies
+    expect(morphModeFor("p:hero", "orbit", false)).toBe("orbit"); // Orbit is a person topology
+    expect(morphModeFor("pr:a", "orbit", false)).toBe("motherboard"); // Orbit never coerces a promotion
     expect(morphModeFor("p:hero", "organic", false)).toBe("organic"); // organic is always allowed
   });
 });
