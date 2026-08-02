@@ -71,7 +71,7 @@ async function setTier(tier) {
 }
 
 async function promotionScope() {
-  const select = page.locator("select").filter({ hasText: "All visible promotions" });
+  const select = page.locator("select").filter({ hasText: "All promotions" });
   const chosen = (await select.locator("option").evaluateAll((nodes) => nodes.slice(1, 2).map((node) => ({ value: node.value, label: node.textContent ?? "" }))))[0];
   if (!chosen) throw new Error("no corpus-backed promotion option");
   await select.selectOption(chosen.value);
@@ -82,18 +82,22 @@ async function promotionScope() {
 }
 
 async function compareScope() {
-  // Compare deterministic promotion lanes so two exact records sharing the
-  // same first participant cannot accidentally select the same entity twice.
-  const ids = await page.evaluate(() => window.__kayfabeRatings.currentLayout.lanes
-    .map((lane) => lane.id)
-    .filter((id) => id.startsWith("pr:"))
-    .slice(0, 2));
+  const ids = await page.evaluate(() => {
+    const layout = window.__kayfabeRatings.currentLayout;
+    return Array.from(layout.opacity)
+      .map((opacity, index) => opacity > .7 ? layout.matchIds[index] : null)
+      .filter(Boolean)
+      .slice(0, 24);
+  });
   if (ids.length < 2) return false;
-  await page.evaluate(([a]) => window.__kayfabeRatings.hover.enterSurface("keyboard", `promotion:${a}`), ids);
-  await page.getByRole("button", { name: "Set comparison A" }).click();
-  await page.evaluate(([, b]) => window.__kayfabeRatings.hover.enterSurface("keyboard", `promotion:${b}`), ids);
-  await page.getByRole("button", { name: "Set comparison B" }).click();
+  await page.evaluate((id) => window.__kayfabeRatings.hover.enterSurface("keyboard", id), ids[0]);
+  await page.getByRole("button", { name: "Set A" }).click();
   const compare = page.getByRole("button", { name: "C · Compare A/B", exact: true });
+  for (const id of ids.slice(1)) {
+    await page.evaluate((candidate) => window.__kayfabeRatings.hover.enterSurface("keyboard", candidate), id);
+    await page.getByRole("button", { name: "Set B" }).click();
+    if (!await compare.isDisabled()) break;
+  }
   if (await compare.isDisabled()) return false;
   await compare.click();
   await settle("compare");
@@ -126,6 +130,12 @@ const appendSample = (sample) => {
 
 try {
   await open();
+  const globalContract = await page.evaluate(() => {
+    const layout = window.__kayfabeRatings.currentLayout;
+    return layout.lanes.length === 1 && layout.lanes[0].id === "global:chronology" &&
+      Array.from(layout.opacity).every((opacity, index) => opacity <= .01 || layout.positions[index * 3 + 2] === 0);
+  });
+  if (!globalContract) throw new Error("global performance scope is not the neutral time/rating chronology");
   for (const tier of ["high", "medium", "low"]) {
     await setTier(tier);
     await settle("promotions");
@@ -136,12 +146,12 @@ try {
   // Promotion focus intentionally leaves its evidence filter in place. Clear
   // that prior scope before constructing a person benchmark; otherwise a
   // truthful empty NJPW/Undertaker intersection has nothing to pick.
-  await page.locator("select").filter({ hasText: "All visible promotions" }).selectOption({ index: 0 });
+  await page.locator("select").filter({ hasText: "All promotions" }).selectOption({ index: 0 });
   await page.getByRole("combobox", { name: /Search people/ }).fill("The Undertaker");
   await page.locator('.search-pop [role="option"]').filter({ hasText: "The Undertaker" }).first().click({ force: true });
   await settle("career");
   appendSample(compact(await measure("career")));
-  await page.getByRole("button", { name: "1 · Promotion ridges", exact: true }).click();
+  await page.getByRole("button", { name: "1 · Time + rating", exact: true }).click();
   await settle("promotions");
   const compared = await compareScope();
   if (compared) appendSample(compact(await measure("compare")));

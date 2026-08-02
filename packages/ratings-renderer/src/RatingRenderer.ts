@@ -353,7 +353,10 @@ export class RatingRenderer {
   }
 
   fit(durationS = 0.72): void {
-    if (this.currentLayout) this.cam.overview(this.currentLayout.bounds, this.reducedMotion ? 0 : durationS);
+    if (!this.currentLayout) return;
+    const flight = this.reducedMotion ? 0 : durationS;
+    if (this.currentLayout.mode === "promotions") this.cam.chronology(this.currentLayout.bounds, flight);
+    else this.cam.overview(this.currentLayout.bounds, flight);
   }
 
   fitVisible(): void {

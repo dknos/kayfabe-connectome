@@ -35,7 +35,7 @@ async function chooseSearch(page: Page, name: string): Promise<void> {
 }
 
 async function scopeFromPromotionControl(page: Page): Promise<{ name: string }> {
-  const promotion = page.locator("select").filter({ hasText: "All visible promotions" });
+  const promotion = page.locator("select").filter({ hasText: "All promotions" });
   const options = await promotion.locator("option").evaluateAll((nodes) => nodes.slice(1).map((node) => ({ value: (node as HTMLOptionElement).value, label: node.textContent ?? "" })));
   expect(options.length).toBeGreaterThan(0);
   const chosen = options[0]!;
@@ -108,6 +108,11 @@ test.describe("Meltzer Ratings lens", () => {
         aggregates: renderer.visibleAggregateBins,
         range: renderer.ratingRange,
         coverage: renderer.coverageStats,
+        lanes: renderer.currentLayout.lanes.map((lane: any) => ({ id: lane.id, z: lane.z, basis: lane.coverageBasis })),
+        visibleDepths: Array.from(renderer.currentLayout.opacity as Float32Array)
+          .map((opacity: number, index: number) => opacity > 0.01 ? renderer.currentLayout.positions[index * 3 + 2] : null)
+          .filter((value: number | null) => value !== null),
+        aggregateEvidence: renderer.currentLayout.aggregates.slice(0, 3).map((bin: any) => ({ promotionId: bin.promotionId, basis: bin.coverageBasis })),
         files: performance.getEntriesByType("resource").map((entry) => entry.name)
           .filter((name) => name.includes("/data/ratings/")),
       };
@@ -115,6 +120,10 @@ test.describe("Meltzer Ratings lens", () => {
     expect(probe.exact).toBeGreaterThan(0);
     expect(probe.range[0]).toBeLessThan(probe.range[1]);
     expect(probe.coverage).toBeTruthy();
+    expect(probe.lanes).toEqual([{ id: "global:chronology", z: 0, basis: "global-denominator" }]);
+    expect(probe.visibleDepths.length).toBeGreaterThan(0);
+    expect(probe.visibleDepths.every((value: number) => value === 0)).toBe(true);
+    expect(probe.aggregateEvidence.every((bin: { promotionId: string | null; basis: string }) => bin.promotionId === null && bin.basis === "global-denominator")).toBe(true);
     expect(probe.files.length).toBeGreaterThan(before);
     for (const file of ["manifest.json", "dictionaries.json", "matches.bin", "participants.bin", "coverage.bin", "lod.bin", "histograms.json"]) {
       expect(probe.files.some((url) => url.endsWith(`/ratings/${file}`))).toBe(true);
@@ -230,7 +239,7 @@ test.describe("Meltzer Ratings lens", () => {
     await settled(page, "promotion");
     await expect(page.getByLabel("Ratings inspector")).toContainText(promotion.name);
 
-    await page.getByRole("button", { name: "1 · Promotion ridges", exact: true }).click();
+    await page.getByRole("button", { name: "1 · Time + rating", exact: true }).click();
     await settled(page, "promotions");
     const title = await scopeFromTitleLedger(page);
     await chooseSearch(page, title.name);
@@ -322,7 +331,7 @@ test.describe("Meltzer Ratings lens", () => {
     test.skip(isMobile || test.info().project.name !== "desktop", "desktop retarget cancellation journey");
     await boot(page);
     await openRatings(page);
-    const names = await page.locator("select").filter({ hasText: "All visible promotions" }).locator("option").evaluateAll((nodes) => nodes.slice(1, 6).map((node) => (node.textContent ?? "").replace(/ · \d+$/, "")));
+    const names = await page.locator("select").filter({ hasText: "All promotions" }).locator("option").evaluateAll((nodes) => nodes.slice(1, 6).map((node) => (node.textContent ?? "").replace(/ · \d+$/, "")));
     test.skip(names.length < 5, "current corpus did not expose five rated promotions");
     for (const name of names) await chooseSearch(page, name);
     await settled(page, "promotion", 45_000);

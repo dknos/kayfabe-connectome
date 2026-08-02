@@ -121,12 +121,12 @@ async function reset() {
   const details = page.locator("details.ratings-diagnostics");
   if (await details.getAttribute("open") === null) await details.locator("summary").click();
   await details.getByRole("button", { name: "Reset ratings controls" }).click();
-  await page.getByRole("button", { name: "1 · Promotion ridges", exact: true }).click();
+  await page.getByRole("button", { name: "1 · Time + rating", exact: true }).click();
   await waitRating("promotions");
 }
 
 async function promotionScope() {
-  const select = page.locator("select").filter({ hasText: "All visible promotions" });
+  const select = page.locator("select").filter({ hasText: "All promotions" });
   const options = await select.locator("option").evaluateAll((nodes) => nodes.slice(1).map((node) => ({ value: node.value, label: node.textContent ?? "" })));
   if (!options.length) throw new Error("ratings controls did not expose a rated promotion");
   const selected = options[0];
@@ -157,6 +157,21 @@ async function titleScope() {
 
 try {
   await open();
+  const globalContract = await page.evaluate(() => {
+    const layout = window.__kayfabeRatings.currentLayout;
+    const visibleDepths = Array.from(layout.opacity)
+      .map((opacity, index) => opacity > .01 ? layout.positions[index * 3 + 2] : null)
+      .filter((value) => value !== null);
+    return {
+      lanes: layout.lanes.map((lane) => ({ id: lane.id, z: lane.z, basis: lane.coverageBasis })),
+      allVisibleDepthsNeutral: visibleDepths.length > 0 && visibleDepths.every((value) => value === 0),
+      aggregatesGlobal: layout.aggregates.length > 0 && layout.aggregates.every((bin) => bin.promotionId === null && bin.coverageBasis === "global-denominator"),
+    };
+  });
+  if (JSON.stringify(globalContract.lanes) !== JSON.stringify([{ id: "global:chronology", z: 0, basis: "global-denominator" }]) ||
+      !globalContract.allVisibleDepthsNeutral || !globalContract.aggregatesGlobal) {
+    throw new Error(`global splash is not a promotion-neutral time/rating chronology: ${JSON.stringify(globalContract)}`);
+  }
   await capture("01-global", "promotions");
   if (MOBILE) {
     await page.getByRole("tab", { name: "Layout", exact: true }).click();
@@ -215,19 +230,22 @@ try {
     await capture("12-above-five", "promotions");
 
     await reset();
-    const comparisonPromotions = await page.evaluate(() => window.__kayfabeRatings.currentLayout.lanes
-      .map((lane) => lane.id)
-      .filter((id) => id.startsWith("pr:"))
-      .slice(0, 2));
-    if (comparisonPromotions.length < 2) throw new Error("global ridge did not expose two promotion lanes for comparison QA");
-    await page.evaluate((id) => window.__kayfabeRatings.hover.enterSurface("keyboard", `promotion:${id}`), comparisonPromotions[0]);
-    await page.locator(`[data-rating-hover="promotion:${comparisonPromotions[0]}"]`).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Set comparison A" }).click();
-    await page.evaluate((id) => window.__kayfabeRatings.hover.enterSurface("keyboard", `promotion:${id}`), comparisonPromotions[1]);
-    await page.locator(`[data-rating-hover="promotion:${comparisonPromotions[1]}"]`).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Set comparison B" }).click();
+    const firstComparisonMatch = await hover("exact");
+    await page.getByRole("button", { name: "Set A" }).click();
+    const comparisonCandidates = await page.evaluate((first) => {
+      const layout = window.__kayfabeRatings.currentLayout;
+      return Array.from(layout.opacity)
+        .map((opacity, index) => opacity > .7 && layout.matchIds[index] !== first ? layout.matchIds[index] : null)
+        .filter(Boolean)
+        .slice(0, 20);
+    }, firstComparisonMatch);
     const compare = page.getByRole("button", { name: "C · Compare A/B", exact: true });
-    if (await compare.isDisabled()) throw new Error("two distinct promotion comparison scopes did not enable Compare");
+    for (const candidate of comparisonCandidates) {
+      await page.evaluate((id) => window.__kayfabeRatings.hover.enterSurface("keyboard", id), candidate);
+      await page.getByRole("button", { name: "Set B" }).click();
+      if (!await compare.isDisabled()) break;
+    }
+    if (await compare.isDisabled()) throw new Error("distinct exact matches did not expose two comparison identities");
     await compare.click();
     await capture("13-compare", "compare");
   }

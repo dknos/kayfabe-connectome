@@ -29,6 +29,9 @@ export const RatingsHoverCard = forwardRef<HTMLDivElement, Props>(function Ratin
   const aggregate = hovered?.kind === "aggregate"
     ? layout?.aggregates.find((bin) => bin.key === hovered.id) ?? null
     : null;
+  const aggregateLane = aggregate
+    ? layout?.lanes.find((lane) => lane.z === aggregate.z) ?? null
+    : null;
   const promotionLane = hovered?.kind === "promotion"
     ? layout?.lanes.find((lane) => `promotion:${lane.id}` === hovered.id) ?? null
     : null;
@@ -100,11 +103,15 @@ export const RatingsHoverCard = forwardRef<HTMLDivElement, Props>(function Ratin
       ) : aggregate ? (
         <>
           <div className="rating-card-calibration"><strong>{aggregate.startDay === aggregate.endDay ? exactDate(aggregate.startDay) : `${yearOf(aggregate.startDay)} bin`}</strong><span>aggregate</span></div>
-          <div className="ratings-card-title">{promotionName(data!, aggregate.promotionId)}</div>
+          <div className="ratings-card-title">{aggregate.promotionId
+            ? promotionName(data!, aggregate.promotionId)
+            : aggregate.coverageBasis === "global-denominator"
+              ? "All reported ratings"
+              : aggregateLane?.name ?? "Current scope"}</div>
           <div className="ratings-card-meta num">{exactDate(aggregate.startDay)} → {exactDate(aggregate.endDay)}</div>
           <dl className="ratings-card-dl">
             <dt>Rated sample</dt><dd>{aggregate.ratedCount.toLocaleString()} matches</dd>
-            <dt>Coverage</dt><dd>{aggregate.coverageBasis === "promotion-denominator" && aggregate.coverageRatedCount !== null
+            <dt>Coverage</dt><dd>{aggregate.coverageBasis !== "derived-context-no-denominator" && aggregate.coverageRatedCount !== null
               ? formatCoverage(aggregate.coverageRatedCount, aggregate.totalCount)
               : "Not attributable to this derived context lane; see the scope denominator."}</dd>
             <dt>Reported range</dt><dd>{ratingStars(aggregate.min)} → {ratingStars(aggregate.max)}</dd>
@@ -113,7 +120,9 @@ export const RatingsHoverCard = forwardRef<HTMLDivElement, Props>(function Ratin
             <dt>Thresholds</dt><dd>{aggregate.fourPlus} at 4★+ · {aggregate.fivePlus} at 5★+</dd>
             <dt>Dates</dt><dd>{aggregate.approximateCount} approximate</dd>
           </dl>
-          <p className="ratings-emphasis-note">Height is the maximum reported rating. The thin embedded trace is the median. Chronological width is the bin span; ridge depth reflects rated-match density. This is not one match.</p>
+          <p className="ratings-emphasis-note">{aggregate.coverageBasis === "global-denominator"
+            ? "Height is the maximum reported rating. The thin embedded trace is the median. Chronological width is the bin span; depth is neutral in the global view. The rated sample and coverage counts are disclosed above. This is not one match."
+            : "Height is the maximum reported rating. The thin embedded trace is the median. Chronological width is the bin span; ridge depth reflects rated-match density. This is not one match."}</p>
           <div className="ratings-card-actions">
             <button type="button" onClick={() => zoomAggregate(aggregate.startDay, aggregate.endDay)}>Open exact matches</button>
           </div>

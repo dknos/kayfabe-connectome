@@ -93,7 +93,9 @@ export function RatingsInspector() {
             <dl className="ratings-detail-list">
               <dt>Promotion</dt><dd>{selected.promotionName}</dd>
               <dt>Event</dt><dd>{detail?.en || selected.eventName || (detailLoading ? "Loading canonical event…" : "Not reported")}</dd>
-              <dt>Card position</dt><dd>{selected.placement === null ? "Not reported; stable match-id offset used for same-day separation" : `Documented position ${selected.placement}`}</dd>
+              <dt>Card position</dt><dd>{selected.placement === null
+                ? scope.mode === "promotions" ? "Not reported" : "Not reported; stable match-id offset used for focused same-day separation"
+                : `Documented position ${selected.placement}`}</dd>
               <dt>Location</dt><dd>{detail?.loc || "Not reported"}</dd>
               <dt>Participants</dt><dd>{selected.participantNames.join(" · ")}</dd>
               <dt>Match form</dt><dd>{(detail?.form ?? selected.form).replaceAll("_", " ")}{detail?.stip ? ` · ${detail.stip}` : ""}</dd>
@@ -118,7 +120,9 @@ export function RatingsInspector() {
         <section className="ratings-disclosure" aria-label="Display disclosures">
           <h3>Display accounting</h3>
           {layout.notes.map((note) => <p key={note}>{note}</p>)}
-          <p>{layout.visibleExactMatches.toLocaleString()} exact peaks · {layout.visibleAggregateBins.toLocaleString()} aggregate bins · {layout.omittedPromotions.toLocaleString()} omitted promotion lanes · {shownLabels}/{layout.wantedLabels} labels shown.</p>
+          <p>{layout.visibleExactMatches.toLocaleString()} exact peaks · {layout.visibleAggregateBins.toLocaleString()} aggregate bins · {layout.mode === "promotions"
+            ? "one neutral chronology · no promotion ordering"
+            : `${layout.omittedPromotions.toLocaleString()} omitted promotion lanes`} · {shownLabels}/{layout.wantedLabels} labels shown.</p>
         </section>
       ) : null}
 
@@ -181,7 +185,7 @@ function SmallStat({ label, value }: { label: string; value: string }) {
 }
 
 function modeDescription(mode: ReturnType<typeof useRatings.getState>["scope"]["mode"]): string {
-  if (mode === "promotions") return "Stable promotion lanes ordered by full-corpus rated-match count.";
+  if (mode === "promotions") return "One global chronology: time determines horizontal position and exact reported rating determines height. Promotion does not determine position.";
   if (mode === "promotion") return "One expanded promotion on the same absolute chronological and rating scales.";
   if (mode === "career") return "Direct singles opponents receive named lanes; team and multi-person matches stay explicit context.";
   if (mode === "title") return "Rated title matches only; title match and documented title change remain distinct.";

@@ -29,10 +29,12 @@ interface LaneAssignment {
   laneName: string;
   z: number;
   selected: boolean;
+  global?: boolean;
   promotionIndex?: number;
 }
 
 const REQUIRED_PRIORITY = 1_000_000;
+const GLOBAL_CHRONOLOGY_LANE = "global:chronology";
 
 export function buildRatingLayout(input: RatingLayoutBuildInput): RatingLayoutBuildResult {
   const { data, controls, scope } = input;
@@ -95,7 +97,12 @@ export function buildRatingLayout(input: RatingLayoutBuildInput): RatingLayoutBu
     if (relevantToScope) sameDayOrdinal.set(key, ordinal + 1);
     positions[i * 3] = dayToWorldX(day, dayMin, dayMax);
     positions[i * 3 + 1] = 0;
-    positions[i * 3 + 2] = (lane?.z ?? fallbackZ) + sameDaySublaneOffset(id, data.exact.placement[i]! >= 0 ? data.exact.placement[i]! : null, ordinal);
+    // The landing chronology has only two positional variables: date and
+    // reported rating. Focused semantic views may use deterministic depth to
+    // separate otherwise overlapping evidence.
+    positions[i * 3 + 2] = scope.mode === "promotions"
+      ? 0
+      : (lane?.z ?? fallbackZ) + sameDaySublaneOffset(id, data.exact.placement[i]! >= 0 ? data.exact.placement[i]! : null, ordinal);
     if (kept.has(i) && lane) {
       const contextual = scope.mode !== "promotions" && !lane.selected;
       opacity[i] = contextual ? 0.24 + controls.context * 0.34 : 0.9;
@@ -108,14 +115,21 @@ export function buildRatingLayout(input: RatingLayoutBuildInput): RatingLayoutBu
   const lanes: RatingLaneVisual[] = assignments.map((lane) => {
     const promoMetric = lane.promotionIndex === undefined ? null : viewMetrics[lane.promotionIndex] ?? null;
     const laneIndices = filtered.filter((index) => laneKeyForMatch(input, index, assignments, stableMetrics) === lane.laneId);
+    const globalCoverage = lane.global
+      ? coverageTotals(data, COVERAGE_KIND.global, GLOBAL_SUBJECT, dayMin, dayMax)
+      : null;
     return {
       id: lane.laneId,
       name: lane.laneName,
       z: lane.z,
-      ratedCount: promoMetric?.rated ?? laneIndices.length,
-      totalCount: promoMetric?.total ?? 0,
+      ratedCount: globalCoverage?.rated ?? promoMetric?.rated ?? laneIndices.length,
+      totalCount: globalCoverage?.total ?? promoMetric?.total ?? 0,
       visibleRatedCount: laneIndices.length,
-      coverageBasis: promoMetric ? "promotion-denominator" : "derived-context-no-denominator",
+      coverageBasis: lane.global
+        ? "global-denominator"
+        : promoMetric
+          ? "promotion-denominator"
+          : "derived-context-no-denominator",
       selected: lane.selected,
     };
   });
@@ -127,13 +141,13 @@ export function buildRatingLayout(input: RatingLayoutBuildInput): RatingLayoutBu
   const stats = buildStats(input, filtered, kept, dayMin, dayMax, lanes);
   const notes: string[] = [];
   if (orderedVisible.length > kept.size) notes.push(`${orderedVisible.length - kept.size} exact rated matches are summarized at the ${input.tier} quality tier.`);
-  if (stableMetrics.filter((metric) => metric.rated > 0).length > lanes.length) notes.push(`${stableMetrics.filter((metric) => metric.rated > 0).length - lanes.length} promotion lanes are omitted from this view and remain available through search.`);
+  if (scope.mode !== "promotions" && stableMetrics.filter((metric) => metric.rated > 0).length > lanes.length) notes.push(`${stableMetrics.filter((metric) => metric.rated > 0).length - lanes.length} promotion lanes are omitted from this view and remain available through search.`);
   const outsideFilterRequired = [...kept].filter((index) => !filteredSet.has(index)).length;
   if (outsideFilterRequired) notes.push(`${outsideFilterRequired} locked, current, or pinned match remains visible outside the active filters so its identity is not lost.`);
   if (stats.coverageBoundaryApproximate) notes.push("Coverage denominator uses complete calendar months at partial-month filter boundaries.");
   if (scope.mode === "compare") notes.push("Comparison coverage is reported as A+B subject exposures; shared exact matches appear once in the ridge but belong to each side's denominator. Side ledgers disclose both denominators.");
-  if (controls.filters.form !== "all" || controls.filters.ppvOnly || controls.filters.titleMatchOnly || controls.filters.titleChangeOnly) {
-    notes.push("Form and event flags filter rated peaks; the coverage rail remains the documented all-match denominator for the same time and lane.");
+  if (controls.filters.promotionId || controls.filters.form !== "all" || controls.filters.ppvOnly || controls.filters.titleMatchOnly || controls.filters.titleChangeOnly) {
+    notes.push("Evidence filters affect rated peaks; the coverage rail remains the documented all-match denominator for the same time and scope.");
   }
   const minZ = lanes.length ? Math.min(...lanes.map((lane) => lane.z)) - 18 : -18;
   const maxZ = lanes.length ? Math.max(...lanes.map((lane) => lane.z)) + 18 : 18;
@@ -165,7 +179,9 @@ export function buildRatingLayout(input: RatingLayoutBuildInput): RatingLayoutBu
     ratingScale: RATING_WORLD.ratingScale,
     visibleExactMatches: kept.size,
     visibleAggregateBins: aggregates.length,
-    omittedPromotions: Math.max(0, stableMetrics.filter((metric) => metric.rated > 0).length - lanes.length),
+    omittedPromotions: scope.mode === "promotions"
+      ? 0
+      : Math.max(0, stableMetrics.filter((metric) => metric.rated > 0).length - lanes.length),
     wantedLabels: labels.length,
     notes,
   };
@@ -281,6 +297,15 @@ function assignLanes(
 ): LaneAssignment[] {
   const { data, scope, tier } = input;
   const cap = RATING_TIERS[tier].laneCap;
+  if (scope.mode === "promotions") {
+    return [{
+      laneId: GLOBAL_CHRONOLOGY_LANE,
+      laneName: "All reported ratings",
+      z: 0,
+      selected: true,
+      global: true,
+    }];
+  }
   if (scope.mode === "career" && scope.id) return careerLanes(input, filtered);
   if (scope.mode === "compare") return compareLanes(input);
   const ordered = sortedPromotionMetrics(input, stableMetrics, viewMetrics);
@@ -355,6 +380,7 @@ function compareLanes(input: RatingLayoutBuildInput): LaneAssignment[] {
 
 function laneKeyForMatch(input: RatingLayoutBuildInput, index: number, lanes: LaneAssignment[], metrics: PromotionMetric[]): string {
   const { data, scope } = input;
+  if (scope.mode === "promotions") return GLOBAL_CHRONOLOGY_LANE;
   if (scope.mode === "career" && scope.id) {
     const selected = data.participantIndexById.get(scope.id);
     const form = data.dictionaries.forms[data.exact.form[index]!];
@@ -394,8 +420,10 @@ function buildCoverageCells(data: RatingsData, lanes: RatingLaneVisual[], assign
   const yearWidth = (RATING_WORLD.xMax - RATING_WORLD.xMin) / Math.max(1, maxYear - minYear + 1);
   for (const lane of lanes) {
     const assignment = assignments.find((item) => item.laneId === lane.id);
-    if (assignment?.promotionIndex === undefined) continue;
-    const [start, end] = data.coverageRows(COVERAGE_KIND.promotion, assignment.promotionIndex, PERIOD.year);
+    if (!assignment || (!assignment.global && assignment.promotionIndex === undefined)) continue;
+    const coverageKind = assignment.global ? COVERAGE_KIND.global : COVERAGE_KIND.promotion;
+    const coverageSubject = assignment.global ? GLOBAL_SUBJECT : assignment.promotionIndex!;
+    const [start, end] = data.coverageRows(coverageKind, coverageSubject, PERIOD.year);
     let maxTotal = 1;
     for (let i = start; i < end; i++) {
       const year = data.coverage.periodKey[i]!;
@@ -410,7 +438,7 @@ function buildCoverageCells(data: RatingsData, lanes: RatingLaneVisual[], assign
       const x1 = dayToWorldX(Math.min(dayMax, yearEnd), dayMin, dayMax);
       cells.push({
         key: `coverage:${lane.id}:${year}`,
-        promotionId: lane.id,
+        promotionId: assignment.global ? null : lane.id,
         x: (x0 + x1) * 0.5,
         z: lane.z,
         width: Math.max(0.6, Math.min(yearWidth, x1 - x0)),
@@ -454,8 +482,9 @@ function buildMaterializedAggregates(
 ): RatingAggregateVisual[] {
   const bins: RatingAggregateVisual[] = [];
   for (const lane of assignments) {
-    if (lane.promotionIndex === undefined) continue;
-    const [rowStart, rowEnd] = data.lodRows(lane.promotionIndex, PERIOD.year);
+    if (!lane.global && lane.promotionIndex === undefined) continue;
+    const lodSubject = lane.global ? GLOBAL_SUBJECT : lane.promotionIndex!;
+    const [rowStart, rowEnd] = data.lodRows(lodSubject, PERIOD.year);
     for (let row = rowStart; row < rowEnd; row++) {
       const start = data.lod.startDay[row]!;
       const end = data.lod.endDay[row]!;
@@ -470,7 +499,7 @@ function buildMaterializedAggregates(
       const maximum = data.lod.max[row]!;
       bins.push({
         key: `bin:${lane.laneId}:${year}`,
-        promotionId: lane.laneId,
+        promotionId: lane.global ? null : lane.laneId,
         startDay: start,
         endDay: end,
         x: (x0 + x1) * 0.5,
@@ -481,7 +510,7 @@ function buildMaterializedAggregates(
         ratedCount: rated,
         coverageRatedCount: rated,
         totalCount: data.lod.total[row]!,
-        coverageBasis: "promotion-denominator",
+        coverageBasis: lane.global ? "global-denominator" : "promotion-denominator",
         min: data.lod.min[row]!,
         median,
         mean: data.lod.sum[row]! / rated,
@@ -515,10 +544,11 @@ function buildExactAggregates(input: RatingLayoutBuildInput, filtered: number[],
     const lane = assignments.find((item) => item.laneId === laneId);
     if (!lane) continue;
     const values = indices.map((index) => input.data.exact.rating[index]!);
-    const firstPromotion = input.data.exact.promotion[indices[0]!]!;
-    const sourceCoverage = lane.promotionIndex === undefined
-      ? null
-      : coverageYear(input.data, lane.promotionIndex, year);
+    const sourceCoverage = lane.global
+      ? coverageYear(input.data, COVERAGE_KIND.global, GLOBAL_SUBJECT, year)
+      : lane.promotionIndex === undefined
+        ? null
+        : coverageYear(input.data, COVERAGE_KIND.promotion, lane.promotionIndex, year);
     const start = Math.max(dayMin, isoToDay(`${year}-01-01`));
     const end = Math.min(dayMax, isoToDay(`${year}-12-31`));
     const x0 = dayToWorldX(start, dayMin, dayMax);
@@ -526,7 +556,7 @@ function buildExactAggregates(input: RatingLayoutBuildInput, filtered: number[],
     const median = exactMedian(values)!;
     bins.push({
       key: `bin:${laneId}:${year}`,
-      promotionId: input.data.dictionaries.promotions.id[firstPromotion]!,
+      promotionId: lane.global || lane.promotionIndex === undefined ? null : lane.laneId,
       startDay: start,
       endDay: end,
       x: (x0 + x1) * 0.5,
@@ -537,7 +567,11 @@ function buildExactAggregates(input: RatingLayoutBuildInput, filtered: number[],
       ratedCount: values.length,
       coverageRatedCount: sourceCoverage?.rated ?? null,
       totalCount: sourceCoverage?.total ?? 0,
-      coverageBasis: sourceCoverage ? "promotion-denominator" : "derived-context-no-denominator",
+      coverageBasis: lane.global
+        ? "global-denominator"
+        : sourceCoverage
+          ? "promotion-denominator"
+          : "derived-context-no-denominator",
       min: Math.min(...values),
       median,
       mean: mean(values)!,
@@ -551,8 +585,8 @@ function buildExactAggregates(input: RatingLayoutBuildInput, filtered: number[],
   return bins.sort((a, b) => a.z - b.z || a.startDay - b.startDay || stableOpaqueCompare(a.key, b.key));
 }
 
-function coverageYear(data: RatingsData, promotion: number, year: number): { total: number; rated: number } {
-  const [start, end] = data.coverageRows(COVERAGE_KIND.promotion, promotion, PERIOD.year);
+function coverageYear(data: RatingsData, kind: number, subject: number, year: number): { total: number; rated: number } {
+  const [start, end] = data.coverageRows(kind, subject, PERIOD.year);
   for (let i = start; i < end; i++) if (data.coverage.periodKey[i] === year) return { total: data.coverage.total[i]!, rated: data.coverage.rated[i]! };
   return { total: 0, rated: 0 };
 }
@@ -573,9 +607,9 @@ function buildLabels(
   for (let laneOrder = 0; laneOrder < lanes.length; laneOrder++) {
     const lane = lanes[laneOrder]!;
     const nearEdgeAnchor = laneOrder === 0;
-    const coverageSub = lane.coverageBasis === "promotion-denominator"
-      ? `${lane.ratedCount.toLocaleString()}/${lane.totalCount.toLocaleString()} source coverage${lane.visibleRatedCount !== lane.ratedCount ? ` · ${lane.visibleRatedCount.toLocaleString()} visible` : ""}`
-      : `${lane.visibleRatedCount.toLocaleString()} rated · derived context`;
+    const coverageSub = lane.coverageBasis === "derived-context-no-denominator"
+      ? `${lane.visibleRatedCount.toLocaleString()} rated · derived context`
+      : `${lane.ratedCount.toLocaleString()}/${lane.totalCount.toLocaleString()} ${lane.coverageBasis === "global-denominator" ? "global" : "source"} coverage${lane.visibleRatedCount !== lane.ratedCount ? ` · ${lane.visibleRatedCount.toLocaleString()} visible` : ""}`;
     const forceLane = nearEdgeAnchor
       || (input.scope.mode === "promotion" && lane.selected)
       || (input.scope.mode === "title" && lane.visibleRatedCount > 0)
@@ -593,9 +627,11 @@ function buildLabels(
       force: forceLane,
       tone: "lane",
       pick: lane.id.startsWith("pr:") ? `promotion:${lane.id}` : undefined,
-      accessibleName: lane.coverageBasis === "promotion-denominator"
-        ? `${lane.name} lane. ${lane.visibleRatedCount} visible rated matches. Promotion coverage is ${lane.ratedCount} source-rated matches of ${lane.totalCount} documented matches.`
-        : `${lane.name} derived context lane. ${lane.visibleRatedCount} visible rated matches. Its documented denominator is not attributed to this derived lane; use the scope inspector denominator.`,
+      accessibleName: lane.coverageBasis === "global-denominator"
+        ? `${lane.name}. ${lane.visibleRatedCount} visible rated matches. Global coverage is ${lane.ratedCount} source-rated matches of ${lane.totalCount} documented matches.`
+        : lane.coverageBasis === "promotion-denominator"
+          ? `${lane.name} lane. ${lane.visibleRatedCount} visible rated matches. Promotion coverage is ${lane.ratedCount} source-rated matches of ${lane.totalCount} documented matches.`
+          : `${lane.name} derived context lane. ${lane.visibleRatedCount} visible rated matches. Its documented denominator is not attributed to this derived lane; use the scope inspector denominator.`,
     });
   }
   const lo = Math.floor(Math.min(0, ratingMin));
@@ -688,7 +724,7 @@ function buildStats(input: RatingLayoutBuildInput, filtered: number[], kept: Set
     displayedMatches: kept.size,
     omittedMatches: Math.max(0, filtered.length - kept.size),
     displayedLanes: lanes.length,
-    omittedLanes: Math.max(0, data.exactByPromotion.size - lanes.length),
+    omittedLanes: scope.mode === "promotions" ? 0 : Math.max(0, data.exactByPromotion.size - lanes.length),
     dateSpan: days.length ? [Math.min(...days), Math.max(...days)] : null,
   };
 }
@@ -724,7 +760,7 @@ function scopeName(data: RatingsData, scope: RatingLayoutBuildInput["scope"]): s
     };
     return `${entityName(scope.compareA)} versus ${entityName(scope.compareB)}`;
   }
-  if (!scope.id) return "All rated promotions";
+  if (!scope.id) return "All reported ratings";
   if (scope.id.startsWith("pr:")) {
     const index = data.promotionIndexById.get(scope.id);
     return index === undefined ? scope.id : data.dictionaries.promotions.name[index]!;
