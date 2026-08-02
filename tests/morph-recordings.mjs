@@ -107,7 +107,7 @@ const showSheet = async (page, name) => {
   await page.getByRole("tab", { name, exact: true }).click({ timeout: 6000 });
 };
 
-const search = async (page, q, expectedName = q) => {
+const search = async (page, q, expectedName = q, waitForLayout = true) => {
   const box = page.getByRole("combobox", { name: /Search/ });
   await box.fill("");
   await box.fill(q);
@@ -120,10 +120,23 @@ const search = async (page, q, expectedName = q) => {
   }
   await option.click();
   await page.locator(".morph-crumbs").getByText(expectedName, { exact: true }).waitFor({ timeout: 10000 });
+  if (waitForLayout) {
+    await page.waitForFunction(
+      (name) => {
+        const r = window.__kayfabeMorph;
+        const layout = r?.currentLayout;
+        return !!layout?.anchorId && layout.labels.some(
+          (label) => label.pick === layout.anchorId && label.text === name,
+        );
+      },
+      expectedName,
+      { timeout: 30000 },
+    );
+  }
 };
 
 const rapidSearch = async (page, q, expectedName = q) => {
-  await search(page, q, expectedName);
+  await search(page, q, expectedName, false);
   await page.waitForTimeout(90);
 };
 

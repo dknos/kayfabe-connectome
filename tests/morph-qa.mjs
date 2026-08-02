@@ -73,7 +73,7 @@ const waitMode = (mode, settled = true) =>
 const exactText = (value) =>
   new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
 
-const search = async (query, expectedName = query) => {
+const search = async (query, expectedName = query, waitForLayout = true) => {
   const box = page.getByRole("combobox", { name: /Search/ });
   await box.fill("");
   await box.fill(query);
@@ -86,6 +86,19 @@ const search = async (query, expectedName = query) => {
   }
   await option.click();
   await page.locator(".morph-crumbs").getByText(expectedName, { exact: true }).waitFor({ timeout: 10000 });
+  if (waitForLayout) {
+    await page.waitForFunction(
+      (name) => {
+        const r = window.__kayfabeMorph;
+        const layout = r?.currentLayout;
+        return !!layout?.anchorId && layout.labels.some(
+          (label) => label.pick === layout.anchorId && label.text === name,
+        );
+      },
+      expectedName,
+      { timeout: 30000 },
+    );
+  }
 };
 
 const clickLabelAction = async (entityName, actionName) => {
@@ -220,7 +233,7 @@ if (!MOBILE) {
     ["The Rock", "The Rock"],
     ["Ric Flair", "Ric Flair"],
   ]) {
-    await search(query, expectedName);
+    await search(query, expectedName, false);
     await page.waitForTimeout(90);
   }
   await waitMode("loom");

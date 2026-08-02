@@ -8,34 +8,54 @@
  *
  *   node tests/geo-visual-qa.mjs [outDir]
  *
- * A dev server must already be running on 127.0.0.1:9460.
+ * ENV: KAYFABE_BASE_URL, QA_VIEWPORT (optional exact viewport name),
+ * QA_CHROMIUM_EXECUTABLE, QA_REQUIRE_HARDWARE=1.
  */
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 const OUT = process.argv[2] ?? "test-results/geo-visual-qa";
 mkdirSync(OUT, { recursive: true });
+const BASE = process.env.KAYFABE_BASE_URL ?? "http://127.0.0.1:9460/";
+const REQUIRE_HARDWARE = process.env.QA_REQUIRE_HARDWARE === "1";
+const ONLY_VIEWPORT = process.env.QA_VIEWPORT ?? null;
 
 const VIEWPORTS = [
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "1440x900", width: 1440, height: 900 },
   { name: "1366x768", width: 1366, height: 768 },
   { name: "390x844", width: 390, height: 844, mobile: true },
-];
+].filter((viewport) => !ONLY_VIEWPORT || viewport.name === ONLY_VIEWPORT);
+if (VIEWPORTS.length === 0) throw new Error(`Unknown QA_VIEWPORT: ${ONLY_VIEWPORT}`);
 
 const browser = await chromium.launch({
-  args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  ...(process.env.QA_CHROMIUM_EXECUTABLE
+    ? { executablePath: process.env.QA_CHROMIUM_EXECUTABLE }
+    : {}),
+  args: ["--use-gl=angle", "--enable-webgl", "--ignore-gpu-blocklist"],
 });
 
 const problems = [];
 
 async function openGeo(page) {
-  await page.goto("http://127.0.0.1:9460/", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!document.querySelector(".topbar"), { timeout: 120000 });
   await page.waitForSelector("canvas.gl", { timeout: 90000 });
   await page.getByRole("button", { name: "Geo Replay" }).click();
   await page.waitForFunction(() => !!window.__kayfabeGeo, { timeout: 120000 });
   await page.waitForTimeout(2500);
+  const gpu = await page.evaluate(() => {
+    const canvas = document.querySelector(".geo-globe canvas");
+    const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
+    const debug = gl?.getExtension("WEBGL_debug_renderer_info");
+    return gl
+      ? String(debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER))
+      : "unavailable";
+  });
+  if (REQUIRE_HARDWARE && /unavailable|swiftshader|llvmpipe|software/i.test(gpu)) {
+    throw new Error(`software WebGL renderer rejected: ${gpu}`);
+  }
+  console.log(`  GPU: ${gpu}`);
 }
 
 async function pickPromotion(page, name) {
@@ -74,6 +94,10 @@ for (const vp of VIEWPORTS) {
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  page.on("requestfailed", (request) => errors.push(`requestfailed: ${request.url()} — ${request.failure()?.errorText}`));
+  page.on("response", (response) => {
+    if (response.status() >= 400) errors.push(`http ${response.status()}: ${response.url()}`);
+  });
 
   await openGeo(page);
   await shot(page, "01-corpus-world", vp);
