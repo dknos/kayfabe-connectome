@@ -607,11 +607,16 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   transition: opacity 0.18s linear;
 }
 .mlabel.pickable { pointer-events: auto; cursor: pointer; }
+.mlabel-primary {
+  appearance: none; border: 0; padding: 0; background: none; color: inherit;
+  font: inherit; display: flex; align-items: baseline; gap: 5px;
+  -webkit-text-stroke: inherit; text-shadow: inherit; cursor: pointer;
+}
+.mlabel-primary:focus-visible {
+  outline: 2px solid var(--same); outline-offset: 3px; border-radius: 2px;
+}
 .mlabel.pickable:hover {
   color: var(--select); z-index: 4;
-  background: rgba(4, 8, 14, 0.94);
-  outline: 1px solid var(--stroke-bright);
-  padding: 3px 5px 30px;
   -webkit-text-stroke-width: 1.5px;
 }
 .mlabel-name { font-weight: 500; }
@@ -639,9 +644,10 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
 .mlabel.force .mlabel-name { font-size: 13px; letter-spacing: 0.03em; }
 .mlabel-actions {
   display: none; position: absolute; left: 4px; top: 28px;
-  align-items: center; gap: 3px; -webkit-text-stroke: 0;
+  align-items: center; gap: 3px; padding: 3px;
+  border: 1px solid var(--stroke-bright); border-radius: 2px;
+  background: rgba(4, 8, 14, .96); -webkit-text-stroke: 0;
 }
-.mlabel.pickable:hover .mlabel-actions,
 .mlabel.pickable:focus-within .mlabel-actions { display: flex; }
 .mlabel-action {
   min-width: 22px; height: 18px; padding: 0 4px;
@@ -657,18 +663,27 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   display: flex; align-items: center; gap: 4px;
   padding: 4px 10px;
   background: var(--panel-bg); backdrop-filter: var(--panel-blur);
-  border: 1px solid var(--stroke); border-radius: 999px;
+  border: 1px solid var(--stroke); border-radius: 3px;
   max-width: min(70vw, 900px); overflow: hidden;
 }
 .morph-crumbs .crumb {
-  background: transparent; border: 0; padding: 2px 6px; border-radius: 999px;
+  background: transparent; border: 0; padding: 2px 4px; border-radius: 2px;
   color: var(--text-dim); font-size: 11px; white-space: nowrap; cursor: pointer;
 }
 .morph-crumbs .crumb:hover { color: var(--text); }
 .morph-crumbs .crumb.here { color: var(--text); font-weight: 600; }
+.morph-crumbs .crumb.entity { cursor: default; overflow: hidden; text-overflow: ellipsis; }
 .morph-crumbs .sep { color: var(--text-faint); }
 
 .morph-rail { z-index: 20; }
+.app[data-lens="morph"] .morph-rail .panel {
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: rgba(6, 10, 17, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow-y: visible;
+}
 .app[data-lens="morph"] .rail {
   overflow-y: auto; overflow-x: hidden; pointer-events: auto;
   scrollbar-width: thin; scrollbar-color: var(--stroke) transparent;
@@ -681,25 +696,127 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
 }
 .morph-tissue-btn:hover:not(:disabled) { border-color: var(--same); }
 .morph-tissue-btn:disabled { opacity: 0.45; cursor: default; }
-.morph-layouts { display: flex; flex-wrap: wrap; gap: 5px; }
+.morph-kicker { margin: 0 0 12px; line-height: 1.55; }
+.morph-control-heading { margin: 11px 0 5px; color: var(--text-dim); }
+.morph-layouts { display: flex; flex-wrap: wrap; gap: 4px; }
+.morph-view-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .morph-layouts button, .morph-spatial-actions button {
+  min-height: 30px; padding: 4px 7px;
   border-radius: 2px; background: #070c14; border-color: var(--stroke-bright);
 }
-.morph-layouts button.active { color: var(--select); border-color: var(--same); }
+.morph-layouts button.active {
+  color: var(--select); border-color: var(--same);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--same) 72%, transparent);
+}
+.morph-layouts button:disabled, .morph-spatial-actions button:disabled { opacity: 0.38; cursor: not-allowed; }
 .morph-spatial-actions { display: flex; gap: 5px; margin-top: 6px; }
+.morph-spatial-actions button:last-child { flex: 1; }
+.morph-requirement { margin: 5px 0 0; color: var(--text-faint); }
+.morph-entity-mode {
+  display: flex; align-items: center; gap: 8px;
+  border-top: 1px solid var(--stroke); border-bottom: 1px solid var(--stroke);
+  padding: 7px 2px; font-family: var(--font-data); font-size: 11px;
+}
+.morph-mode-explanation { margin: 8px 0 0; color: var(--text-dim); font-size: 11px; line-height: 1.45; }
 .morph-mode-readout { margin-top: 8px; letter-spacing: 0.08em; text-transform: uppercase; }
-.morph-mode-readout .status-dot {
+.status-dot, .morph-mode-readout .status-dot {
   display: inline-block; width: 5px; height: 5px; margin-right: 4px;
   background: var(--same); box-shadow: 0 0 8px color-mix(in srgb, var(--same) 50%, transparent);
 }
+.morph-reading-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; margin-bottom: 8px; background: var(--stroke);
+  border: 1px solid var(--stroke);
+}
+.morph-reading-grid > div {
+  min-width: 0; padding: 6px 7px; background: #070c14;
+  display: flex; flex-direction: column;
+}
+.morph-reading-grid .num { color: var(--text); font-size: 12px; }
+.morph-reading-grid div span:last-child {
+  color: var(--text-faint); font-family: var(--font-data); font-size: 8px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.quality-note { color: var(--caution); }
+.morph-coverage-summary { margin: 7px 0; padding-left: 8px; border-left: 2px solid var(--stroke-bright); }
+.morph-coverage-notes { margin: 5px 0 8px; border-top: 1px solid var(--stroke); padding-top: 5px; }
+.morph-coverage-notes summary { color: var(--text-dim); cursor: pointer; font-size: 10px; }
+.morph-reading-panel .derivation-note,
+.morph-orbit-summary .derivation-note {
+  font-family: var(--font-ui); font-size: 10.5px; line-height: 1.45;
+  letter-spacing: .01em; text-transform: none; color: var(--text-dim);
+}
+.morph-legend-grid { display: grid; gap: 5px; color: var(--text-dim); font-size: 10px; }
+.morph-legend-grid > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; }
 .morph-legend .sw {
   display: inline-block; width: 12px; height: 3px; vertical-align: middle;
   border-radius: 2px;
+}
+.morph-legend-grid .sw {
+  display: inline-block; width: 13px; height: 3px; border-radius: 1px;
 }
 .morph-legend .sw.ember { background: var(--opposed); }
 .morph-legend .sw.cyan { background: var(--same); }
 .morph-legend .sw.br { background: #8f7a52; }
 .morph-legend .sw.gold { background: var(--gold); }
+.sw.ember { background: var(--opposed); }
+.sw.cyan { background: var(--same); }
+.sw.br { background: #8f7a52; }
+.sw.gold { background: var(--gold); }
+.sw.core { height: 7px; background: var(--select); box-shadow: 0 0 6px rgba(255,255,255,.55); }
+.sw.direct { border: 1px solid var(--same); background: transparent; }
+.sw.bridge { border-top: 1px dashed var(--text-dim); background: transparent; }
+.sw.mixed { background: linear-gradient(90deg, var(--opposed) 0 48%, var(--same) 52% 100%); }
+.sw.promotion { border-top: 2px solid var(--text-dim); background: transparent; }
+.sw.quiet { border-top: 1px dashed var(--text-faint); background: transparent; }
+.sw.route { background: var(--same-soft); }
+.legend-equation { margin: 4px 0 0; padding-top: 7px; border-top: 1px solid var(--stroke); line-height: 1.5; }
+.morph-help { margin-top: 10px; border-top: 1px solid var(--stroke); padding-top: 7px; }
+.morph-help summary { color: var(--text-dim); cursor: pointer; font-size: 10px; }
+.morph-help p { margin-bottom: 0; line-height: 1.6; }
+.morph-hover-peek { border-left: 2px solid var(--same) !important; }
+.morph-peek-heading { display: flex; gap: 8px; align-items: baseline; }
+.morph-peek-heading strong { min-width: 0; overflow-wrap: anywhere; }
+.morph-peek-heading span {
+  margin-left: auto; color: var(--text-faint); font-family: var(--font-data);
+  font-size: 8px; letter-spacing: .1em; text-transform: uppercase;
+}
+.morph-hover-peek p { margin: 6px 0; color: var(--text-dim); }
+.morph-hover-card {
+  position: absolute; top: 0; left: 0; z-index: 25;
+  width: min(304px, calc(100vw - 24px)); max-height: min(360px, calc(100% - 24px));
+  overflow: auto; visibility: hidden; pointer-events: auto;
+  padding: 10px; border: 1px solid var(--stroke-bright); border-left: 2px solid var(--same);
+  border-radius: 3px; background: rgba(5, 9, 15, .97);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .44);
+  will-change: transform;
+}
+/* Keyboard label navigation owns a compact sibling action tray and the
+   persistent Inspector Hover Peek. Suppress the floating pointer card while
+   that tray has focus so it can never cover its own accessible controls. */
+body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
+.morph-hover-card-heading { display: flex; align-items: baseline; gap: 8px; }
+.morph-hover-card-heading strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.morph-hover-card-heading span {
+  margin-left: auto; color: var(--text-faint); font: 8px/1 var(--font-data);
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.morph-hover-card p { margin: 6px 0; }
+.morph-hover-why { color: var(--text-dim); }
+.morph-hover-card .morph-hover-caveat { color: var(--caution); line-height: 1.45; }
+.morph-hover-actions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--stroke);
+}
+.morph-hover-actions button {
+  min-height: 30px; padding: 4px 6px; border-radius: 2px;
+  background: #070c14; border-color: var(--stroke-bright); font-size: 10px;
+}
+.morph-hover-actions button[aria-pressed="true"] { border-color: var(--same); color: var(--same-soft); }
+.morph-orbit-summary {
+  margin: 0 0 10px; padding: 0 0 9px; border-bottom: 1px solid var(--stroke);
+}
+.morph-orbit-summary h3 { margin: 0 0 7px; }
 .morph-overlay {
   position: absolute; inset: 0; z-index: 28; pointer-events: none;
 }
@@ -724,8 +841,9 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   }
   .app[data-lens="morph"] .rail.left { display: flex; }
   .app[data-lens="morph"] .morph-rail {
-    position: absolute; left: 0; right: 0; bottom: 38px; top: auto;
-    width: 100%; max-height: 44vh; overflow-y: auto;
+    position: absolute; left: 0; right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom)); top: auto;
+    width: 100%; max-height: 38vh; overflow-y: auto;
     border-top: 1px solid var(--stroke-bright);
     background: var(--panel-bg); backdrop-filter: var(--panel-blur);
   }
@@ -734,6 +852,18 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
   .app[data-lens="morph"][data-morph-sheet="hidden"] .rail.left,
   .app[data-lens="morph"][data-morph-sheet="hidden"] .rail.right { display: none; }
   .morph-crumbs { top: 6px; max-width: 94vw; font-size: 10px; }
+  .morph-view-switch button,
+  .morph-spatial-actions button,
+  .morph-sheet-tabs button { min-height: 44px; }
+  .morph-spatial-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .morph-spatial-actions button:last-child { grid-column: 1 / -1; }
+  .morph-reading-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .morph-reading-grid > div { padding: 6px 5px; }
+  .morph-mode-explanation { font-size: 12px; }
+  .morph-hover-card {
+    width: min(300px, calc(100vw - 16px)); max-height: 44vh;
+  }
+  .morph-hover-actions button { min-height: 44px; }
   .mlabel { font-size: 10px; }
   .mlabel-name {
     max-width: calc(100vw - 22px);
@@ -741,5 +871,8 @@ input[type="checkbox"], input[type="range"] { accent-color: var(--same); }
     text-overflow: ellipsis;
   }
   .mlabel-detail { display: none; }
-  .morph-sheet-tabs { display: flex; }
+  .morph-sheet-tabs {
+    display: flex;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
 }

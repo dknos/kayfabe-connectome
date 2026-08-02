@@ -5,6 +5,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { MorphCamera } from "./MorphCamera";
 import { writeMorphEmphasis } from "./emphasis";
+import { MorphHoverController, type MorphHoverSnapshot } from "./MorphHoverController";
 import { MorphLabels, type MorphLabelReport } from "./MorphLabels";
 import { MorphNodes } from "./MorphNodes";
 import { pickAt } from "./MorphPicking";
@@ -15,6 +16,9 @@ import { MorphTransition } from "./MorphTransition";
 import { M, rgb, type RGB } from "./palette";
 import {
   MORPH_TIERS,
+  ME,
+  MR,
+  TK,
   TRACE_SAMPLES,
   easeQuintic,
   elementProgress,
@@ -24,6 +28,8 @@ import {
   type MorphLayoutResult,
   type MorphMode,
   type MorphPickResult,
+  type MorphPickDiagnostic,
+  type MorphPickSource,
   type MorphTier,
 } from "./types";
 
@@ -42,9 +48,11 @@ export class MorphRenderer {
   readonly scene: THREE.Scene;
   readonly cam: MorphCamera;
   readonly labels: MorphLabels;
+  readonly hover = new MorphHoverController();
 
   onPick: ((hit: MorphPickResult | null) => void) | null = null;
   onHover: ((id: string | null) => void) | null = null;
+  onHoverState: ((state: MorphHoverSnapshot) => void) | null = null;
   onLabelReport: ((r: MorphLabelReport) => void) | null = null;
   onTierChange: ((t: MorphTier) => void) | null = null;
   onCameraChange: (() => void) | null = null;
@@ -53,6 +61,16 @@ export class MorphRenderer {
   /** QA seams */
   mode: MorphMode = "organic";
   frameTimeMs = 0;
+  readonly lastPickDiagnostic: MorphPickDiagnostic = {
+    id: null,
+    source: "programmatic",
+    candidateCount: 0,
+    durationMs: 0,
+    normalizedDistance: Infinity,
+    depth: Infinity,
+    semanticPriority: ME.AMBIENT,
+    layoutRole: MR.BACKGROUND,
+  };
 
   private nodes!: MorphNodes;
   private traces = new MorphTraces(MORPH_TIERS.high.traceCap);
@@ -72,6 +90,14 @@ export class MorphRenderer {
   private labelByPick = new Map<string, number>();
   private hoveredLabelIndex = -1;
   private labelReport: MorphLabelReport = { shown: 0, wanted: 0 };
+  private pickRoles = new Uint8Array(0);
+  private activePickSlots = new Int32Array(0);
+  private activePickCount = 0;
+  private lastHoverId: string | null = null;
+  private hoverPickRaf = 0;
+  private hoverPointerX = Number.NaN;
+  private hoverPointerY = Number.NaN;
+  private hoverPointerType: "mouse" | "pen" | "touch" = "mouse";
 
   private clock = new THREE.Clock();
   private raf = 0;
@@ -121,9 +147,31 @@ export class MorphRenderer {
     this.scene = new THREE.Scene();
     this.cam = new MorphCamera(canvas);
     this.cam.onChange = () => this.onCameraChange?.();
+    this.cam.onDragChange = (dragging) => {
+      this.hover.setDragging(dragging);
+      if (dragging) {
+        if (this.hoverPickRaf) cancelAnimationFrame(this.hoverPickRaf);
+        this.hoverPickRaf = 0;
+      } else if (Number.isFinite(this.hoverPointerX) && Number.isFinite(this.hoverPointerY)) {
+        this.requestHoverPick(this.hoverPointerX, this.hoverPointerY, this.hoverPointerType);
+      }
+    };
     this.labels = new MorphLabels(labelHost);
     this.labels.onPick = (id) => this.onPick?.({ id, kind: "node" });
-    this.labels.onHover = (id) => this.onHover?.(id);
+    this.labels.onHoverSurface = (id, source, phase) => {
+      if (phase === "enter") {
+        if (source === "label") this.hover.setTouchActive(false);
+        this.hover.enterSurface(source, id);
+      }
+      else this.hover.leaveSurface(source, id);
+    };
+    this.labels.onTouch = () => this.hover.setTouchActive(true);
+    this.hover.onChange = (state) => {
+      this.onHoverState?.(state);
+      if (state.id === this.lastHoverId) return;
+      this.lastHoverId = state.id;
+      this.onHover?.(state.id);
+    };
 
     this.scene.add(this.regions.mesh);
     this.scene.add(this.traces.mesh);
@@ -149,6 +197,7 @@ export class MorphRenderer {
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     document.addEventListener("visibilitychange", this.onVisibility);
+    window.addEventListener("blur", this.onWindowBlur);
     this.resize();
   }
 
@@ -172,6 +221,8 @@ export class MorphRenderer {
       this.nodes.dispose();
     }
     this.nodes = new MorphNodes(input.count, VIRTUAL_CAP);
+    this.pickRoles = new Uint8Array(this.nodes.total);
+    this.activePickSlots = new Int32Array(this.nodes.total);
     this.transition = new MorphTransition(input.count, VIRTUAL_CAP);
     const nd = this.nodes;
     nd.from.set(input.organic, 0);
@@ -196,7 +247,14 @@ export class MorphRenderer {
     this.layout = layout;
     this.transition.reducedMotion = this.reducedMotion;
     this.transition.apply(layout, this.nodes, this.traces, this.regions, performance.now(), immediate);
+    this.pickRoles.fill(MR.BACKGROUND);
+    this.pickRoles.set(layout.nodeRole, 0);
+    for (const virtual of layout.virtuals) {
+      const slot = this.virtualSlotOf(virtual.id);
+      if (slot !== null) this.pickRoles[slot] = virtual.role;
+    }
     this.labelWork = layout.labels.map((label) => ({ ...label }));
+    this.labels.setLayoutKeys(layout.labels);
     this.labelSlots = new Int32Array(layout.labels.length).fill(-1);
     this.labelByPick.clear();
     this.hoveredLabelIndex = -1;
@@ -212,6 +270,11 @@ export class MorphRenderer {
     );
     this.pulses.setWorldSize(Math.min(8, Math.max(1.6, span * 0.004)));
     this.applyEmphasis(this.emphasis);
+    this.hover.layoutChanged((id) => {
+      const slot = this.slotOfId(id);
+      if (slot !== null && this.nodes.alphaTo[slot]! >= 0.03) return true;
+      return layout.labels.some((label) => label.pick === id) || layout.regions.some((region) => region.pick === id);
+    });
   }
 
   get morphProgress(): number {
@@ -248,6 +311,11 @@ export class MorphRenderer {
     const p = this.currentPositionOf(slot);
     return p ? this.cam.worldToScreen(p[0], p[1], p[2]) : null;
   }
+  /** Current projected entity anchor, including keyed virtual nodes. */
+  projectId(id: string): { x: number; y: number; front: boolean; depth: number } | null {
+    const slot = this.slotOfId(id);
+    return slot === null ? null : this.projectSlot(slot);
+  }
   projectedNodeMetrics(slot: number): { x: number; y: number; depth: number; pointSizePx: number } | null {
     if (!this.nodes || slot < 0 || slot >= this.nodes.total) return null;
     const projected = this.projectSlot(slot);
@@ -258,14 +326,19 @@ export class MorphRenderer {
     const semantic = this.nodes.semantic[slot]!;
     const semanticBoost = semantic >= 6 ? 0.42 : semantic >= 5 ? 0.34 : semantic >= 4 ? 0.24 : semantic >= 3 ? 0.18 : semantic >= 2 ? 0.08 : semantic >= 1 ? 0.05 : 0;
     const boost = 1 + Math.max(0, this.nodes.emph[slot]! - 1) * 0.4 + semanticBoost + this.nodes.glow[slot]! * 0.8;
-    const pr = Math.min(window.devicePixelRatio || 1, MORPH_TIERS[this.tier].pixelRatioCap);
-    const raw = scale * this.cam.camera.projectionMatrix.elements[5]! * (this.canvas.clientHeight || 2) * 0.5 / projected.depth * boost * pr;
+    // gl_PointSize is multiplied by device pixel ratio in the shader. Cards
+    // and picking operate in CSS pixels, so expose the pre-ratio size here.
+    const raw = scale * this.cam.camera.projectionMatrix.elements[5]! * (this.canvas.clientHeight || 2) * 0.5 / projected.depth * boost;
     return {
       x: projected.x,
       y: projected.y,
       depth: projected.depth,
-      pointSizePx: THREE.MathUtils.clamp(raw, 1.15 * pr, 30 * pr),
+      pointSizePx: THREE.MathUtils.clamp(raw, 1.15, 30),
     };
+  }
+  projectedNodeMetricsById(id: string): { x: number; y: number; depth: number; pointSizePx: number } | null {
+    const slot = this.slotOfId(id);
+    return slot === null ? null : this.projectedNodeMetrics(slot);
   }
   virtualSlotOf(id: string): number | null {
     const s = this.transition?.virtualSlotOf(id);
@@ -314,6 +387,7 @@ export class MorphRenderer {
       (id) => this.virtualSlotOf(id),
     );
     this.nodes.commitEmphasis();
+    this.rebuildActivePickSlots();
     this.applyTraceEmphasis(em);
     this.applyHoveredLabel(em.hoveredId ?? this.idOfSlot(em.hovered));
   }
@@ -341,17 +415,22 @@ export class MorphRenderer {
 
   private applyTraceEmphasis(em: MorphEmphasis): void {
     if (!this.layout || !this.transition) return;
-    const hovered = em.hovered;
-    const selected = em.selected;
+    const hovered = em.hovered >= 0 ? em.hovered : em.hoveredId ? this.slotOfId(em.hoveredId) ?? -1 : -1;
+    const selected = em.selected >= 0 ? em.selected : em.selectedId ? this.slotOfId(em.selectedId) ?? -1 : -1;
+    const hoveredId = em.hoveredId ?? this.idOfSlot(hovered);
+    const selectedId = em.selectedId ?? this.idOfSlot(selected);
+    const hasHover = hovered >= 0 || hoveredId !== null;
     const path = new Set(em.pathNodes);
     for (const route of this.layout.routes) {
       const slot = this.transition.traceSlotOf(route.key);
       if (slot === undefined) continue;
-      const incidentHover = hovered >= 0 && (route.a === hovered || route.b === hovered);
-      const incidentSelected = selected >= 0 && (route.a === selected || route.b === selected);
+      const incidentHover = (hovered >= 0 && (route.a === hovered || route.b === hovered)) ||
+        (!!hoveredId && (route.aId === hoveredId || route.bId === hoveredId));
+      const incidentSelected = (selected >= 0 && (route.a === selected || route.b === selected)) ||
+        (!!selectedId && (route.aId === selectedId || route.bId === selectedId));
       const onPath = path.has(route.a) && path.has(route.b);
-      const optical = hovered >= 0
-        ? incidentHover ? 1.9 : 0.28
+      const optical = hasHover
+        ? incidentHover ? (route.kind === TK.BRIDGE ? 4.2 : 1.9) : 0.22
         : onPath ? 1.45 : incidentSelected ? 1.24 : 1;
       this.traces.setSlotEmphasis(slot, optical);
     }
@@ -413,7 +492,7 @@ export class MorphRenderer {
     this.playhead.scale.set(Math.max(0.75, this.cam.worldPerPixel * 1.5), y1 - y0, 1);
   }
 
-  pick(px: number, py: number, slopPx = 8): MorphPickResult | null {
+  pick(px: number, py: number, slopPx = 8, source: MorphPickSource = "programmatic"): MorphPickResult | null {
     if (!this.nodes || !this.layout) return null;
     return pickAt(
       this.cam,
@@ -424,8 +503,82 @@ export class MorphRenderer {
       this.transition.progress,
       px,
       py,
-      slopPx,
+      {
+        slopPx,
+        source,
+        stickyId: this.hover.snapshot().id,
+        activeSlots: this.layout.mode === "organic" ? undefined : this.activePickSlots,
+        activeSlotCount: this.layout.mode === "organic" ? undefined : this.activePickCount,
+        roles: this.pickRoles,
+        diagnostic: this.lastPickDiagnostic,
+      },
     );
+  }
+
+  /**
+   * Queue at most one canvas pick for the next animation frame. Pointer events
+   * only overwrite the pending coordinates; React/store publication occurs
+   * solely when the central controller's hovered id actually changes.
+   */
+  requestHoverPick(px: number, py: number, pointerType: "mouse" | "pen" | "touch" = "mouse"): void {
+    if (this.disposed || !Number.isFinite(px) || !Number.isFinite(py)) return;
+    this.hoverPointerX = px;
+    this.hoverPointerY = py;
+    this.hoverPointerType = pointerType;
+    this.hover.setPointer(px, py);
+    if (pointerType === "touch") {
+      this.setTouchActive(true);
+      return;
+    }
+    if (this.hover.snapshot().touchActive) this.setTouchActive(false);
+    if (this.hoverPickRaf || this.hover.snapshot().cameraDragging) return;
+    this.hoverPickRaf = requestAnimationFrame(() => {
+      this.hoverPickRaf = 0;
+      if (this.disposed || this.hover.snapshot().cameraDragging || this.hover.snapshot().touchActive) return;
+      const latestPointerType = this.hoverPointerType;
+      const hit = this.pick(
+        this.hoverPointerX,
+        this.hoverPointerY,
+        latestPointerType === "pen" ? 11 : 8,
+        "canvas",
+      );
+      this.hover.proposeCanvas(hit?.id ?? null, this.hoverPointerX, this.hoverPointerY);
+      this.canvas.style.cursor = hit ? "pointer" : "default";
+      // A replacement candidate is intentionally two-frame confirmed. Queue
+      // its one follow-up sample even if the physical pointer is stationary
+      // (notably after camera drag ends).
+      if (this.hover.snapshot().candidateId) {
+        this.requestHoverPick(this.hoverPointerX, this.hoverPointerY, latestPointerType);
+      }
+    });
+  }
+
+  leaveCanvasHover(): void {
+    this.hover.leaveSurface("canvas");
+  }
+
+  cancelHover(reason: "context" | "blur" | "cancel" | "touch" | "lens" = "cancel"): void {
+    this.hover.clear(reason);
+  }
+
+  setTouchActive(active: boolean): void {
+    if (active && this.hoverPickRaf) {
+      cancelAnimationFrame(this.hoverPickRaf);
+      this.hoverPickRaf = 0;
+    }
+    this.hover.setTouchActive(active);
+  }
+
+  private rebuildActivePickSlots(): void {
+    if (!this.nodes || !this.layout) return;
+    let count = 0;
+    for (let slot = 0; slot < this.nodes.total; slot++) {
+      if (this.nodes.alphaTo[slot]! < 0.03 && this.nodes.alphaFrom[slot]! < 0.03) continue;
+      const organized = this.layout.mode === "organic" || this.pickRoles[slot] !== MR.BACKGROUND;
+      const semantic = this.nodes.semantic[slot]! > ME.AMBIENT;
+      if (organized || semantic) this.activePickSlots[count++] = slot;
+    }
+    this.activePickCount = count;
   }
 
   fitLayout(durationS = 0.8, settleOrientation = false): void {
@@ -450,7 +603,10 @@ export class MorphRenderer {
 
   setActive(v: boolean): void {
     this.active = v;
-    if (!v) this.stop();
+    if (!v) {
+      this.hover.clear("lens");
+      this.stop();
+    }
     else this.start();
   }
   get isActive(): boolean {
@@ -495,7 +651,11 @@ export class MorphRenderer {
     this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
     this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     document.removeEventListener("visibilitychange", this.onVisibility);
+    window.removeEventListener("blur", this.onWindowBlur);
+    if (this.hoverPickRaf) cancelAnimationFrame(this.hoverPickRaf);
+    this.hoverPickRaf = 0;
     this.labels.clear();
+    this.hover.dispose();
     this.cam.dispose();
     this.nodes?.dispose();
     this.traces.dispose();
@@ -541,7 +701,12 @@ export class MorphRenderer {
     if (this.layout) {
       const raw = this.transition.progress;
       const opacity = this.reducedMotion || raw >= 1 ? 1 : Math.max(0, Math.min(1, (raw - 0.5) / 0.4));
-      const cap = MORPH_TIERS[this.tier].labelCap;
+      const tierCap = MORPH_TIERS[this.tier].labelCap;
+      // Orbit has two populated rings plus contextual halos; the ordinary
+      // high-tier cap lets too many valid non-overlapping labels compete with
+      // the topology itself. Ranking is unchanged and hovered/focused labels
+      // are still forced into the pool.
+      const cap = this.layout.mode === "orbit" ? Math.min(tierCap, 76) : tierCap;
       for (let i = 0; i < this.labelSlots.length; i++) {
         let slot = this.labelSlots[i]!;
         if (slot < 0) {
@@ -605,6 +770,7 @@ export class MorphRenderer {
   private onContextLost = (e: Event): void => {
     e.preventDefault();
     this.contextLost = true;
+    this.hover.clear("context");
     this.onContextState?.("lost");
   };
   private onContextRestored = (): void => {
@@ -613,9 +779,13 @@ export class MorphRenderer {
     this.onContextState?.("restored");
   };
   private onVisibility = (): void => {
-    if (document.hidden) this.stop();
+    if (document.hidden) {
+      this.hover.clear("blur");
+      this.stop();
+    }
     else this.start();
   };
+  private onWindowBlur = (): void => this.hover.clear("blur");
 }
 
 function orientationFor(mode: MorphMode): { theta: number; phi: number } {
@@ -623,6 +793,7 @@ function orientationFor(mode: MorphMode): { theta: number; phi: number } {
     case "lineage": return { theta: THREE.MathUtils.degToRad(24), phi: THREE.MathUtils.degToRad(73) };
     case "career": return { theta: THREE.MathUtils.degToRad(31), phi: THREE.MathUtils.degToRad(70) };
     case "h2h": return { theta: THREE.MathUtils.degToRad(28), phi: THREE.MathUtils.degToRad(68) };
+    case "orbit": return { theta: THREE.MathUtils.degToRad(22), phi: THREE.MathUtils.degToRad(64) };
     case "motherboard": return { theta: THREE.MathUtils.degToRad(34), phi: THREE.MathUtils.degToRad(66) };
     case "loom": return { theta: THREE.MathUtils.degToRad(32), phi: THREE.MathUtils.degToRad(66) };
     default: return { theta: THREE.MathUtils.degToRad(29), phi: THREE.MathUtils.degToRad(68) };

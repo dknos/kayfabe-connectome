@@ -9,6 +9,7 @@
  * ARGS: argv[2] = output dir (default /tmp/kayfabe-morph-recordings)
  * ENV: KAYFABE_BASE_URL (default http://127.0.0.1:9460),
  *      QA_CHROMIUM_EXECUTABLE (optional full Chrome path for hardware GL),
+ *      QA_HEADFUL=1 (use WSLg/native display; default remains headless),
  *      QA_REQUIRE_HARDWARE=1 (reject software WebGL such as SwiftShader)
  */
 import { chromium } from "@playwright/test";
@@ -19,11 +20,13 @@ const OUT = process.argv[2] ?? "/tmp/kayfabe-morph-recordings";
 mkdirSync(OUT, { recursive: true });
 const BASE = process.env.KAYFABE_BASE_URL ?? "http://127.0.0.1:9460";
 const REQUIRE_HARDWARE = process.env.QA_REQUIRE_HARDWARE === "1";
+const HEADFUL = process.env.QA_HEADFUL === "1";
 const WIDTH = Number(process.env.QA_W ?? 1600);
 const HEIGHT = Number(process.env.QA_H ?? 900);
 const NARROW = WIDTH <= 860;
 const TAG = process.env.QA_TAG ? `${process.env.QA_TAG}-` : "";
 const browser = await chromium.launch({
+  headless: !HEADFUL,
   ...(process.env.QA_CHROMIUM_EXECUTABLE
     ? { executablePath: process.env.QA_CHROMIUM_EXECUTABLE }
     : {}),
@@ -96,7 +99,7 @@ const waitMode = (page, mode, settled = true) =>
   page.waitForFunction(
     ([expected, mustSettle]) => {
       const r = window.__kayfabeMorph;
-      return r?.mode === expected && (!mustSettle || !r.morphing);
+      return r?.mode === expected && (!mustSettle || (!r.morphing && !r.cam.flying));
     },
     [mode, settled],
     { timeout: 30000 },
@@ -118,7 +121,7 @@ const search = async (page, q, expectedName = q, waitForLayout = true) => {
   if (await option.count() !== 1) {
     throw new Error(`${q}: expected one exact result named ${expectedName}, got ${await option.count()}`);
   }
-  await option.click();
+  await option.click({ force: true });
   await page.locator(".morph-crumbs").getByText(expectedName, { exact: true }).waitFor({ timeout: 10000 });
   if (waitForLayout) {
     await page.waitForFunction(
@@ -148,10 +151,9 @@ const clickLabelAction = async (page, entityName, actionName) => {
   if (await label.count() !== 1) {
     throw new Error(`${entityName}: expected one projected focus label, got ${await label.count()}`);
   }
-  // Contact actions are intentionally revealed on hover/focus; exercising
-  // that disclosure is part of the journey, not something to bypass with a
-  // forced click against a display:none button.
-  await label.hover();
+  // Contact actions are a keyboard disclosure; pointer hover remains visually
+  // lightweight and uses the stable node-anchored hover card.
+  await label.locator(".mlabel-primary").focus();
   const action = label.getByRole("button", { name: actionName, exact: true });
   await action.first().waitFor({ state: "visible", timeout: 10000 });
   if (await action.count() !== 1) {
@@ -178,17 +180,37 @@ const hoverRelationshipBank = async (page, tone) => {
   await candidate.waitFor({ state: "visible", timeout: 10000 });
   const entityName = (await candidate.locator(".mlabel-name").textContent())?.trim();
   if (!entityName) throw new Error(`${tone}: projected relationship label had no identity`);
+  // A prior actionable card legitimately owns pointer events. Leave it before
+  // approaching the next projected label instead of force-hovering through it.
+  await page.mouse.move(720, 80);
+  await page.waitForFunction(() => !document.querySelector(".morph-hover-card"), undefined, { timeout: 2000 });
   await candidate.hover();
-  // Hover emphasis intentionally raises this label to force priority, so
-  // re-find it by stable identity instead of retaining the role-class query.
-  const hovered = page.locator(".mlabel.pickable").filter({
-    has: page.locator(".mlabel-name", { hasText: exactText(entityName) }),
-  });
-  await hovered.getByRole("button", { name: "Pin entity", exact: true }).waitFor({
-    state: "visible",
-    timeout: 4000,
-  });
+  // Pointer hover now resolves into one stable node-anchored card; keyboard
+  // disclosure of the sibling label actions is exercised by Head-to-Head.
+  const card = page.locator(".morph-hover-card");
+  await card.getByText(entityName, { exact: true }).waitFor({ state: "visible", timeout: 4000 });
   await page.waitForTimeout(850);
+};
+
+const hoverOrbitEntity = async (page, kind) => {
+  const identity = await page.evaluate((wanted) => {
+    const labels = window.__kayfabeMorph?.currentLayout?.labels ?? [];
+    const candidate = labels.find((label) => {
+      if (!label.pick?.startsWith("p:")) return false;
+      const text = `${label.badge ?? ""} ${label.sub ?? ""} ${label.detail ?? ""}`.toLowerCase();
+      return wanted === "bridge"
+        ? /2 hops|two hops|bridge/.test(text)
+        : /direct|opposed|same-side|mixed|battle.royal/.test(text) && !/2 hops|two hops|bridge/.test(text);
+    });
+    return candidate ? { id: candidate.pick, name: candidate.text } : null;
+  }, kind);
+  if (!identity) throw new Error(`Orbit ${kind} hover target is unavailable`);
+  const label = page.locator(".mlabel.pickable").filter({
+    has: page.locator(".mlabel-name", { hasText: exactText(identity.name) }),
+  }).first();
+  await label.waitFor({ state: "visible", timeout: 10000 });
+  await label.hover({ force: true });
+  await page.waitForTimeout(1200);
 };
 
 try {
@@ -291,6 +313,68 @@ await record("9-five-target-rapid-retarget", async (page) => {
   if (final.anchorName !== "Ric Flair" || final.mode !== "loom" || final.morphing !== false) {
     throw new Error(`rapid retarget did not remain on the fifth target: ${JSON.stringify(final)}`);
   }
+});
+
+await record("10-array-to-orbit", async (page) => {
+  await search(page, "Undertaker", "The Undertaker");
+  await waitMode(page, "loom");
+  await page.waitForTimeout(1200);
+  await showSheet(page, "Layout");
+  await page.getByRole("button", { name: "Orbit", exact: true }).click({ timeout: 8000 });
+  await page.waitForTimeout(2400);
+  await waitMode(page, "orbit");
+  await showSheet(page, "Map");
+  await page.waitForTimeout(1400);
+});
+
+await record("11-orbit-rapid-recenter", async (page) => {
+  await search(page, "Undertaker", "The Undertaker");
+  await waitMode(page, "loom");
+  await showSheet(page, "Layout");
+  await page.getByRole("button", { name: "Orbit", exact: true }).click({ timeout: 8000 });
+  await waitMode(page, "orbit");
+  await showSheet(page, "Map");
+  for (const [query, expectedName] of [
+    ["Kane", "Kane"],
+    ["Steve Austin", "Steve Austin"],
+    ["The Rock", "The Rock"],
+    ["Shawn Michaels", "Shawn Michaels"],
+    ["Ric Flair", "Ric Flair"],
+  ]) {
+    await rapidSearch(page, query, expectedName);
+  }
+  await stableAnchor(page, "Ric Flair", "orbit");
+  await page.waitForTimeout(1800);
+});
+
+await record("12-orbit-hover-routes", async (page) => {
+  await search(page, "Undertaker", "The Undertaker");
+  await waitMode(page, "loom");
+  await showSheet(page, "Layout");
+  await page.getByRole("button", { name: "Orbit", exact: true }).click({ timeout: 8000 });
+  await waitMode(page, "orbit");
+  await showSheet(page, "Map");
+  await hoverOrbitEntity(page, "direct");
+  await hoverOrbitEntity(page, "bridge");
+  await showSheet(page, "Layout");
+  await page.getByRole("checkbox", { name: "Corpus context" }).uncheck();
+  await waitMode(page, "orbit");
+  await showSheet(page, "Map");
+  await page.waitForTimeout(1600);
+});
+
+await record("13-orbit-to-career", async (page) => {
+  await search(page, "Undertaker", "The Undertaker");
+  await waitMode(page, "loom");
+  await showSheet(page, "Layout");
+  await page.getByRole("button", { name: "Orbit", exact: true }).click({ timeout: 8000 });
+  await waitMode(page, "orbit");
+  await page.waitForTimeout(1100);
+  await page.getByRole("button", { name: "Career", exact: true }).click({ timeout: 8000 });
+  await page.waitForTimeout(2600);
+  await waitMode(page, "career");
+  await showSheet(page, "Map");
+  await page.waitForTimeout(1000);
 });
 
 if (ONLY && selectedJourneyCount === 0) {

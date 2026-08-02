@@ -24,6 +24,7 @@ import { buildMotherboard } from "./layouts/promotionMotherboard";
 import { buildCareer } from "./layouts/careerCircuit";
 import { buildLineage } from "./layouts/championshipLineage";
 import { buildHeadToHead } from "./layouts/headToHead";
+import { buildOrbitMap } from "./layouts/orbitMap";
 import { DEFAULT_MORPH_CONTROLS, type MorphControlsState } from "./layouts/layoutTypes";
 
 /**
@@ -59,6 +60,7 @@ export const morphModeFor = (
   if (override !== "auto") {
     const ok =
       (override === "loom" && id?.startsWith("p:")) ||
+      (override === "orbit" && id?.startsWith("p:")) ||
       (override === "career" && id?.startsWith("p:")) ||
       (override === "motherboard" && id?.startsWith("pr:")) ||
       (override === "lineage" && id?.startsWith("t:")) ||
@@ -244,7 +246,7 @@ export const useMorph = create<MorphStore>((set, get) => ({
     // be picked from a lineage board): person boards need a node, and the
     // honest fallback is the organic reading with the selection retained —
     // never the boot-error screen.
-    const personBoard = (mode === "loom" || mode === "career" || mode === "h2h") && id?.startsWith("p:");
+    const personBoard = (mode === "loom" || mode === "orbit" || mode === "career" || mode === "h2h") && id?.startsWith("p:");
     const hasNode = id ? data.indexOf(id) !== undefined : false;
     const effMode = personBoard && !hasNode ? "organic" : mode;
 
@@ -265,6 +267,38 @@ export const useMorph = create<MorphStore>((set, get) => ({
           },
           s.controls,
           Math.max(60, traceCap - 60),
+        );
+        if (token !== buildToken) return;
+        set({ layout, dossier, promotion: null, personRoutes: null, building: false });
+        return;
+      }
+
+      if (effMode === "orbit" && id) {
+        // Orbit's graph topology is useful without the optional dossier. The
+        // shard only enriches the restrained promotion/title halos, so a
+        // failed request must not replace the working graph with an error.
+        const bucket = await loadPersonDossier(id).catch(() => null);
+        if (token !== buildToken) return;
+        const dossier = bucket?.[id] ?? null;
+        const chronology = s.chronology;
+        const current = useStore.getState();
+        const requiredIds = [
+          current.hoverId,
+          ...current.pinned,
+          current.pathA,
+          current.pathB,
+          ...(current.pathResult?.nodes ?? []),
+        ].filter((candidate): candidate is string => candidate !== null);
+        const layout = buildOrbitMap(
+          data,
+          id,
+          dossier,
+          (titleId) => {
+            const ti = chronology?.titleIndex.get(titleId);
+            return ti !== undefined ? (chronology!.titles.name[ti] ?? null) : null;
+          },
+          s.controls,
+          { tier: s.tier, traceCap, requiredIds },
         );
         if (token !== buildToken) return;
         set({ layout, dossier, promotion: null, personRoutes: null, building: false });

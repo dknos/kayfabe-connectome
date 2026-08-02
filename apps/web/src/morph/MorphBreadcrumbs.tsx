@@ -4,6 +4,7 @@ import { h2hPair, morphModeFor, useMorph } from "./morphStore";
 const MODE_LABEL: Record<string, string> = {
   organic: "Tissue",
   loom: "Relationship Array",
+  orbit: "Orbit Map",
   motherboard: "Promotion Network",
   career: "Career Spine",
   lineage: "Title Lineage",
@@ -11,7 +12,7 @@ const MODE_LABEL: Record<string, string> = {
   rack: "Organized Context",
 };
 
-/** Tissue › mode › entity — clicks move through the one shared selection. */
+/** Tissue › entity › mode — clicks move through the one shared selection. */
 export function MorphBreadcrumbs() {
   const selection = useStore((s) => s.selection);
   // These subscriptions keep the comparison identity current even when the
@@ -45,15 +46,18 @@ export function MorphBreadcrumbs() {
       {mode !== "organic" && (
         <>
           <span className="sep">›</span>
+          <span className="crumb entity">{readingName}</span>
+        </>
+      )}
+      {mode !== "organic" && (
+        <>
+          <span className="sep">›</span>
           <span className="crumb here" aria-current="page">{MODE_LABEL[mode] ?? mode}</span>
         </>
       )}
-      {readingName && (
-        <>
-          <span className="sep">›</span>
-          <span className="crumb here">{readingName}</span>
-        </>
-      )}
+      {mode === "organic" && readingName ? (
+        <><span className="sep">›</span><span className="crumb here">{readingName}</span></>
+      ) : null}
       {building && <span className="loading-dot micro"> building…</span>}
     </nav>
   );

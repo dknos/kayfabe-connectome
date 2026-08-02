@@ -22,6 +22,7 @@ export type MorphMode =
   | "career"
   | "lineage"
   | "h2h"
+  | "orbit"
   | "rack";
 
 /** Node roles, written into aRole and read back by emphasis and tests. */
@@ -37,6 +38,8 @@ export const MR = {
   HOLDER: 8,
   JUNCTION: 9,
   MEMBER: 10,
+  /** Two-hop person reached through one or more displayed direct neighbours. */
+  BRIDGE: 11,
 } as const;
 export type MorphRole = (typeof MR)[keyof typeof MR];
 
@@ -62,6 +65,7 @@ export const TK = {
   CONTEXT_TITLE: 2, // gold module link — documented holder/reign context
   BUS: 3, // aggregate bundle where individual traces exceed the cap
   ROUTE: 4, // career circuit route (luminous, wide)
+  BRIDGE: 5, // two-hop supporting route; never selected-to-bridge direct evidence
 } as const;
 export type TraceKind = (typeof TK)[keyof typeof TK];
 
@@ -85,6 +89,10 @@ export interface MorphRoute {
   /** endpoints as corpus slot ids, for pulse resolution (-1 = none) */
   a: number;
   b: number;
+  /** Optional canonical/virtual ids preserve endpoint identity when a route
+   * touches a keyed virtual slot and therefore has no corpus slot index. */
+  aId?: string;
+  bId?: string;
 }
 
 export interface MorphLabel {
@@ -103,6 +111,10 @@ export interface MorphLabel {
   force?: boolean;
   anchor?: "left" | "center";
   pick?: string;
+  /** Optional explicit accessible copy. Defaults are derived from id/tone/text. */
+  accessibleName?: string;
+  /** Current topology role, for example "two-hop bridge". */
+  roleDescription?: string;
 }
 
 /** Region quad kinds (backplanes, rails, shelves, gold modules, gaps). */
@@ -155,6 +167,67 @@ export interface MorphVirtualNode {
   role: MorphRole;
 }
 
+export type OrbitSector = "opposed" | "same-side" | "mixed" | "battle-royal-only";
+
+export interface OrbitDirectDetail {
+  id: string;
+  index: number;
+  name: string;
+  sector: OrbitSector;
+  strength: number;
+  same: number;
+  opposed: number;
+  battleRoyal: number;
+  titleRelated: number;
+  firstDay: number | null;
+  lastDay: number | null;
+  angle: number;
+  radius: number;
+  band: number;
+}
+
+export interface OrbitBridgeSupportDetail {
+  intermediaryId: string;
+  intermediaryIndex: number;
+  intermediaryName: string;
+  strength: number;
+  pathScore: number;
+  displayed: boolean;
+}
+
+export interface OrbitBridgeDetail {
+  id: string;
+  index: number;
+  name: string;
+  score: number;
+  routeCount: number;
+  displayedRouteCount: number;
+  strongestIntermediaryId: string;
+  strongestIntermediaryName: string;
+  angle: number;
+  radius: number;
+  band: number;
+  supports: OrbitBridgeSupportDetail[];
+}
+
+export interface OrbitStats {
+  directTotal: number;
+  directDisplayed: number;
+  bridgeTotal: number;
+  bridgeDisplayed: number;
+  bridgeRoutesDisplayed: number;
+  bridgeRoutesOmitted: number;
+  guideCount: number;
+  tierReduced: boolean;
+  dossierAvailable: boolean;
+}
+
+export interface OrbitDetails {
+  selectedId: string;
+  direct: OrbitDirectDetail[];
+  bridges: OrbitBridgeDetail[];
+}
+
 export interface MorphLayoutResult {
   mode: MorphMode;
   /** flat xyz per corpus node — length = 3*count, every node gets a target */
@@ -178,6 +251,11 @@ export interface MorphLayoutResult {
   /** honest degradation — trace caps, label caps, truncations. Never empty
    *  when something was bounded. */
   notes: string[];
+  /** Orbit-only semantic report used by inspector, hover copy and QA. */
+  orbitStats?: OrbitStats;
+  orbitDetails?: OrbitDetails;
+  /** Rich semantic alias retained for QA/inspection callers. */
+  orbit?: OrbitDetails;
   /** linear day→x mapping when the mode has a time axis (playhead rides it) */
   timeAxis?: { dayMin: number; dayMax: number; x0: number; x1: number; y0: number; y1: number };
 }
@@ -185,6 +263,21 @@ export interface MorphLayoutResult {
 export interface MorphPickResult {
   id: string;
   kind: "node" | "virtual" | "region";
+}
+
+export type MorphPickSource = "canvas" | "touch" | "keyboard" | "programmatic";
+
+/** Mutable read-only-at-the-boundary probe populated by MorphRenderer.pick. */
+export interface MorphPickDiagnostic {
+  id: string | null;
+  source: MorphPickSource;
+  /** Node slots plus interactive regions evaluated by this pick. */
+  candidateCount: number;
+  durationMs: number;
+  normalizedDistance: number;
+  depth: number;
+  semanticPriority: number;
+  layoutRole: number;
 }
 
 export type MorphTier = "high" | "medium" | "low";
@@ -210,6 +303,7 @@ export interface MorphEmphasis {
   selectedId: string | null;
   hoveredId: string | null;
   pinned: readonly number[];
+  virtualPinned?: readonly string[];
   pathNodes: readonly number[];
   /** Transient semantic relatives of the hovered entity (for example title
    * holders inside a promotion). They sit at path priority, above the active

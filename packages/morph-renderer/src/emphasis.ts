@@ -53,6 +53,7 @@ export function writeMorphEmphasis(
   raiseSlots(emphasis.anchors, 1.12, ME.ANCHOR);
   raiseVirtuals(emphasis.virtualAnchors, 1.12, ME.ANCHOR);
   raiseSlots(emphasis.pinned, 1.2, ME.PINNED);
+  raiseVirtuals(emphasis.virtualPinned ?? [], 1.2, ME.PINNED);
   raiseSlots(emphasis.members, 1.42, ME.MEMBER);
   raiseVirtuals(emphasis.virtualMembers, 1.42, ME.MEMBER);
   raiseSlots(emphasis.hoverMembers ?? [], 1.62, ME.PATH);

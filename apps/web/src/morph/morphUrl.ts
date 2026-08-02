@@ -13,7 +13,7 @@ import { morphModeFor, useMorph, type MorphModeOverride } from "./morphStore";
 
 const SORTS: LoomSort[] = ["strength", "first", "latest", "median", "alpha"];
 const GROUPS: BankGroup[] = ["decade", "activity", "alpha", "champ"];
-const MODES: MorphModeOverride[] = ["auto", "organic", "loom", "motherboard", "career", "lineage", "h2h", "rack"];
+const MODES: MorphModeOverride[] = ["auto", "organic", "loom", "orbit", "motherboard", "career", "lineage", "h2h", "rack"];
 
 let cameraTouched = false;
 export function markMorphCameraTouched(v: boolean): void {
@@ -28,6 +28,7 @@ function serializeMorph(): Record<string, string | number | null> {
   if (s.controls.sort !== DEFAULT_MORPH_CONTROLS.sort) out.mos = s.controls.sort;
   if (s.controls.group !== DEFAULT_MORPH_CONTROLS.group) out.mog = s.controls.group;
   if (s.controls.timeAxis) out.mox = 1;
+  if (s.controls.context === false) out.moct = 0;
   if (cameraTouched && s.camera) {
     out.mocx = Math.round(s.camera.cx * 100) / 100;
     out.mocy = Math.round(s.camera.cy * 100) / 100;
@@ -61,6 +62,7 @@ export async function applyPendingMorphUrl(): Promise<void> {
   const group = kv.get("mog");
   if (group && (GROUPS as string[]).includes(group)) controls.group = group as BankGroup;
   controls.timeAxis = kv.get("mox") === "1";
+  controls.context = kv.get("moct") !== "0";
 
   const mode = kv.get("mom");
   const modeOverride = mode && (MODES as string[]).includes(mode)
