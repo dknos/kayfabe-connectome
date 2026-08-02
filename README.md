@@ -1,7 +1,7 @@
 # KAYFABE CONNECTOME
 
-A database-first, time-aware, three-dimensional atlas of professional wrestling
-history, rendered as a living biological connectome.
+A database-first, time-aware, three-dimensional network of professional
+wrestling history, rendered as a living biological connectome.
 
 Clean-room fresh build. This repository does not reuse, copy, or extend any prior
 visualization project.

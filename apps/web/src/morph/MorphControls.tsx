@@ -1,31 +1,17 @@
 import { useStore } from "../state/store";
-import type { BankGroup, LoomSort } from "./layouts/layoutTypes";
-import { h2hPair, morphModeFor, useMorph, type MorphModeOverride } from "./morphStore";
+import { h2hPair, morphModeFor, useMorph } from "./morphStore";
 
-const SORTS: { id: LoomSort; label: string }[] = [
-  { id: "strength", label: "Relationship strength" },
-  { id: "first", label: "First encounter" },
-  { id: "latest", label: "Latest encounter" },
-  { id: "median", label: "Median encounter year" },
-  { id: "alpha", label: "Alphabetical" },
-];
+const MODE_NAMES: Record<string, string> = {
+  organic: "Organic Tissue",
+  loom: "Relationship Array",
+  motherboard: "Promotion Network",
+  career: "Career Spine",
+  lineage: "Title Lineage",
+  h2h: "Head-to-Head",
+  rack: "Organized context",
+};
 
-const GROUPS: { id: BankGroup; label: string }[] = [
-  { id: "decade", label: "First documented decade" },
-  { id: "activity", label: "Documented activity" },
-  { id: "alpha", label: "Alphabetical" },
-  { id: "champ", label: "Documented title holders" },
-];
-
-const LAYOUTS: { id: MorphModeOverride; label: string; needs?: "p" | "pr" | "t" }[] = [
-  { id: "auto", label: "Auto" },
-  { id: "organic", label: "Organic" },
-  { id: "loom", label: "Relationship Loom", needs: "p" },
-  { id: "motherboard", label: "Promotion Motherboard", needs: "pr" },
-  { id: "career", label: "Career Circuit", needs: "p" },
-  { id: "lineage", label: "Championship Lineage", needs: "t" },
-];
-
+/** One automatic topology system with only useful, contextual overrides. */
 export function MorphControls() {
   const controls = useMorph((s) => s.controls);
   const setControls = useMorph((s) => s.setControls);
@@ -42,135 +28,95 @@ export function MorphControls() {
   const selection = useStore((s) => s.selection);
   const selId = selection?.kind === "node" ? selection.id : null;
   const mode = morphModeFor(selId, modeOverride, tissue);
-
   const pathA = useStore((s) => s.pathA);
   const pathB = useStore((s) => s.pathB);
   const pinned = useStore((s) => s.pinned);
   void pathA;
   void pathB;
-  void pinned; // subscribed so the H2H chip enables the moment a pair exists
+  void pinned;
   const pair = h2hPair();
-
-  const allowed = (l: (typeof LAYOUTS)[number]): boolean => {
-    if (!l.needs) return true;
-    return !!selId && selId.startsWith(l.needs + ":");
-  };
+  const personSelected = !!selId?.startsWith("p:");
 
   return (
     <div className="rail left morph-rail">
-      <div className="panel">
-        <h2>Morph Lab β <span className="line" /></h2>
+      <div className="panel morph-command-panel">
+        <h2>Morph Lab <span className="line" /></h2>
         <p className="micro">
-          one corpus, many topologies — click an entity and the tissue
-          reorganises around it. {building ? "building…" : ""}
+          the Connectome tissue reorganizes around the current entity
+          {building ? " · resolving structure…" : ""}
         </p>
-        <button
-          className="morph-tissue-btn"
-          onClick={() => useMorph.getState().returnToTissue()}
-          disabled={mode === "organic" && tissue}
-          title="Reverse the morph back to the exact organic positions [T]"
-        >
-          ⟲ Return to tissue
-        </button>
-      </div>
-
-      <div className="panel">
-        <h2>Layout <span className="line" /></h2>
-        <div className="morph-layouts" role="group" aria-label="Layout">
-          {LAYOUTS.map((l) => (
-            <button
-              key={l.id}
-              className={"chip " + (modeOverride === l.id && !tissue ? "on" : "")}
-              aria-pressed={modeOverride === l.id && !tissue}
-              disabled={!allowed(l)}
-              title={l.needs && !allowed(l) ? `select a ${l.needs === "p" ? "wrestler" : l.needs === "pr" ? "promotion" : "championship"} first` : undefined}
-              onClick={() => setModeOverride(l.id)}
-            >
-              {l.label}
-            </button>
-          ))}
+        <div className="morph-layouts" role="group" aria-label="Morph topology">
           <button
-            className={"chip " + (modeOverride === "h2h" && !tissue ? "on" : "")}
-            aria-pressed={modeOverride === "h2h" && !tissue}
-            disabled={!pair}
-            title={pair ? `compare ${pair[0]} and ${pair[1]}` : "set path A and B (shift-click two wrestlers) or pin a second wrestler"}
-            onClick={() => setModeOverride("h2h")}
-          >
-            Head-to-Head β
-          </button>
+            className={modeOverride === "auto" && !tissue ? "active" : ""}
+            aria-pressed={modeOverride === "auto" && !tissue}
+            onClick={() => setModeOverride("auto")}
+          >Auto</button>
+          {personSelected && (
+            <button
+              className={modeOverride === "career" && !tissue ? "active" : ""}
+              aria-pressed={modeOverride === "career" && !tissue}
+              onClick={() => setModeOverride("career")}
+            >Career</button>
+          )}
+          {pair && (
+            <button
+              className={modeOverride === "h2h" && !tissue ? "active" : ""}
+              aria-pressed={modeOverride === "h2h" && !tissue}
+              title={`Compare ${pair[0]} and ${pair[1]}`}
+              onClick={() => setModeOverride("h2h")}
+            >Compare</button>
+          )}
         </div>
-        <p className="micro">showing: <b>{mode}</b>{tissue ? " (tissue)" : ""}</p>
+        <div className="morph-spatial-actions">
+          <button type="button" onClick={() => useMorph.getState().requestFit()} title="Fit active structure [R]">Fit</button>
+          <button
+            type="button"
+            onClick={() => useMorph.getState().returnToTissue()}
+            disabled={mode === "organic" && tissue}
+            title="Restore exact Connectome positions [T]"
+          >Return to Tissue</button>
+        </div>
+        <label className="row morph-context-toggle">
+          <input
+            type="checkbox"
+            checked={controls.context !== false}
+            onChange={(event) => setControls({ context: event.target.checked })}
+          />
+          <span>Corpus context</span>
+        </label>
+        <p className="micro morph-mode-readout">
+          <span className="status-dot" /> {MODE_NAMES[mode] ?? mode}
+        </p>
       </div>
-
-      {(mode === "loom" || modeOverride === "loom") && (
-        <div className="panel">
-          <h2>Loom order <span className="line" /></h2>
-          <label className="row">
-            <span>Sort</span>
-            <select aria-label="Loom sort" value={controls.sort} onChange={(e) => setControls({ sort: e.target.value as LoomSort })}>
-              {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-          </label>
-          <label className="row">
-            <input
-              type="checkbox"
-              checked={controls.timeAxis}
-              onChange={(e) => setControls({ timeAxis: e.target.checked })}
-            />
-            <span>Time layout — vertical = first documented encounter</span>
-          </label>
-        </div>
-      )}
-
-      {mode === "motherboard" && (
-        <div className="panel">
-          <h2>Port banks <span className="line" /></h2>
-          <label className="row">
-            <span>Group</span>
-            <select aria-label="Bank grouping" value={controls.group} onChange={(e) => setControls({ group: e.target.value as BankGroup })}>
-              {GROUPS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-            </select>
-          </label>
-        </div>
-      )}
 
       <div className="panel">
         <h2>Reading <span className="line" /></h2>
         <div className="micro" data-testid="morph-counts">
           {layout ? (
             <>
-              {layout.representedCount.toLocaleString()} entities represented ·{" "}
-              {layout.expandedCount} expanded · {layout.routes.length} traces ·{" "}
-              {labelShown}/{labelWanted} labels
+              {layout.representedCount.toLocaleString()} entities · {layout.expandedCount.toLocaleString()} active ·{" "}
+              {layout.routes.length.toLocaleString()} traces · {labelShown}/{labelWanted} labels
               {tier !== "high" ? <> · quality {tier}</> : null}
             </>
-          ) : (
-            "building the first layout…"
-          )}
+          ) : "building the first structure…"}
         </div>
-        {layout?.notes.map((note, i) => (
-          <p key={i} className="micro derivation-note">{note}</p>
-        ))}
+        {layout?.notes.map((note, i) => <p key={i} className="micro derivation-note">{note}</p>)}
         <label className="row">
-          <input type="checkbox" checked={reducedMotion} onChange={(e) => setReducedMotion(e.target.checked)} />
+          <input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} />
           <span>Reduced motion</span>
         </label>
-        <button
-          onClick={() => {
-            useStore.getState().setLens("connectome");
-          }}
-        >
-          Open in Connectome
-        </button>
+        <button type="button" onClick={() => useStore.getState().setLens("connectome")}>Open in Connectome</button>
       </div>
 
       <div className="panel">
-        <h2>Legend <span className="line" /></h2>
+        <h2>Spatial reading <span className="line" /></h2>
         <div className="micro morph-legend">
           <span className="sw ember" /> opposed · <span className="sw cyan" /> same-side ·{" "}
           <span className="sw br" /> battle royal · <span className="sw gold" /> championship
           <br />
-          dashed traces = contextual (documented appearances / reigns), never match relationships
+          height = strength · depth = chronology · dashed = contextual evidence
+          <br />
+          drag orbit · right-drag pan · wheel dolly · WASD/QE move · F focus
         </div>
       </div>
     </div>

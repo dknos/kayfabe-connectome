@@ -13,7 +13,7 @@ export interface FiredEvent {
 /**
  * What playback is scoped to.
  *
- * v1 only knew about a person, because only the connectome consumed it. ATLAS
+ * v1 only knew about a person, because only the connectome consumed it. Morph
  * plays a promotion lane and a title lineage as well, and those are different
  * questions about the same record stream — so the scope is typed rather than a
  * second nullable field per kind.
@@ -32,7 +32,7 @@ export type FireListener = (f: FiredEvent) => void;
  * the serializable state; renderers subscribe for fire instructions.
  *
  * Subscription rather than a single `onFire` slot: two lenses can be mounted at
- * once (the connectome stays alive but paused while ATLAS is open), and a bare
+ * once (the connectome stays alive but paused while Morph is open), and a bare
  * callback property means whichever mounted last silently owns playback and
  * whichever unmounts first silently kills it for both.
  */

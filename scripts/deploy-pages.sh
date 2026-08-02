@@ -15,9 +15,17 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE="${KAYFABE_BASE:-/kayfabe-connectome/}"
 STAGE="$(mktemp -d)"
 WORKTREE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"; git -C "$REPO_ROOT" worktree remove -f "$WORKTREE" 2>/dev/null || true' EXIT
+trap 'rm -rf "$STAGE"; git -C "$REPO_ROOT" worktree remove -f "$WORKTREE" 2>/dev/null || true; rm -rf "$WORKTREE"' EXIT
 
 cd "$REPO_ROOT"
+# A Pages artifact must correspond to the commit named in its deployment
+# message. Publishing a dirty tree would make the public bytes impossible to
+# reproduce from that SHA, so fail before building or touching gh-pages.
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+  echo "refusing to deploy: commit or remove working-tree changes first" >&2
+  git status --short >&2
+  exit 1
+fi
 [ -f data/materialized/manifest.json ] || {
   echo "data/materialized is missing — run: pnpm data:materialize && pnpm geo:materialize" >&2
   exit 1

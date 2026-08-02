@@ -154,12 +154,10 @@ for (const vp of VIEWPORTS) {
     await shot(page, "12-low-quality-tier", vp);
     await page.evaluate(() => window.__kayfabeGeo.setTier("high"));
 
-    // Unresolved disclosure, via the table
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await page.waitForTimeout(1200);
-    await page.getByRole("tab", { name: "unplotted" }).click();
-    await page.waitForTimeout(600);
-    await shot(page, "13-unplotted-table", vp);
+    // Unresolved disclosure stays in the contextual inspector.
+    await page.getByLabel("Scope", { exact: true }).selectOption("corpus");
+    await page.waitForTimeout(900);
+    await shot(page, "13-unplotted-inspector", vp);
   } else {
     // Mobile: each sheet, and globe-only
     await page.getByRole("tab", { name: "inspector" }).click();
@@ -168,9 +166,6 @@ for (const vp of VIEWPORTS) {
     await page.getByRole("tab", { name: "globe only" }).click();
     await page.waitForTimeout(800);
     await shot(page, "06-mobile-globe-only", vp);
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await page.waitForTimeout(1500);
-    await shot(page, "07-mobile-table", vp);
   }
 
   if (errors.length) problems.push(`${vp.name}: ${errors.length} console errors — ${errors[0]}`);

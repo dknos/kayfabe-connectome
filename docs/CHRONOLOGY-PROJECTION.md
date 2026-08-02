@@ -1,10 +1,13 @@
-# ATLAS Projection — `atlas-projection@1`
+# Chronology Projection — `atlas-projection@1`
 
-The materialized semantic view the ATLAS lens reads: every promotion in the
-corpus, every championship, and every person's documented route between
-promotions. Producer: `services/materializer/kayfabe_materializer/atlas_project.py`
-(`pnpm atlas:materialize`). Validator: `atlas_validate.py` (`pnpm atlas:validate`).
-Wire types: the `ATLAS` banner in `packages/graph-contract/src/index.ts`.
+The neutral chronology dataset Morph Lab reads: every promotion in the corpus,
+every championship, and every person's documented route between promotions.
+The `atlas-projection@1` schema name and `/data/atlas/` directory remain on-wire
+compatibility contracts; neither implies a production Atlas view. Producer:
+`services/materializer/kayfabe_materializer/atlas_project.py`
+(`pnpm chronology:materialize`). Validator: `atlas_validate.py`
+(`pnpm chronology:validate`).
+Wire types: the chronology projection types in `packages/graph-contract/src/index.ts`.
 
 It is a **separate entry point** from `pnpm data:materialize`. `atlas` is not in
 that module's `_MANAGED` tuple, so the connectome build neither creates nor
@@ -23,7 +26,7 @@ node — without inventing anything to fill the gaps that visibility exposes.
 Ids are the canonical prefixed ids from `docs/CANONICAL-MODEL.md`: `pr:<n>`,
 `t:<n>`, `p:<n>`. Shard files use `bb = bucket_of(id) = fnv1a32(id) % 256`, hex,
 over the **prefixed** id — the same key `entities/people/{bb}.json` uses, so a
-person is in the same `bb` in both trees and the lens can open them together.
+person is in the same `bb` in both trees and consumers can open them together.
 Bucketing the bare id would silently split the two.
 
 Only non-empty shards are written: 232 promotion shards, 256 people shards. A
@@ -73,7 +76,7 @@ The `matches` column of a promotion node in `graph/nodes.json` is not
 comparable to either — it holds sqlite *card* counts for the six family
 promotions and csv *match* counts for everyone else. Two definitions inside one
 file would be worse than one definition that differs from a neighbouring
-file's, so atlas uses one and states it here.
+file's, so this projection uses one and states it here.
 
 `src` labels the **registry** a promotion came from (`local_sql` for the six
 family promotions, `csv_initial_matches` for the other 565), not the source of
@@ -149,9 +152,10 @@ promotion's titles — 814 flagged members today, on the six family boards and
 nowhere else, because only sqlite belts derive reigns.
 
 `atlas/titles.json` `pr` and `entities/championships.json` `pr` agree on all
-4389 titles today. They would diverge on an unresolved belt: atlas writes `""`,
-championships writes the ECW fallback. The lens reads both files together, so
-prefer atlas's `pr` when they disagree.
+4389 titles today. They would diverge on an unresolved belt: the chronology
+projection writes `""`, while championships writes the ECW fallback. Morph
+reads both files together, so prefer the chronology projection's `pr` when they
+disagree.
 
 A title's `yearCounts` inside a promotion's focus board is the belt's **global**
 per-year title-match series, matching its global `titleMatches`, not the slice

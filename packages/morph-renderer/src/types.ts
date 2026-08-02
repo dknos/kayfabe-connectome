@@ -40,6 +40,20 @@ export const MR = {
 } as const;
 export type MorphRole = (typeof MR)[keyof typeof MR];
 
+/** Layout-independent semantic priority written to aSemantic. Roles answer
+ * where a node sits; these values answer why it is lit. Never derive one from
+ * the other. */
+export const ME = {
+  AMBIENT: 0,
+  ANCHOR: 1,
+  PINNED: 2,
+  MEMBER: 3,
+  PATH: 4,
+  HOVERED: 5,
+  SELECTED: 6,
+} as const;
+export type MorphSemanticLevel = (typeof ME)[keyof typeof ME];
+
 /** Trace kinds — canonical relationships and contextual links must never
  *  share a treatment (context is dashed / bus-shaped, never a match fiber). */
 export const TK = {
@@ -123,6 +137,8 @@ export interface LayoutBounds {
   maxX: number;
   minY: number;
   maxY: number;
+  minZ?: number;
+  maxZ?: number;
 }
 
 /** A chip for an entity with NO corpus node (406/571 promotions, 3,648/4,389
@@ -193,8 +209,23 @@ export interface MorphEmphasis {
   /** selected/hovered VIRTUAL chip ids (no corpus slot) */
   selectedId: string | null;
   hoveredId: string | null;
-  pinned: number[];
-  pathNodes: number[];
+  pinned: readonly number[];
+  pathNodes: readonly number[];
+  /** Transient semantic relatives of the hovered entity (for example title
+   * holders inside a promotion). They sit at path priority, above the active
+   * population but below the hovered node itself. */
+  hoverMembers?: readonly number[];
+  /** Resolved semantic populations, independent of outgoing layout roles. */
+  members: readonly number[];
+  anchors: readonly number[];
+  /** IDs which do not have a corpus slot may still have a live virtual slot in
+   * the active organized structure. */
+  virtualMembers: readonly string[];
+  virtualAnchors: readonly string[];
+  memberGroup: string;
+  basis: string;
+  caveat: string | null;
+  coverageWarnings: readonly string[];
   /** dim background-role nodes. The app clears this while a rebuild is in
    *  flight — roles still belong to the OUTGOING layout, and dimming the
    *  incoming neighbourhood against them reads as flicker. */

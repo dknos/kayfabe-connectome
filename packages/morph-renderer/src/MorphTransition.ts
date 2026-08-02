@@ -208,6 +208,8 @@ export class MorphTransition {
       nodes.from.set(nodes.to);
       nodes.scaleFrom.set(nodes.scaleTo);
       traces.from.set(traces.to);
+      traces.prevFrom.set(traces.prevTo);
+      traces.nextFrom.set(traces.nextTo);
       traces.normFrom.set(traces.normTo);
     }
     this.startMs = nowMs;
@@ -261,6 +263,7 @@ function fadeOutSlot(traces: MorphTraces, slot: number): void {
     traces.alphaTo[v] = 0;
     traces.delay[v] = 0;
   }
+  traces.syncTargetAdjacency(slot);
 }
 
 function overwriteSlotTarget(traces: MorphTraces, slot: number, route: MorphRoute): void {
@@ -286,11 +289,12 @@ function overwriteSlotTarget(traces: MorphTraces, slot: number, route: MorphRout
       traces.color[v3] = route.color[0];
       traces.color[v3 + 1] = route.color[1];
       traces.color[v3 + 2] = route.color[2];
-      traces.width[v] = route.width;
+      traces.width[v] = route.kind === 1 || route.kind === 2 ? -route.width : route.width;
       traces.kind[v] = route.kind;
       traces.delay[v] = 0.3;
     }
   }
+  traces.syncTargetAdjacency(slot);
 }
 
 function copySlotFromTo(traces: MorphTraces, slot: number, alpha: number): void {
@@ -300,6 +304,12 @@ function copySlotFromTo(traces: MorphTraces, slot: number, alpha: number): void 
     traces.from[v3] = traces.to[v3]!;
     traces.from[v3 + 1] = traces.to[v3 + 1]!;
     traces.from[v3 + 2] = traces.to[v3 + 2]!;
+    traces.prevFrom[v3] = traces.prevTo[v3]!;
+    traces.prevFrom[v3 + 1] = traces.prevTo[v3 + 1]!;
+    traces.prevFrom[v3 + 2] = traces.prevTo[v3 + 2]!;
+    traces.nextFrom[v3] = traces.nextTo[v3]!;
+    traces.nextFrom[v3 + 1] = traces.nextTo[v3 + 1]!;
+    traces.nextFrom[v3 + 2] = traces.nextTo[v3 + 2]!;
     traces.normFrom[v * 2] = traces.normTo[v * 2]!;
     traces.normFrom[v * 2 + 1] = traces.normTo[v * 2 + 1]!;
     traces.alphaFrom[v] = alpha;

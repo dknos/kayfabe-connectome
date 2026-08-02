@@ -145,11 +145,11 @@ export interface DensityFile {
   years: Record<string, { matches: number; titleChanges: number }>;
 }
 
-/* ------------------------------------------------------------------ ATLAS
+/* ------------------------------------------------------------- CHRONOLOGY
  *
- * data/materialized/atlas/ — the semantic projection the ATLAS lens reads.
- * See docs/ATLAS-PROJECTION.md. Written by `pnpm atlas:materialize`, which is
- * a SEPARATE entry point from `pnpm data:materialize`; the atlas tree is not
+ * data/materialized/atlas/ — the legacy on-wire path for the chronology projection.
+ * See docs/CHRONOLOGY-PROJECTION.md. Written by `pnpm chronology:materialize`, which is
+ * a SEPARATE entry point from `pnpm data:materialize`; the chronology tree is not
  * in the connectome materializer's managed set and is never wiped by it.
  *
  * Nothing here is a new claim about the corpus. Every field is either a count

@@ -12,20 +12,25 @@ test.describe("vertical slice journey", () => {
     });
     (page as any)._consoleErrors = errors;
     await page.goto("/");
-    await expect(page.getByText("KAYFABE CONNECTOME").first()).toBeVisible();
+    // The wordmark intentionally yields its scarce width to search/navigation
+    // on phones; the search instrument is the stable visible boot landmark.
+    await expect(page.getByRole("combobox", { name: /Search/ })).toBeVisible();
     // boot must finish against real materialized data
     await expect(page.locator("canvas.gl")).toBeVisible({ timeout: 30000 });
   });
 
-  test("mobile: search resolves, dossier bottom-sheet opens, table reachable", async ({ page, isMobile }) => {
+  test("mobile: search resolves and semantic inspector bottom-sheet opens", async ({ page, isMobile }) => {
     test.skip(!isMobile, "mobile-specific journey");
     const search = page.getByRole("combobox", { name: /Search/ });
     await search.fill("Undertaker");
     await page.getByRole("option").first().click({ force: true });
     await expect(page.getByText("Person dossier")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("complementary", { name: "Semantic inspector" })).toBeVisible();
     await page.getByRole("button", { name: "Close dossier" }).click();
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByRole("region", { name: /People table/ })).toBeVisible();
+    const lenses = page.getByRole("group", { name: "Lens" }).getByRole("button");
+    await expect(lenses).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "Atlas", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Table", exact: true })).toHaveCount(0);
   });
 
   test("search → focus → dossier → evidence → path → share → restore", async ({ page, isMobile }) => {
@@ -97,13 +102,31 @@ test.describe("vertical slice journey", () => {
     expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
   });
 
-  test("accessible table lens is keyboard operable", async ({ page, isMobile }) => {
+  test("semantic inspector and in-context results are keyboard operable", async ({ page, isMobile }) => {
     test.skip(isMobile, "keyboard journey runs on desktop projects");
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByRole("region", { name: /People table/ })).toBeVisible();
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "Connectome" })).toBeVisible();
+    const search = page.getByRole("combobox", { name: /Search/ });
+    await search.focus();
+    await search.fill("Ric Flair");
+    await expect(page.getByRole("listbox", { name: "Corpus search results" })).toBeVisible();
+    await expect(page.getByRole("option").first()).toBeVisible();
+    await search.press("Enter");
+    const inspector = page.getByRole("complementary", { name: "Semantic inspector" });
+    await expect(inspector).toBeVisible({ timeout: 15000 });
+    await expect(inspector.getByText("Person dossier")).toBeVisible();
+    await expect(inspector.getByTestId("lit-basis")).toBeVisible();
+  });
+
+  test("removed lens URLs migrate without restoring dead views", async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "one migration pass is sufficient");
+    const migrations = [
+      ["atlas", "morph"],
+      ["table", "connectome"],
+      ["geoTable", "geo"],
+    ] as const;
+    for (const [legacy, expected] of migrations) {
+      await page.goto(`/#2/lens=${legacy}`);
+      await expect(page.locator(".app")).toHaveAttribute("data-lens", expected, { timeout: 90000 });
+      await expect(page.getByRole("group", { name: "Lens" }).getByRole("button")).toHaveCount(3);
+    }
   });
 });

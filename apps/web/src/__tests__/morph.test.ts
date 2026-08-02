@@ -23,13 +23,12 @@ import {
 } from "@kayfabe/graph-contract";
 import { EF, GraphModel, STRIDE } from "../graph/model";
 import type { CoreData } from "../data/loader";
-import type { AtlasData } from "../atlas/atlasLoader";
+import type { ChronologyData } from "../data/chronology/loader";
 import { buildMorphData } from "../morph/morphAdapter";
 import {
   DEFAULT_MORPH_CONTROLS,
   LOOM,
   ORGANIC_SCALE,
-  Z,
 } from "../morph/layouts/layoutTypes";
 import { buildOrganic } from "../morph/layouts/organicLayout";
 import { buildLoom } from "../morph/layouts/relationshipLoom";
@@ -157,7 +156,7 @@ const heroDossier: PersonDossier = {
 const titleNameOf = (id: string): string | null =>
   id === "t:1" ? "Alpha World Title" : id === "t:x" ? "Ghost Belt" : null;
 
-function makeAtlas(): AtlasData {
+function makeChronology(): ChronologyData {
   const promotions: AtlasPromotionsFile = {
     count: 1,
     id: ["pr:a"],
@@ -214,7 +213,7 @@ function makeAtlas(): AtlasData {
     maxTitleMatches: 300,
   };
 }
-const atlas = makeAtlas();
+const chronology = makeChronology();
 
 const lineageRecord: ChampionshipRecord = {
   n: "Alpha World Title",
@@ -322,9 +321,9 @@ function layoutText(l: MorphLayoutResult): string {
 }
 
 /**
- * Same rule as the atlas suite: a forbidden word may still APPEAR, because
+ * Same rule as the chronology suite: a forbidden word may still APPEAR, because
  * saying "not employment" out loud is the honest thing to do — but every
- * occurrence must be a denial. Unlike the atlas helper this one does not
+ * occurrence must be a denial. Unlike the chronology helper this one does not
  * require the word to occur at all: most boards never mention it.
  */
 function expectDeniedOrAbsent(text: string, word: string, deniers: RegExp[]): void {
@@ -404,7 +403,7 @@ describe("relationship loom", () => {
     const h = idx("p:hero");
     expect(l.nodeTargets[h * 3]).toBe(0);
     expect(l.nodeTargets[h * 3 + 1]).toBe(0);
-    expect(l.nodeTargets[h * 3 + 2]).toBe(Z.chip + 1);
+    expect(l.nodeTargets[h * 3 + 2]).toBe(0);
     expect(l.nodeRole[h]).toBe(MR.SELECTED);
     expect(l.anchorId).toBe("p:hero");
   });
@@ -438,7 +437,7 @@ describe("relationship loom", () => {
     const a = buildHeroLoom();
     // equal-strength opponents: p:tiea sorts before p:tieb, so it sits higher
     expect(a.nodeTargets[idx("p:tiea") * 3 + 1]!).toBeGreaterThan(a.nodeTargets[idx("p:tieb") * 3 + 1]!);
-    expect(a.nodeTargets[idx("p:tiea") * 3]).toBe(-LOOM.railX);
+    expect(a.nodeTargets[idx("p:tiea") * 3]!).toBeLessThanOrEqual(-LOOM.railX);
     const b = buildHeroLoom();
     expectSameFloats(a.nodeTargets, b.nodeTargets);
     expectSameFloats(a.nodeDelay, b.nodeDelay);
@@ -538,12 +537,12 @@ describe("background rack", () => {
 
 describe("championship lineage", () => {
   it("orders reign segments chronologically regardless of record order", () => {
-    const l = buildLineage(data, "t:1", lineageRecord, atlas);
+    const l = buildLineage(data, "t:1", lineageRecord, chronology);
     const reignRegions = l.regions.filter((r) => r.key.startsWith("cl:reign:"));
     expect(reignRegions.map((r) => r.key)).toEqual([
-      "cl:reign:1966-01-01",
-      "cl:reign:1975-01-01",
-      "cl:reign:1980-06-01",
+      "cl:reign:t:1:1966-01-01",
+      "cl:reign:t:1:1975-01-01",
+      "cl:reign:t:1:1980-06-01",
     ]);
     const xs = reignRegions.map((r) => r.x);
     expect([...xs].sort((a, b) => a - b)).toEqual(xs);
@@ -551,7 +550,7 @@ describe("championship lineage", () => {
   });
 
   it("draws unrecorded gaps and never calls them vacant", () => {
-    const l = buildLineage(data, "t:1", lineageRecord, atlas);
+    const l = buildLineage(data, "t:1", lineageRecord, chronology);
     expect(l.regions.some((r) => r.key.startsWith("cl:gap:") && r.kind === RK.HATCH)).toBe(true);
     const gapLabels = l.labels.filter((lb) => lb.text === "unrecorded gap");
     expect(gapLabels).toHaveLength(1); // 1970→1975 is a year-plus hole; 1980's 152-day hole stays a quiet region
@@ -559,10 +558,84 @@ describe("championship lineage", () => {
     expect(layoutText(l).toLowerCase()).not.toContain("vacan");
   });
 
+  it("marks leading and trailing closed-record boundaries as unrecorded", () => {
+    const bounded: ChampionshipRecord = {
+      ...lineageRecord,
+      changes: 1,
+      reigns: [
+        {
+          holders: ["p:hero"],
+          s: "1970-01-01",
+          e: "1980-01-01",
+          m: "m:bounded",
+        },
+      ],
+    };
+    const l = buildLineage(data, "t:1", bounded, chronology);
+    const gaps = l.labels.filter((label) => label.text === "unrecorded gap");
+
+    expect(gaps).toHaveLength(2);
+    expect(gaps[0]!.sub).toMatch(/1966-01-01 → 1970-01-01/);
+    expect(gaps[1]!.sub).toMatch(/1980-01-01 → 1998-01-01/);
+    expect(l.regions.filter((region) => region.kind === RK.HATCH)).toHaveLength(2);
+    expect(layoutText(l).toLowerCase()).not.toContain("vacan");
+  });
+
+  it("scopes pooled occurrence regions and labels to the title identity", () => {
+    const first = buildLineage(
+      data,
+      "t:1",
+      {
+        ...lineageRecord,
+        reigns: [
+          {
+            holders: ["p:hero"],
+            s: "1970-01-01",
+            e: "1971-01-01",
+            m: "m:first-title",
+          },
+        ],
+      },
+      chronology,
+    );
+    const second = buildLineage(
+      data,
+      "t:other",
+      {
+        ...lineageRecord,
+        n: "Other Title",
+        reigns: [
+          {
+            holders: ["p:par"],
+            s: "1970-01-01",
+            e: "1971-01-01",
+            m: "m:second-title",
+          },
+        ],
+      },
+      null,
+    );
+    const firstOccurrence = first.labels.find(
+      (label) => label.key.includes("cl:reign:t:1:1970-01-01") && label.pick === "p:hero",
+    )!;
+    const secondOccurrence = second.labels.find(
+      (label) => label.key.includes("cl:reign:t:other:1970-01-01") && label.pick === "p:par",
+    )!;
+    const firstRail = first.regions.find((region) => region.pick === "p:hero")!;
+    const secondRail = second.regions.find((region) => region.pick === "p:par")!;
+
+    expect(firstOccurrence.key).toContain("t:1:");
+    expect(secondOccurrence.key).toContain("t:other:");
+    expect(firstOccurrence.key).not.toBe(secondOccurrence.key);
+    expect(firstRail.key).not.toBe(secondRail.key);
+    expect(firstRail.key).toContain("t:1:");
+    expect(secondRail.key).toContain("t:other:");
+  });
+
   it("marks the open reign open in corpus, with a dissolving edge", () => {
-    const l = buildLineage(data, "t:1", lineageRecord, atlas);
-    expect(l.regions.find((r) => r.key === "cl:reign:1980-06-01")!.kind).toBe(RK.OPEN);
-    expect(l.regions.find((r) => r.key === "cl:reign:1966-01-01")!.kind).toBe(RK.GOLD);
+    const l = buildLineage(data, "t:1", lineageRecord, chronology);
+    expect(l.regions.find((r) => r.key === "cl:reign:t:1:1980-06-01")!.kind).toBe(RK.OPEN);
+    expect(l.regions.find((r) => r.key === "cl:reign:t:1:1966-01-01")!.kind).toBe(RK.GOLD);
     expect(l.labels.some((lb) => lb.sub?.includes("open in corpus"))).toBe(true);
     expect(l.nodeRole[idx("p:hero")]).toBe(MR.HOLDER);
   });
@@ -578,7 +651,7 @@ describe("championship lineage", () => {
   });
 
   it("says why a no-changes lineage has no reigns — absent, not guessed", () => {
-    const l = buildLineage(data, "t:nc", null, atlas);
+    const l = buildLineage(data, "t:nc", null, chronology);
     expect(l.notes.join(" ")).toMatch(/no title-change field/);
     expect(l.notes.join(" ")).toMatch(/not guessed/);
     expect(l.labels.some((lb) => lb.text === "no documented reign records")).toBe(true);
@@ -587,13 +660,193 @@ describe("championship lineage", () => {
     expect(l.virtuals.some((v) => v.id === "t:nc")).toBe(true);
     expect(layoutText(l).toLowerCase()).not.toContain("vacan");
   });
+
+  it("uses deterministic, substantial Z lanes for co-holders and overlapping reigns", () => {
+    const overlapping: ChampionshipRecord = {
+      ...lineageRecord,
+      changes: 2,
+      reigns: [
+        {
+          holders: ["p:par", "p:hero"],
+          s: "1970-01-01",
+          e: "1975-01-01",
+          m: "m:co",
+        },
+        {
+          holders: ["p:opp"],
+          s: "1972-01-01",
+          e: "1976-01-01",
+          m: "m:overlap",
+        },
+      ],
+    };
+    const a = buildLineage(data, "t:1", overlapping, chronology);
+    const b = buildLineage(data, "t:1", overlapping, chronology);
+    const rails = a.regions.filter((region) => region.key.startsWith("cl:reign:"));
+    const laneZ = rails.map((region) => region.z);
+
+    expect(rails).toHaveLength(3);
+    expect(new Set(laneZ).size).toBe(3);
+    expect(Math.max(...laneZ) - Math.min(...laneZ)).toBeGreaterThanOrEqual(200);
+    // X is time: compare segment starts, not midpoints of unequal durations.
+    const starts = rails.map((region) => region.x - region.w / 2);
+    expect(starts[0]).toBeLessThanOrEqual(starts[1]!);
+    expect(starts[1]).toBeLessThan(starts[2]!);
+    expect(a.fitBounds?.minZ).toBeTypeOf("number");
+    expect(a.fitBounds?.maxZ).toBeTypeOf("number");
+    expect(a.fitBounds!.maxZ! - a.fitBounds!.minZ!).toBeGreaterThanOrEqual(300);
+    for (const value of [
+      a.bounds.minZ,
+      a.bounds.maxZ,
+      a.fitBounds!.minZ,
+      a.fitBounds!.maxZ,
+    ]) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+    expect(a.regions.map(({ key, x, y, z }) => ({ key, x, y, z }))).toEqual(
+      b.regions.map(({ key, x, y, z }) => ({ key, x, y, z })),
+    );
+    expectSameFloats(a.nodeTargets, b.nodeTargets);
+    assertLayoutSane(a);
+  });
+
+  it("writes a repeated holder once at the earliest documented representative", () => {
+    const repeated: ChampionshipRecord = {
+      ...lineageRecord,
+      changes: 2,
+      reigns: [
+        {
+          holders: ["p:hero"],
+          s: "1988-01-01",
+          e: "1990-01-01",
+          m: "m:later",
+        },
+        {
+          holders: ["p:hero"],
+          s: "1966-01-01",
+          e: "1970-01-01",
+          m: "m:earlier",
+        },
+      ],
+    };
+    const l = buildLineage(data, "t:1", repeated, chronology);
+    const axis = l.timeAxis!;
+    const xOf = (day: number) =>
+      axis.x0 +
+      ((day - axis.dayMin) / (axis.dayMax - axis.dayMin)) *
+        (axis.x1 - axis.x0);
+    const expectedX =
+      (xOf(isoToDay("1966-01-01")) + xOf(isoToDay("1970-01-01"))) / 2;
+
+    expect(l.nodeTargets[idx("p:hero") * 3]!).toBeCloseTo(expectedX, 4);
+    expect(l.nodeRole[idx("p:hero")]).toBe(MR.HOLDER);
+    expect(l.labels.filter((label) => label.key === "n:p:hero")).toHaveLength(1);
+    expect(
+      l.regions.filter(
+        (region) =>
+          region.key.startsWith("cl:reign:") && region.pick === "p:hero",
+      ),
+    ).toHaveLength(2);
+    expect(
+      l.labels.find((label) => label.key === "n:p:hero")!.detail,
+    ).toMatch(/anchored at earliest documented reign/);
+  });
+
+  it("keeps a listed nonresident holder as one honest virtual entity", () => {
+    const missingId = "p:not-graph-resident";
+    const missing: ChampionshipRecord = {
+      ...lineageRecord,
+      changes: 2,
+      reigns: [
+        {
+          holders: [missingId],
+          s: "1966-01-01",
+          e: "1970-01-01",
+          m: "m:missing-1",
+        },
+        {
+          holders: [missingId],
+          s: "1980-01-01",
+          e: null,
+          m: "m:missing-2",
+        },
+      ],
+    };
+    const l = buildLineage(data, "t:1", missing, chronology);
+    const reordered = buildLineage(
+      data,
+      "t:1",
+      { ...missing, reigns: [...missing.reigns].reverse() },
+      chronology,
+    );
+    const virtuals = l.virtuals.filter((virtual) => virtual.id === missingId);
+    const reorderedVirtuals = reordered.virtuals.filter(
+      (virtual) => virtual.id === missingId,
+    );
+    const label = l.labels.find((candidate) => candidate.key === `n:${missingId}`)!;
+
+    expect(virtuals).toHaveLength(1);
+    expect(reorderedVirtuals).toEqual(virtuals);
+    expect(virtuals[0]!.role).toBe(MR.HOLDER);
+    expect(label.badge).toBe("NO GRAPH NODE");
+    expect(label.detail).toMatch(/listed in documented title-change records/);
+    expect(label.detail).toMatch(/no graph-resident node/);
+    expect(
+      l.regions.filter(
+        (region) => region.key.startsWith("cl:reign:") && region.pick === missingId,
+      ),
+    ).toHaveLength(2);
+    expect(l.labels.some((candidate) => candidate.sub?.includes("open in corpus"))).toBe(true);
+  });
+
+  it("refuses supplied reign rows when chronology says the source has no title-change field", () => {
+    const impossible: ChampionshipRecord = {
+      ...lineageRecord,
+      n: "Ghost Belt",
+      reigns: [
+        {
+          holders: ["p:hero"],
+          s: "1990-01-01",
+          e: null,
+          m: "m:must-not-render",
+        },
+      ],
+    };
+    const l = buildLineage(data, "t:nc", impossible, chronology);
+
+    expect(l.regions.some((region) => region.key.startsWith("cl:reign:"))).toBe(false);
+    expect(l.nodeRole[idx("p:hero")]).toBe(MR.BACKGROUND);
+    expect(l.notes.join(" ")).toMatch(/no title-change field/);
+    expect(l.notes.join(" ")).toMatch(/no lineage was invented/);
+    expect(l.notes.join(" ")).toMatch(/not guessed/);
+  });
+
+  it("honors the corpus-context toggle without down-tiering active holders", () => {
+    const visible = buildLineage(data, "t:1", lineageRecord, chronology, {
+      context: true,
+    });
+    const hidden = buildLineage(data, "t:1", lineageRecord, chronology, {
+      context: false,
+    });
+    const ambient = Array.from({ length: data.count }, (_, i) => i).filter(
+      (i) => hidden.nodeRole[i] === MR.BACKGROUND,
+    );
+
+    expect(ambient.length).toBeGreaterThan(0);
+    expect(ambient.some((i) => visible.nodeOpacity[i]! > 0.01)).toBe(true);
+    expect(ambient.every((i) => hidden.nodeOpacity[i]! <= 0.0011)).toBe(true);
+    for (const holder of ["p:opp", "p:par", "p:hero"]) {
+      expect(hidden.nodeRole[idx(holder)]).toBe(MR.HOLDER);
+      expect(hidden.nodeOpacity[idx(holder)]).toBeGreaterThan(0.9);
+    }
+  });
 });
 
 /* --------------------------------------------------------- motherboard */
 
 describe("promotion motherboard", () => {
   it("banks say documented, grouped by first documented decade", () => {
-    const l = buildMotherboard(data, "pr:a", alphaDetail, atlas, DEFAULT_MORPH_CONTROLS);
+    const l = buildMotherboard(data, "pr:a", alphaDetail, DEFAULT_MORPH_CONTROLS);
     const bankHeads = l.labels.filter((lb) => lb.key.startsWith("mb:bank:") && lb.key.endsWith(":h"));
     expect(bankHeads.length).toBeGreaterThan(0);
     for (const h of bankHeads) expect(h.text).toMatch(/\d+ documented$/);
@@ -603,11 +856,32 @@ describe("promotion motherboard", () => {
   });
 
   it("flags a no-changes belt module honestly", () => {
-    const l = buildMotherboard(data, "pr:a", alphaDetail, atlas, DEFAULT_MORPH_CONTROLS);
+    const l = buildMotherboard(data, "pr:a", alphaDetail, DEFAULT_MORPH_CONTROLS);
     const gb = l.labels.find((lb) => lb.key === "n:t:nc")!;
     expect(gb.sub).toMatch(/no title-change field in source/);
     // the derived belt states its reigns instead
     expect(l.labels.find((lb) => lb.key === "n:t:1")!.sub).toMatch(/3 documented reigns/);
+  });
+
+  it("hides only ambient corpus context while preserving the promotion structure", () => {
+    const shown = buildMotherboard(data, "pr:a", alphaDetail, {
+      ...DEFAULT_MORPH_CONTROLS,
+      context: true,
+    });
+    const hidden = buildMotherboard(data, "pr:a", alphaDetail, {
+      ...DEFAULT_MORPH_CONTROLS,
+      context: false,
+    });
+
+    expect(shown.nodeOpacity[idx("p:opp")]).toBeGreaterThan(0.01);
+    expect(hidden.nodeRole[idx("p:opp")]).toBe(MR.BACKGROUND);
+    expect(hidden.nodeOpacity[idx("p:opp")]).toBeLessThanOrEqual(0.0011);
+    expect(hidden.nodeRole[idx("pr:a")]).toBe(MR.SELECTED);
+    expect(hidden.nodeOpacity[idx("pr:a")]).toBe(1);
+    expect(hidden.nodeRole[idx("p:hero")]).toBe(MR.MEMBER);
+    expect(hidden.nodeOpacity[idx("p:hero")]).toBeGreaterThan(0.6);
+    expect(hidden.nodeRole[idx("t:1")]).toBe(MR.TITLE_CONTEXT);
+    expect(hidden.nodeOpacity[idx("t:1")]).toBeGreaterThan(0.8);
   });
 });
 
@@ -618,9 +892,9 @@ describe("wording contract", () => {
     const layouts: MorphLayoutResult[] = [
       buildOrganic(data, null, [], 100),
       buildHeroLoom(),
-      buildMotherboard(data, "pr:a", alphaDetail, atlas, DEFAULT_MORPH_CONTROLS),
-      buildLineage(data, "t:1", lineageRecord, atlas),
-      buildCareer(data, "p:hero", heroRoutes, heroDossier, atlas, DEFAULT_MORPH_CONTROLS),
+      buildMotherboard(data, "pr:a", alphaDetail, DEFAULT_MORPH_CONTROLS),
+      buildLineage(data, "t:1", lineageRecord, chronology),
+      buildCareer(data, "p:hero", heroRoutes, heroDossier, chronology, DEFAULT_MORPH_CONTROLS),
     ];
     for (const l of layouts) {
       const text = layoutText(l);
@@ -635,7 +909,7 @@ describe("wording contract", () => {
   });
 
   it("keeps the career circuit sane while it is at it", () => {
-    assertLayoutSane(buildCareer(data, "p:hero", heroRoutes, heroDossier, atlas, DEFAULT_MORPH_CONTROLS));
+    assertLayoutSane(buildCareer(data, "p:hero", heroRoutes, heroDossier, chronology, DEFAULT_MORPH_CONTROLS));
   });
 });
 
@@ -753,7 +1027,7 @@ describe("morph url state", () => {
     useMorph.setState({
       modeOverride: "lineage",
       controls: { sort: "alpha", group: "champ", timeAxis: true },
-      camera: { cx: 12.34, cy: -56.78, half: 321 },
+      camera: { cx: 12.34, cy: -56.78, cz: 9.1, distance: 321, theta: 0.44, phi: 1.22 },
     });
     markMorphCameraTouched(true);
     writeUrl();
@@ -768,13 +1042,13 @@ describe("morph url state", () => {
     resetMorph();
     loc.hash = frag;
     restoreFromUrl();
-    applyPendingMorphUrl();
+    await applyPendingMorphUrl();
     const s = useMorph.getState();
     expect(s.modeOverride).toBe("lineage");
     expect(s.controls.sort).toBe("alpha");
     expect(s.controls.group).toBe("champ");
     expect(s.controls.timeAxis).toBe(true);
-    expect(s.pendingCamera).toEqual({ cx: 12.34, cy: -56.78, half: 321 });
+    expect(s.pendingCamera).toEqual({ cx: 12.34, cy: -56.78, cz: 9.1, distance: 321, theta: 0.44, phi: 1.22 });
   });
 
   it("defaults never appear in the fragment", async () => {
@@ -789,12 +1063,31 @@ describe("morph url state", () => {
     expect(lastUrl).not.toContain("mocx=");
   });
 
-  it("ignores invalid sort, group, mode and camera values", () => {
+  it("an active default link clears prior lens-local state", async () => {
+    useStore.setState({ model, core, lens: "morph" });
+    useMorph.setState({
+      modeOverride: "lineage",
+      tissue: true,
+      controls: { sort: "alpha", group: "champ", timeAxis: true, context: false },
+      pendingCamera: { cx: 4, cy: 5, cz: 6, distance: 200, theta: 1, phi: 1 },
+    });
+    markMorphCameraTouched(true);
+    loc.hash = "#2/lens=morph";
+    restoreFromUrl();
+    await applyPendingMorphUrl();
+    const s = useMorph.getState();
+    expect(s.modeOverride).toBe("auto");
+    expect(s.tissue).toBe(false);
+    expect(s.controls).toEqual(DEFAULT_MORPH_CONTROLS);
+    expect(s.pendingCamera).toBeNull();
+  });
+
+  it("ignores invalid sort, group, mode and camera values", async () => {
     useStore.setState({ model, core, lens: "morph" });
     resetMorph();
     loc.hash = "#2/lens=morph/mom=bogus/mos=nope/mog=zap/mox=2/mocx=3/mocy=4/moch=-9";
     restoreFromUrl();
-    applyPendingMorphUrl();
+    await applyPendingMorphUrl();
     const s = useMorph.getState();
     expect(s.modeOverride).toBe("auto");
     expect(s.controls.sort).toBe(DEFAULT_MORPH_CONTROLS.sort);

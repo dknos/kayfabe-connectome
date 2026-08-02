@@ -1,7 +1,7 @@
-"""atlas-projection@1 — the semantic projection the ATLAS lens reads.
+"""atlas-projection@1 — the neutral chronology projection used by Morph Lab.
 
 Writes data/materialized/atlas/ and nothing else. It is a SEPARATE entry point
-from materialize.py: the atlas tree is not in that module's _MANAGED tuple, so
+from materialize.py: the chronology tree is not in that module's _MANAGED tuple, so
 `pnpm data:materialize` neither builds nor deletes it, and this module never
 touches graph/, timeline/, entities/, evidence/, search/ or geo/.
 
@@ -64,7 +64,7 @@ MEMBER_CAP = 4000
 # strings entities/championships.json uses, so the two files agree.
 SOURCE_LINEAGE = {"local_sql": "derived", "csv_initial_matches": "no-changes"}
 
-# Files the lens reads from the connectome tree instead of from here. Copying
+# Files chronology consumers read from the connectome tree instead of here. Copying
 # them would double the bytes and create a second version that can drift.
 REUSES = {
     "person teams": "entities/people/{bb}.json .teams",
@@ -165,7 +165,7 @@ def promo_bits_of(promotions: dict[str, str], csv_promo_matches: dict[str, int])
     """Recompute manifest.promo_bits (family fixed, then top csv by matches).
 
     Recomputed rather than read from data/materialized/manifest.json so the
-    atlas tree can be built from the two source corpora alone; build() then
+    chronology tree can be built from the two source corpora alone; build() then
     cross-checks the result against that manifest when it happens to exist.
     The csv tie-break is by DISPLAY NAME, matching materialize.py exactly — by
     id instead and the bits drift silently out of step with promoMask.
@@ -186,7 +186,7 @@ def build(argv: list[str] | None = None) -> int:
     from .atlas_validate import run_checks
 
     argv = argv if argv is not None else sys.argv[1:]
-    print(f"atlas:materialize — {ATLAS_PROJECTION_VERSION}")
+    print(f"chronology:materialize — {ATLAS_PROJECTION_VERSION}")
 
     src, resolver, belt_map, matches_sql = extract_all()
     merged = merge_csv(src, resolver)
@@ -552,7 +552,7 @@ def build(argv: list[str] | None = None) -> int:
     for name in sorted(checks):
         c = checks[name]
         print(f"  [{'PASS' if c.get('passed') else 'FAIL'}] {name}")
-    print("atlas:materialize", "OK" if passed else "FAILED VALIDATION")
+    print("chronology:materialize", "OK" if passed else "FAILED VALIDATION")
     return 0 if passed else 2
 
 

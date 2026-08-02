@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "atlas" | "morph" | "table" | "geo" | "geoTable";
+export type Lens = "connectome" | "morph" | "geo";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -99,6 +99,10 @@ const prefersReduced =
 export const PROMO_ALL = 0x7fffffff;
 
 let recomputeToken = 0;
+let memberResolutionToken = 0;
+
+const selectedNodeId = (selection: Selection): string | null =>
+  selection?.kind === "node" ? selection.id : null;
 
 export const useStore = create<AppState>((set, get) => ({
   core: null,
@@ -145,6 +149,7 @@ export const useStore = create<AppState>((set, get) => ({
   showLabels: true,
 
   async boot() {
+    set({ bootError: null, bootProgress: 0, bootWhat: "connecting to the local corpus" });
     try {
       const core = await loadCore((frac, what) =>
         set({ bootProgress: frac, bootWhat: what }),
@@ -171,17 +176,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ lens });
     writeUrl();
     get().announce(
-      lens === "table"
-        ? "Accessible table view"
-        : lens === "geo"
-          ? "Geo Replay — territory globe"
-          : lens === "geoTable"
-            ? "Geo table view"
-            : lens === "atlas"
-              ? "Atlas — chronological archive. Promotions are lanes on a time axis."
-              : lens === "morph"
-                ? "Morph Lab — the tissue reorganises around whatever you select."
-                : "Connectome view",
+      lens === "geo"
+        ? "Geo Replay beta — territory globe"
+        : lens === "morph"
+          ? "Morph Lab — the tissue reorganises around whatever you select."
+          : "Connectome view",
     );
   },
 
@@ -241,8 +240,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   focus(focusId) {
     set({ focusId });
-    if (focusId) set({ selection: { kind: "node", id: focusId } });
-    writeUrl();
+    const selection = get().selection;
+    if (focusId && selectedNodeId(selection) !== focusId) {
+      // Focusing is also a semantic selection. Route it through select() so
+      // async member/title resolution cannot be skipped by this entry point.
+      get().select({ kind: "node", id: focusId });
+    } else {
+      writeUrl();
+    }
   },
 
   hover(hoverId) {
@@ -312,11 +317,6 @@ export const useStore = create<AppState>((set, get) => ({
     set({ announcement });
   },
 
-  /** Recompute the lit set for the current selection.
-   *
-   * Championship membership needs the reign records, which load lazily — so
-   * this resolves once without them (lighting nothing) and again once they
-   * arrive, rather than leaving a selected title permanently dark. */
   /** Step back to the previously selected node. Popping the trail rather than
    * pushing onto it, so back-then-back walks the way you came. */
   back() {
@@ -341,24 +341,39 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async resolveSelectionMembers() {
+    const token = ++memberResolutionToken;
     const { model, core, selection } = get();
-    if (!model || !core) return;
-    const id = selection?.kind === "node" ? selection.id : null;
-    const champs = id?.startsWith("t:") ? await loadChampionships().catch(() => null) : null;
-    if (get().selection?.kind === "node" && (get().selection as { id: string }).id !== id) return;
-    set({ members: resolveMembers(model, core.manifest, core.search, id, champs) });
+    if (!model || !core) {
+      set({ members: { ids: [], basis: "" }, pulseScope: null });
+      return;
+    }
+    const id = selectedNodeId(selection);
+    const current = () =>
+      token === memberResolutionToken && selectedNodeId(get().selection) === id;
+
+    // Publish synchronously before the first await. This clears the outgoing
+    // population immediately and gives titles an honest loading state instead
+    // of leaving the previous selection lit while reign records arrive.
+    set({
+      members: resolveMembers(model, core.manifest, core.search, id, null),
+      pulseScope: null,
+    });
+
+    if (!id) return;
+    if (id.startsWith("t:")) {
+      const champs = await loadChampionships().catch(() => null);
+      if (!current()) return;
+      set({ members: resolveMembers(model, core.manifest, core.search, id, champs) });
+      return;
+    }
 
     // The pulse follows the selection. A person's dossier already carries exact
     // per-year match counts; nothing equivalent exists for a promotion or a
     // championship without scanning the whole timeline, so those keep the
     // corpus series rather than showing an invented one.
-    if (!id || !id.startsWith("p:")) {
-      set({ pulseScope: null });
-      return;
-    }
+    if (!id.startsWith("p:")) return;
     const bucket = await loadPersonDossier(id).catch(() => null);
-    if (get().selection?.kind !== "node") return;
-    if ((get().selection as { id: string }).id !== id) return;
+    if (!current()) return;
     const d = bucket?.[id];
     if (!d) {
       set({ pulseScope: null });
@@ -372,8 +387,11 @@ export const useStore = create<AppState>((set, get) => ({
     // dossier already lists them, and leaving them off the tissue means the
     // reader can see who someone wrestled but not where or for what. They are
     // added as their own groups AND kept in every isolate set as anchors.
-    const titleIds = d.titles.map((t) => t.t).filter((t) => model.indexOfId.has(t));
-    const promoIds = Object.keys(d.promos).filter((pr) => model.indexOfId.has(pr));
+    // Keep registry anchors even when the Connectome projection omitted their
+    // node. Connectome filters these IDs at its slot boundary; Morph can light
+    // the matching virtual promotion/title in an organized structure.
+    const titleIds = d.titles.map((t) => t.t);
+    const promoIds = Object.keys(d.promos);
     set((st) => ({
       pulseScope: { label: d.n, years: d.years },
       timeline: st.timeline.mode === "off" ? st.timeline : { ...st.timeline, day: firstDay },
@@ -400,16 +418,11 @@ export const useStore = create<AppState>((set, get) => ({
 type UrlSerializer = () => Record<string, string | number | null>;
 type UrlRestorer = (kv: Map<string, string>) => void;
 
-/** One slot per lens rather than one slot total: a single global pair was
- *  fine while GEO was the only tenant and would have silently made ATLAS
- *  overwrite it. */
+/** One slot per secondary lens keeps their URL state isolated. */
 const lensUrl = new Map<Lens, { serialize: UrlSerializer; restore: UrlRestorer }>();
 
 export function registerGeoUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("geo", { serialize, restore });
-}
-export function registerAtlasUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
-  lensUrl.set("atlas", { serialize, restore });
 }
 export function registerMorphUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("morph", { serialize, restore });
@@ -431,13 +444,9 @@ export function writeUrl(): void {
     };
     push("lens", s.lens !== "connectome" ? s.lens : null);
     push("tis", s.tissue !== "cortex" ? s.tissue : null);
-    if (s.lens === "geo" || s.lens === "geoTable") {
+    if (s.lens === "geo") {
       const g = lensUrl.get("geo")?.serialize();
       if (g) for (const [k, v] of Object.entries(g)) push(k, v);
-    }
-    if (s.lens === "atlas") {
-      const a = lensUrl.get("atlas")?.serialize();
-      if (a) for (const [k, v] of Object.entries(a)) push(k, v);
     }
     if (s.lens === "morph") {
       const m = lensUrl.get("morph")?.serialize();
@@ -485,8 +494,8 @@ export function restoreFromUrl(): void {
    * A selectable id is not the same thing as a graph node.
    *
    * 406 of 571 promotions and 3,648 of 4,389 championships never earned a node
-   * — they are below the node thresholds — but ATLAS represents every one of
-   * them and a shared ATLAS link has to restore them. So selection accepts any
+   * — they are below the node thresholds — but the chronology projection retains
+   * every one and Morph can represent them as virtual entities. So selection accepts any
    * id the corpus knows about; only camera FOCUS still requires a node,
    * because only a node has a position in the connectome.
    */
@@ -524,9 +533,19 @@ export function restoreFromUrl(): void {
 
   const lensParam = kv.get("lens");
   for (const { restore } of lensUrl.values()) restore(kv);
-  const LENSES: Lens[] = ["table", "geo", "geoTable", "atlas", "morph"];
+  // Removed view URLs remain safe and useful: the old chronological view is
+  // closest to Morph, tabular links return to Connectome, and geographic
+  // tabular links remain in Geo Replay. Unknown values fail closed to Connectome.
+  const restoredLens: Lens =
+    lensParam === "morph" || lensParam === "geo"
+      ? lensParam
+      : lensParam === "atlas"
+        ? "morph"
+        : lensParam === "geoTable"
+          ? "geo"
+          : "connectome";
   useStore.setState((prev) => ({
-    lens: LENSES.includes(lensParam as Lens) ? (lensParam as Lens) : "connectome",
+    lens: restoredLens,
     focusId: valid(kv.get("focus")),
     selection: selectable(kv.get("sel"))
       ? { kind: "node", id: kv.get("sel")! }
@@ -551,6 +570,9 @@ export function restoreFromUrl(): void {
       windowDays: num("tw") ?? prev.timeline.windowDays,
     },
   }));
+  // URL restore bypasses select(), so it must explicitly start the same
+  // guarded semantic resolution as every interactive selection entry point.
+  void useStore.getState().resolveSelectionMembers();
 }
 
 export const fmtDay = (day: number): string => {

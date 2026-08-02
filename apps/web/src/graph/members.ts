@@ -13,7 +13,7 @@ import { EF, type GraphModel } from "./model";
  * the corpus actually carries, and each answer states what it is:
  *
  *   person       every wrestler they share a documented match with
- *   promotion    every wrestler documented working for it
+ *   promotion    every wrestler with a documented appearance for it
  *   championship every wrestler documented holding it
  *
  * Each result carries a `basis` string the dossier shows, because these are
@@ -28,6 +28,13 @@ export interface MemberResult {
   basis: string;
   /** Set when the corpus cannot answer precisely, and why. */
   caveat?: string;
+  /** Coverage failures that affect how many semantic members can light in a
+   * renderer. Kept separate from `caveat`: a caveat explains the evidence
+   * basis, while these warnings explain a concrete representation gap. */
+  coverageWarnings?: string[];
+  /** Documented members that cannot light a graph node. Never discard these
+   * silently: inspectors can name them and state why no corpus node lights. */
+  nonResident?: NonResidentMember[];
   /** Nodes that stay visible whichever category is active — a wrestler's
    * promotions and championships, which locate the connections rather than
    * being connections. */
@@ -36,6 +43,12 @@ export interface MemberResult {
    * is. Opponent and tag partner are different relationships and a reader
    * asking "who did Evan Bourne team with" is not asking who he fought. */
   groups?: MemberGroup[];
+}
+
+export interface NonResidentMember {
+  id: string;
+  name?: string;
+  reason: "not graph-resident";
 }
 
 export type GroupKey = "all" | "opposed" | "same" | "br" | "promotions" | "titles";
@@ -60,12 +73,20 @@ export function resolveMembers(
 ): MemberResult {
   if (!selectedId) return EMPTY;
   const i = model.indexOfId.get(selectedId);
-  if (i === undefined) return EMPTY;
-  const type = model.nodes.type[i];
-
-  if (type === 0) return peopleFor(model, i, search);
-  if (type === 1) return promotionMembers(model, manifest, search, selectedId);
-  if (type === 2) return titleHolders(model, selectedId, championships);
+  // Selection covers the complete entity registry, while the GPU graph is a
+  // thresholded projection. Promotions and belts therefore resolve by stable
+  // entity kind even when the selected anchor itself has no graph slot.
+  if (selectedId.startsWith("p:")) {
+    return i === undefined
+      ? { ids: [], basis: "selected person has no graph-resident relationship node" }
+      : peopleFor(model, i, search);
+  }
+  if (selectedId.startsWith("pr:")) {
+    return promotionMembers(model, manifest, search, selectedId);
+  }
+  if (selectedId.startsWith("t:")) {
+    return titleHolders(model, search, selectedId, championships);
+  }
   return EMPTY;
 }
 
@@ -102,8 +123,8 @@ function peopleFor(
   const entity = search.find((e) => e.id === self);
   const promotions: string[] = [];
   for (const p of entity?.pm ?? []) {
-    const idx = model.nodes.name.findIndex((n, i) => n === p && model.nodes.type[i] === 1);
-    if (idx >= 0) promotions.push(model.nodes.id[idx]!);
+    const promotion = search.find((candidate) => candidate.t === "promotion" && candidate.n === p);
+    if (promotion) promotions.push(promotion.id);
   }
   return {
     ids: all,
@@ -119,7 +140,7 @@ function peopleFor(
 }
 
 /**
- * A promotion: everyone documented working for it.
+ * A promotion: everyone with a documented appearance for it.
  *
  * The precise signal is the per-person promotion bitmask, but the materialized
  * format only assigns distinct bits to the 30 largest promotions — the other
@@ -135,8 +156,11 @@ function promotionMembers(
 ): MemberResult {
   const key = promotionId.slice(3);
   const bit = manifest.promo_bits[key];
-  const idx = model.indexOfId.get(promotionId)!;
-  const name = model.nodes.name[idx] ?? promotionId;
+  const idx = model.indexOfId.get(promotionId);
+  const name =
+    (idx === undefined ? null : model.nodes.name[idx]) ??
+    search.find((entity) => entity.id === promotionId)?.n ??
+    promotionId;
 
   if (bit !== undefined) {
     const mask = 1 << bit;
@@ -149,39 +173,62 @@ function promotionMembers(
   }
 
   const ids: string[] = [];
+  const nonResident: NonResidentMember[] = [];
   for (const e of search) {
     if (e.t !== "person" || !e.pm) continue;
-    if (e.pm.includes(name)) ids.push(e.id);
+    if (!e.pm.includes(name)) continue;
+    if (model.indexOfId.has(e.id)) ids.push(e.id);
+    else nonResident.push({ id: e.id, name: e.n, reason: "not graph-resident" });
   }
+  const matched = ids.length + nonResident.length;
   return {
     ids,
-    basis: `${ids.length.toLocaleString()} wrestlers documented in ${name}`,
+    basis: `${matched.toLocaleString()} wrestlers documented in ${name}`,
     caveat:
       `${name} is outside the 30 promotions with a dedicated bit in the materialized ` +
       `format, so membership is matched on name against each wrestler's top six ` +
       `promotions — wrestlers for whom ${name} is a minor promotion are missed.`,
+    coverageWarnings: nonResident.length
+      ? [`${nonResident.length.toLocaleString()} documented participants cannot light because they are not graph-resident.`]
+      : undefined,
+    nonResident: nonResident.length ? nonResident : undefined,
   };
 }
 
 /** A championship: everyone documented holding it. */
 function titleHolders(
   model: GraphModel,
+  search: SearchEntity[],
   titleId: string,
   championships: ChampionshipsFile | null,
 ): MemberResult {
-  const idx = model.indexOfId.get(titleId)!;
-  const name = model.nodes.name[idx] ?? titleId;
+  const idx = model.indexOfId.get(titleId);
+  const name =
+    (idx === undefined ? null : model.nodes.name[idx]) ??
+    search.find((entity) => entity.id === titleId)?.n ??
+    titleId;
   if (!championships) return { ids: [], basis: "loading reigns…" };
   const rec = championships[titleId];
   if (!rec) return { ids: [], basis: `no documented reigns for ${name}` };
   const seen = new Set<string>();
   for (const reign of rec.reigns) for (const h of reign.holders) seen.add(h);
   const ids = [...seen].filter((id) => model.indexOfId.has(id));
+  const nonResident: NonResidentMember[] = [...seen]
+    .filter((id) => !model.indexOfId.has(id))
+    .map((id) => ({
+      id,
+      name: search.find((entity) => entity.id === id)?.n,
+      reason: "not graph-resident",
+    }));
   return {
     ids,
-    basis: `${ids.length.toLocaleString()} wrestlers documented holding ${name}`,
+    basis: `${seen.size.toLocaleString()} wrestlers documented holding ${name}`,
     caveat:
       "Holders only. A wrestler who challenged for this title without winning it is " +
       "not lit, because the corpus records title changes rather than title contenders.",
+    coverageWarnings: nonResident.length
+      ? [`${nonResident.length.toLocaleString()} documented holders cannot light because they are not graph-resident.`]
+      : undefined,
+    nonResident: nonResident.length ? nonResident : undefined,
   };
 }

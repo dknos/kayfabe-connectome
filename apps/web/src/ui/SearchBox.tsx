@@ -52,25 +52,23 @@ export function SearchBox() {
   const choose = (e: SearchEntity) => {
     setOpen(false);
     setQ(e.n);
-    // Selection is not gated on being a graph NODE any more. 406 of 571
-    // promotions and most championships sit below the node thresholds, and
-    // ATLAS represents every one of them — refusing to select them meant
-    // search could not reach most of what that lens draws. Camera focus still
-    // requires a node, because only a node has a connectome position.
+    // Selection is not gated on being a graph node. Morph can represent
+    // below-threshold promotions and titles as honest virtual entities; only
+    // Connectome camera focus requires a resident node.
     if (e.t === "event") {
       announce(`${e.n} is an event name, not a selectable entity.`);
       return;
     }
     select({ kind: "node", id: e.id });
-    if (model?.indexOfId.has(e.id)) {
+    if (lens === "connectome" && model?.indexOfId.has(e.id)) {
       focus(e.id);
       announce(`Focused ${e.n} (${KIND_LABEL[e.t]})`);
-    } else if (lens === "atlas") {
-      announce(`Centred ${e.n} (${KIND_LABEL[e.t]}) in the Atlas.`);
+    } else if (lens === "morph") {
+      announce(`Organizing Morph Lab around ${e.n} (${KIND_LABEL[e.t]}).`);
+    } else if (lens === "connectome") {
+      announce(`${e.n} (${KIND_LABEL[e.t]}) has no resident Connectome node; inspect it in Morph Lab.`);
     } else {
-      announce(
-        `${e.n} (${KIND_LABEL[e.t]}) is in the corpus but below the connectome's node threshold — open the Atlas to read it.`,
-      );
+      announce(`Selected ${e.n} (${KIND_LABEL[e.t]}).`);
     }
   };
 
@@ -81,6 +79,8 @@ export function SearchBox() {
         type="search"
         role="combobox"
         aria-expanded={open && results.length > 0}
+        aria-controls="search-results"
+        aria-activedescendant={open && results[sel] ? `search-result-${sel}` : undefined}
         aria-label="Search people, promotions, titles, events"
         placeholder="Search the corpus…  ( / )"
         value={q}
@@ -106,10 +106,11 @@ export function SearchBox() {
         }}
       />
       {open && results.length > 0 && (
-        <div className="search-pop" role="listbox">
+        <div className="search-pop" role="listbox" id="search-results" aria-label="Corpus search results">
           {results.map((e, i) => (
             <button
               key={e.id}
+              id={`search-result-${i}`}
               role="option"
               aria-selected={i === sel}
               className={`search-row ${i === sel ? "sel" : ""}`}

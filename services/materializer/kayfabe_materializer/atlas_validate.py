@@ -1,9 +1,9 @@
-"""atlas:validate — assert the ATLAS projection is internally consistent and
+"""chronology:validate — assert the chronology projection is internally consistent and
 honest about what it could not resolve.
 
 Called by atlas_project.build() before the manifest is written (which is why
 every check reads the tree from disk and none of them reads the manifest), and
-standalone by `pnpm atlas:validate` to re-check a committed tree, where it
+standalone by `pnpm chronology:validate` to re-check a committed tree, where it
 additionally verifies every recorded checksum.
 
 The browser loader refuses to render a projection whose own validation failed,
@@ -452,8 +452,8 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest_path = out / "manifest.json"
     if not manifest_path.exists():
-        print(f"atlas:validate FAILED — no manifest at {manifest_path}. "
-              "Run: pnpm atlas:materialize")
+        print(f"chronology:validate FAILED — no manifest at {manifest_path}. "
+              "Run: pnpm chronology:materialize")
         return 1
     manifest = _load(manifest_path)
 
@@ -476,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
         c = checks[name]
         print(f"[{'PASS' if c.get('passed') else 'FAIL'}] {name}: "
               + ", ".join(f"{k}={v}" for k, v in c.items() if k != "passed"))
-    print("atlas:validate", "PASSED" if ok else "FAILED", f"— {out}")
+    print("chronology:validate", "PASSED" if ok else "FAILED", f"— {out}")
     return 0 if ok else 1
 
 

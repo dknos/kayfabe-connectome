@@ -34,9 +34,23 @@ const manifestSchema = z.object({
 /** Deploy base. Vite injects "/" in dev and the configured base in a build,
  * so the same code works at a domain root and under a project subpath. */
 const BASE = import.meta.env.BASE_URL;
+const LOAD_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`Timed out loading ${url}`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}data/${path}`);
+  const res = await fetchWithTimeout(`${BASE}data/${path}`);
   if (!res.ok) throw new Error(`GET /data/${path} → ${res.status}`);
   return (await res.json()) as T;
 }
@@ -68,7 +82,7 @@ export async function loadCore(onProgress: (frac: number, what: string) => void)
   if (nodes.pos.length !== 3 * n) throw new Error("nodes.pos length mismatch");
 
   onProgress(0.45, "edges");
-  const res = await fetch(`${BASE}data/graph/edges.bin`);
+  const res = await fetchWithTimeout(`${BASE}data/graph/edges.bin`);
   if (!res.ok) throw new Error(`edges.bin → ${res.status}`);
   const buf = await res.arrayBuffer();
   const edges = new Uint32Array(buf);
@@ -100,6 +114,9 @@ export function loadEvidenceForPair(pairKeyStr: string): Promise<EvidenceBucket>
   if (!p) {
     p = getJSON<EvidenceBucket>(`evidence/pairs/${b}.json`);
     evidenceCache.set(b, p);
+    void p.catch(() => {
+      if (evidenceCache.get(b) === p) evidenceCache.delete(b);
+    });
   }
   return p;
 }
@@ -111,6 +128,9 @@ export function loadPersonDossier(id: string): Promise<PeopleBucket> {
   if (!p) {
     p = getJSON<PeopleBucket>(`entities/people/${b}.json`);
     peopleCache.set(b, p);
+    void p.catch(() => {
+      if (peopleCache.get(b) === p) peopleCache.delete(b);
+    });
   }
   return p;
 }
@@ -127,6 +147,12 @@ export function loadYear(year: number): Promise<TimelineEvent[]> {
 
 let championships: Promise<ChampionshipsFile> | null = null;
 export function loadChampionships(): Promise<ChampionshipsFile> {
-  championships ??= getJSON<ChampionshipsFile>("entities/championships.json");
+  if (!championships) {
+    const request = getJSON<ChampionshipsFile>("entities/championships.json");
+    championships = request;
+    void request.catch(() => {
+      if (championships === request) championships = null;
+    });
+  }
   return championships;
 }

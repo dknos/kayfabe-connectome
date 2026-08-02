@@ -28,6 +28,7 @@ interface Live {
   sub: HTMLSpanElement;
   detail: HTMLSpanElement;
   badge: HTMLSpanElement;
+  actions: HTMLDivElement;
   text: string;
   subText: string;
   detailText: string;
@@ -38,10 +39,12 @@ interface Live {
 export class MorphLabels {
   onPick: ((id: string) => void) | null = null;
   onHover: ((id: string | null) => void) | null = null;
+  onAction: ((id: string, action: "pin" | "a" | "b" | "open") => void) | null = null;
 
   private host: HTMLElement;
   private live = new Map<string, Live>();
   private pinInset = 12;
+  private hoveredKey: string | null = null;
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -80,9 +83,20 @@ export class MorphLabels {
         lines[1]!.length * 0.85,
         lines[2]!.length * 0.85,
       );
-      const tw = widest * CHAR_PX + (spec.badge ? 34 : 8);
+      const measuredWidth = widest * CHAR_PX + (spec.badge ? 34 : 8);
+      // A forced semantic label must never be wider than the screen band it
+      // is pinned into. Long title metadata may overflow inside the clipped
+      // label host, but it must not push the entity NAME itself off-screen.
+      const pinToViewport = spec.force || this.pinInset <= 16;
+      const tw = pinToViewport
+        ? Math.min(measuredWidth, Math.max(48, w - this.pinInset * 2))
+        : measuredWidth;
       const th = 14 + (showSub ? 12 : 0) + (showDetail ? 12 : 0);
-      const x0 = spec.anchor === "left" ? p.x : p.x - tw / 2;
+      let x0 = spec.anchor === "left" ? p.x : p.x - tw / 2;
+      if (pinToViewport) {
+        const maxX = Math.max(this.pinInset, w - tw - this.pinInset);
+        x0 = Math.min(maxX, Math.max(this.pinInset, x0));
+      }
       const box = { x0, y0: p.y - th / 2, x1: x0 + tw, y1: p.y + th / 2 };
 
       if (!spec.force) {
@@ -110,9 +124,11 @@ export class MorphLabels {
         detail.className = "mlabel-detail";
         const badge = document.createElement("span");
         badge.className = "mlabel-badge";
-        el.append(name, badge, sub, detail);
+        const actions = document.createElement("div");
+        actions.className = "mlabel-actions";
+        el.append(name, badge, sub, detail, actions);
         this.host.appendChild(el);
-        l = { el, name, sub, detail, badge, text: "", subText: "", detailText: "", badgeText: "", cls: "" };
+        l = { el, name, sub, detail, badge, actions, text: "", subText: "", detailText: "", badgeText: "", cls: "" };
         this.live.set(spec.key, l);
         if (spec.pick) {
           const id = spec.pick;
@@ -120,8 +136,34 @@ export class MorphLabels {
             e.stopPropagation();
             this.onPick?.(id);
           });
-          el.addEventListener("pointerenter", () => this.onHover?.(id));
-          el.addEventListener("pointerleave", () => this.onHover?.(null));
+          el.addEventListener("pointerenter", () => {
+            this.hoveredKey = spec.key;
+            this.onHover?.(id);
+          });
+          el.addEventListener("pointerleave", () => {
+            this.hoveredKey = null;
+            this.onHover?.(null);
+          });
+          for (const [text, action, title] of [
+            ["PIN", "pin", "Pin entity"],
+            ["A", "a", "Set comparison A"],
+            ["B", "b", "Set comparison B"],
+            ["OPEN", "open", "Open in Connectome"],
+          ] as const) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "mlabel-action";
+            button.textContent = text;
+            button.title = title;
+            button.setAttribute("aria-label", title);
+            button.addEventListener("pointerdown", (event) => event.stopPropagation());
+            button.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              this.onAction?.(id, action);
+            });
+            actions.appendChild(button);
+          }
         }
       }
       if (l.text !== spec.text) {
@@ -149,18 +191,15 @@ export class MorphLabels {
         l.cls = cls;
         l.el.className = cls;
       }
-      let lx = Math.round(spec.anchor === "left" ? p.x : p.x - tw / 2);
-      if (spec.force) {
-        // a forced label (the selection) must stay readable on screen even
-        // when its anchor drifts past the edge during a morph
-        lx = Math.min(w - tw - this.pinInset, Math.max(this.pinInset, lx));
-      }
+      // Pinning happened before collision testing, so the box we reserve is
+      // exactly where the stable pooled element is drawn.
+      const lx = Math.round(box.x0);
       l.el.style.transform = `translate3d(${lx}px, ${Math.round(box.y0)}px, 0)`;
       l.el.style.opacity = String(globalOpacity);
     }
 
     for (const [key, l] of this.live) {
-      if (!used.has(key)) {
+      if (!used.has(key) && key !== this.hoveredKey) {
         l.el.remove();
         this.live.delete(key);
       }
@@ -171,5 +210,6 @@ export class MorphLabels {
   clear(): void {
     for (const l of this.live.values()) l.el.remove();
     this.live.clear();
+    this.hoveredKey = null;
   }
 }

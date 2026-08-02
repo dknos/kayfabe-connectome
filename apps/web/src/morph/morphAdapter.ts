@@ -47,7 +47,7 @@ export interface MorphData {
   count: number;
   /** organic positions in world units — flat xyz, OWNED by morph lab */
   organic: Float32Array;
-  organicBounds: { minX: number; maxX: number; minY: number; maxY: number };
+  organicBounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   graph: MorphGraphInput;
   model: GraphModel;
   core: CoreData;
@@ -61,6 +61,7 @@ export interface MorphData {
 
 export function buildMorphData(model: GraphModel, core: CoreData): MorphData {
   const n = model.nodes.count;
+  const registryName = new Map(core.search.map((entity) => [entity.id, entity.n]));
   const organic = new Float32Array(n * 3);
   for (let i = 0; i < n * 3; i++) organic[i] = model.nodes.pos[i]! * ORGANIC_SCALE;
 
@@ -85,7 +86,7 @@ export function buildMorphData(model: GraphModel, core: CoreData): MorphData {
     color[i * 3 + 2] = c[2];
     const deg = model.nodes.degree[i]!;
     // world-unit sizes; the shader clamps px so dust stays dust
-    scale[i] = t === 1 ? 5.2 : t === 2 ? 2.8 : 1.7 + 3.6 * Math.min(1, Math.sqrt(deg) / 26);
+    scale[i] = t === 1 ? 3.6 : t === 2 ? 2.3 : 1.25 + 2.9 * Math.min(1, Math.sqrt(deg) / 26);
     // quiet somas, density-compensated: additive alpha divided by the square
     // root of community population — the connectome's own white-plateau fix —
     // so the dense core reads as tissue instead of saturating to white and
@@ -94,23 +95,33 @@ export function buildMorphData(model: GraphModel, core: CoreData): MorphData {
       const comm = model.nodes.community[i]!;
       const csize = comm >= 0 ? (core.communities.size[comm] ?? 200) : 200;
       const density = Math.min(1, Math.max(0.18, Math.sqrt(140 / Math.max(1, csize))));
-      opacity[i] = (0.1 + 0.16 * Math.min(1, Math.sqrt(deg) / 26)) * density;
+      opacity[i] = (0.035 + 0.075 * Math.min(1, Math.sqrt(deg) / 26)) * density;
     } else {
-      opacity[i] = t === 1 ? 0.22 : 0.2;
+      opacity[i] = t === 1 ? 0.12 : 0.1;
     }
   }
 
   const relCache = new Map<number, NeighborRel[]>();
   let topEdgeCache: AmbientEdge[] | null = null;
 
-  const organicBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  const organicBounds = {
+    minX: Infinity,
+    maxX: -Infinity,
+    minY: Infinity,
+    maxY: -Infinity,
+    minZ: Infinity,
+    maxZ: -Infinity,
+  };
   for (let i = 0; i < n; i++) {
     const x = organic[i * 3]!;
     const y = organic[i * 3 + 1]!;
+    const z = organic[i * 3 + 2]!;
     if (x < organicBounds.minX) organicBounds.minX = x;
     if (x > organicBounds.maxX) organicBounds.maxX = x;
     if (y < organicBounds.minY) organicBounds.minY = y;
     if (y > organicBounds.maxY) organicBounds.maxY = y;
+    if (z < organicBounds.minZ) organicBounds.minZ = z;
+    if (z > organicBounds.maxZ) organicBounds.maxZ = z;
   }
 
   return {
@@ -125,8 +136,9 @@ export function buildMorphData(model: GraphModel, core: CoreData): MorphData {
     nameOf(id) {
       const i = model.indexOfId.get(id);
       if (i !== undefined) return model.nodes.name[i] ?? null;
-      // 406 of 571 promotions never earned a node; the registry names them all
-      return core.promotions[id]?.n ?? null;
+      // Below-threshold promotions, championships and listed holders retain
+      // their registry names even though they do not own a graph slot.
+      return core.promotions[id]?.n ?? registryName.get(id) ?? null;
     },
     relationsOf(index) {
       const hit = relCache.get(index);

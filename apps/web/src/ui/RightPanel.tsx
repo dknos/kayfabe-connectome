@@ -70,6 +70,26 @@ function LitSetNote() {
         Isolate — hide everything else
       </label>
       {members.caveat && <p className="derivation-note">{members.caveat}</p>}
+      {members.coverageWarnings?.map((warning) => (
+        <p className="derivation-note" role="note" key={warning}>{warning}</p>
+      ))}
+      {members.nonResident && members.nonResident.length > 0 && (
+        <details className="derivation-note" data-testid="nonresident-members">
+          <summary>
+            {members.nonResident.length.toLocaleString()} listed member
+            {members.nonResident.length === 1 ? " is" : "s are"} not graph-resident
+          </summary>
+          <p className="micro">
+            These documented people remain listed, but cannot light a corpus node because the
+            materialized graph has no resident node for their stable identifier.
+          </p>
+          <ul>
+            {members.nonResident.slice(0, 50).map((member) => (
+              <li key={member.id}>{member.name ?? member.id}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </>
   );
 }
@@ -80,11 +100,11 @@ export function RightPanel() {
   const selection = useStore((s) => s.selection);
   if (!selection) return null;
   return (
-    <div className="rail right">
+    <aside className="rail right" aria-label="Semantic inspector">
       <div className="panel" style={{ flex: 1 }}>
         {selection.kind === "node" ? <NodeDossier id={selection.id} /> : <EdgeDossier edge={selection.edge} />}
       </div>
-    </div>
+    </aside>
   );
 }
 
@@ -118,10 +138,10 @@ function NodeDossier({ id }: { id: string }) {
 
   // Not every selectable entity is a graph node — most promotions and
   // championships sit below the node thresholds but are fully represented in
-  // the Atlas. Selecting one there and switching back here must offer the way
+  // Morph Lab. Selecting one through search must still offer the way
   // forward rather than an error.
   if (i === undefined) {
-    const known = core?.promotions[id]?.n;
+    const known = core?.promotions[id]?.n ?? core?.search.find((entity) => entity.id === id)?.n;
     return (
       <>
         <h2>
@@ -132,10 +152,10 @@ function NodeDossier({ id }: { id: string }) {
         <div className="dossier-title">{known ?? id}</div>
         <div className="empty-note">
           This entity is in the corpus but below the connectome's node threshold, so it has no
-          position in the network view. The Atlas represents every promotion and championship.
+          position in the network view. Morph Lab can represent it as an honest virtual entity.
         </div>
         <div className="actions">
-          <button onClick={() => useStore.getState().setLens("atlas")}>Organize in Atlas</button>
+          <button onClick={() => useStore.getState().setLens("morph")}>Organize in Morph Lab</button>
         </div>
       </>
     );
@@ -182,11 +202,11 @@ function NodeDossier({ id }: { id: string }) {
 
       <div className="actions">
         <button
-          data-testid="open-in-atlas"
-          title="Read this entity as chronology instead of network"
-          onClick={() => useStore.getState().setLens("atlas")}
+          data-testid="open-in-morph"
+          title="Reorganize the living network around this entity"
+          onClick={() => useStore.getState().setLens("morph")}
         >
-          Organize in Atlas
+          Organize in Morph Lab
         </button>
       </div>
 

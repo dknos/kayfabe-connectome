@@ -33,6 +33,10 @@ export class MorphTraces {
 
   from: Float32Array; // centreline sample per vertex (both sides share it)
   to: Float32Array;
+  prevFrom: Float32Array;
+  nextFrom: Float32Array;
+  prevTo: Float32Array;
+  nextTo: Float32Array;
   normFrom: Float32Array; // 2D extrusion normal per vertex, from-shape
   normTo: Float32Array;
   side: Float32Array; // ±1
@@ -43,6 +47,7 @@ export class MorphTraces {
   alphaTo: Float32Array;
   kind: Float32Array;
   delay: Float32Array;
+  emphasis: Float32Array;
 
   private geo: THREE.BufferGeometry;
   private mat: THREE.ShaderMaterial;
@@ -53,6 +58,10 @@ export class MorphTraces {
     const nv = capacity * VERTS;
     this.from = new Float32Array(nv * 3);
     this.to = new Float32Array(nv * 3);
+    this.prevFrom = new Float32Array(nv * 3);
+    this.nextFrom = new Float32Array(nv * 3);
+    this.prevTo = new Float32Array(nv * 3);
+    this.nextTo = new Float32Array(nv * 3);
     this.normFrom = new Float32Array(nv * 2);
     this.normTo = new Float32Array(nv * 2);
     this.side = new Float32Array(nv);
@@ -63,6 +72,8 @@ export class MorphTraces {
     this.alphaTo = new Float32Array(nv);
     this.kind = new Float32Array(nv);
     this.delay = new Float32Array(nv);
+    this.emphasis = new Float32Array(nv);
+    this.emphasis.fill(1);
 
     const index = new Uint32Array(capacity * IDX);
     for (let t = 0; t < capacity; t++) {
@@ -88,20 +99,22 @@ export class MorphTraces {
     this.geo.setIndex(new THREE.BufferAttribute(index, 1));
     this.geo.setAttribute("position", dyn(this.from, 3));
     this.geo.setAttribute("aTo", dyn(this.to, 3));
-    this.geo.setAttribute("aNormFrom", dyn(this.normFrom, 2));
-    this.geo.setAttribute("aNormTo", dyn(this.normTo, 2));
+    this.geo.setAttribute("aPrevFrom", dyn(this.prevFrom, 3));
+    this.geo.setAttribute("aNextFrom", dyn(this.nextFrom, 3));
+    this.geo.setAttribute("aPrevTo", dyn(this.prevTo, 3));
+    this.geo.setAttribute("aNextTo", dyn(this.nextTo, 3));
     this.geo.setAttribute("aSide", dyn(this.side, 1));
     this.geo.setAttribute("aAlong", dyn(this.along, 1));
     this.geo.setAttribute("aColor", dyn(this.color, 3));
     this.geo.setAttribute("aWidth", dyn(this.width, 1));
     this.geo.setAttribute("aAlphaFrom", dyn(this.alphaFrom, 1));
     this.geo.setAttribute("aAlphaTo", dyn(this.alphaTo, 1));
-    this.geo.setAttribute("aKind", dyn(this.kind, 1));
     this.geo.setAttribute("aDelay", dyn(this.delay, 1));
+    this.geo.setAttribute("aEmphasis", dyn(this.emphasis, 1));
 
     this.mat = new THREE.ShaderMaterial({
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       // ribbon winding flips with travel direction — single-sided culling
@@ -109,14 +122,15 @@ export class MorphTraces {
       side: THREE.DoubleSide,
       uniforms: {
         uMorph: { value: 1 },
-        uWorldPerPixel: { value: 1 },
+        uResolution: { value: new THREE.Vector2(2, 2) },
       },
       vertexShader: /* glsl */ `
         attribute vec3 aTo;
-        attribute vec2 aNormFrom, aNormTo;
-        attribute float aSide, aAlong, aWidth, aAlphaFrom, aAlphaTo, aKind, aDelay;
+        attribute vec3 aPrevFrom, aNextFrom, aPrevTo, aNextTo;
+        attribute float aSide, aAlong, aWidth, aAlphaFrom, aAlphaTo, aDelay, aEmphasis;
         attribute vec3 aColor;
-        uniform float uMorph, uWorldPerPixel;
+        uniform float uMorph;
+        uniform vec2 uResolution;
         varying vec3 vColor;
         varying float vAlpha, vSide, vAlong, vKind;
         ${GLSL_PROGRESS}
@@ -124,14 +138,30 @@ export class MorphTraces {
           float p = elementP(uMorph, aDelay);
           float e = easeQ(p);
           vec3 centre = mix(position, aTo, e);
-          vec2 n = normalize(mix(aNormFrom, aNormTo, e) + vec2(1e-6));
-          centre.xy += n * aSide * aWidth * uWorldPerPixel * 0.5;
+          vec3 previous = mix(aPrevFrom, aPrevTo, e);
+          vec3 following = mix(aNextFrom, aNextTo, e);
           vColor = aColor;
-          vAlpha = mix(aAlphaFrom, aAlphaTo, p);
+          vAlpha = mix(aAlphaFrom, aAlphaTo, p) * aEmphasis;
           vSide = aSide;
           vAlong = aAlong;
-          vKind = aKind;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(centre, 1.0);
+          // The sign bit packs contextual-vs-solid treatment into width. This
+          // keeps the dense ribbon shader within conservative WebGL attribute
+          // limits after adding semantic hover emphasis.
+          vKind = aWidth < 0.0 ? 1.0 : 0.0;
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(centre, 1.0);
+          vec4 clipPrev = projectionMatrix * modelViewMatrix * vec4(previous, 1.0);
+          vec4 clipNext = projectionMatrix * modelViewMatrix * vec4(following, 1.0);
+          vec2 tangent = clipNext.xy / max(1e-5, clipNext.w) - clipPrev.xy / max(1e-5, clipPrev.w);
+          float aspect = uResolution.x / max(1.0, uResolution.y);
+          tangent.x *= aspect;
+          tangent = normalize(tangent + vec2(1e-7, 0.0));
+          vec2 normal = vec2(-tangent.y, tangent.x);
+          normal.x /= aspect;
+          // Ported from the LineMaterial screen-space expansion strategy, but
+          // retained in one batched draw for dense corpus traces.
+          vec2 offset = normal * aSide * abs(aWidth) * 2.0 / max(2.0, uResolution.y);
+          clip.xy += offset * clip.w;
+          gl_Position = clip;
         }
       `,
       fragmentShader: /* glsl */ `
@@ -163,8 +193,8 @@ export class MorphTraces {
   setMorph(raw: number): void {
     this.mat.uniforms.uMorph!.value = raw;
   }
-  setWorldPerPixel(v: number): void {
-    this.mat.uniforms.uWorldPerPixel!.value = v;
+  setResolution(width: number, height: number): void {
+    (this.mat.uniforms.uResolution!.value as THREE.Vector2).set(Math.max(2, width), Math.max(2, height));
   }
 
   setLiveCount(n: number): void {
@@ -173,6 +203,18 @@ export class MorphTraces {
   }
   get live(): number {
     return this.liveCount;
+  }
+
+  /** Update the optical priority of one complete trace without disturbing its
+   * geometry or transition alpha. Hover changes are rare and bounded by the
+   * active trace cap, so this remains a single small GPU buffer upload. */
+  setSlotEmphasis(slot: number, value: number): void {
+    const v0 = slot * VERTS;
+    this.emphasis.fill(value, v0, v0 + VERTS);
+  }
+
+  commitEmphasis(): void {
+    (this.geo.getAttribute("aEmphasis") as THREE.BufferAttribute).needsUpdate = true;
   }
 
   /**
@@ -213,13 +255,15 @@ export class MorphTraces {
         this.color[v3] = color[0];
         this.color[v3 + 1] = color[1];
         this.color[v3 + 2] = color[2];
-        this.width[v] = widthPx;
+        this.width[v] = kind === 1 || kind === 2 ? -widthPx : widthPx;
         this.alphaFrom[v] = alphaFrom;
         this.alphaTo[v] = alphaTo;
         this.kind[v] = kind;
         this.delay[v] = delay;
       }
     }
+    this.syncAdjacency(slot, this.from, this.prevFrom, this.nextFrom);
+    this.syncAdjacency(slot, this.to, this.prevTo, this.nextTo);
   }
 
   /** Fold current interpolation into from-state for one slot. */
@@ -237,6 +281,15 @@ export class MorphTraces {
       this.normFrom[v2 + 1] = this.normFrom[v2 + 1]! + (this.normTo[v2 + 1]! - this.normFrom[v2 + 1]!) * e;
       this.alphaFrom[v] = this.alphaFrom[v]! + (this.alphaTo[v]! - this.alphaFrom[v]!) * p;
     }
+    this.syncAdjacency(slot, this.from, this.prevFrom, this.nextFrom);
+  }
+
+  syncTargetAdjacency(slot: number): void {
+    this.syncAdjacency(slot, this.to, this.prevTo, this.nextTo);
+  }
+
+  syncFromAdjacency(slot: number): void {
+    this.syncAdjacency(slot, this.from, this.prevFrom, this.nextFrom);
   }
 
   /** Current centreline of a slot (for pulses riding a trace). */
@@ -255,8 +308,9 @@ export class MorphTraces {
 
   commit(): void {
     for (const name of [
-      "position", "aTo", "aNormFrom", "aNormTo", "aSide", "aAlong",
-      "aColor", "aWidth", "aAlphaFrom", "aAlphaTo", "aKind", "aDelay",
+      "position", "aTo", "aPrevFrom", "aNextFrom", "aPrevTo", "aNextTo",
+      "aSide", "aAlong",
+      "aColor", "aWidth", "aAlphaFrom", "aAlphaTo", "aDelay", "aEmphasis",
     ]) {
       (this.geo.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
     }
@@ -265,6 +319,25 @@ export class MorphTraces {
   dispose(): void {
     this.geo.dispose();
     this.mat.dispose();
+  }
+
+  private syncAdjacency(slot: number, centre: Float32Array, previous: Float32Array, next: Float32Array): void {
+    const v0 = slot * VERTS;
+    for (let s = 0; s < TRACE_SAMPLES; s++) {
+      const ps = Math.max(0, s - 1);
+      const ns = Math.min(TRACE_SAMPLES - 1, s + 1);
+      for (let sideI = 0; sideI < 2; sideI++) {
+        const v = v0 + s * 2 + sideI;
+        const pv = v0 + ps * 2 + sideI;
+        const nv = v0 + ns * 2 + sideI;
+        previous[v * 3] = centre[pv * 3]!;
+        previous[v * 3 + 1] = centre[pv * 3 + 1]!;
+        previous[v * 3 + 2] = centre[pv * 3 + 2]!;
+        next[v * 3] = centre[nv * 3]!;
+        next[v * 3 + 1] = centre[nv * 3 + 1]!;
+        next[v * 3 + 2] = centre[nv * 3 + 2]!;
+      }
+    }
   }
 }
 

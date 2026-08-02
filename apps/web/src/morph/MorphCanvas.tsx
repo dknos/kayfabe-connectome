@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { M, MorphRenderer, rgb } from "@kayfabe/morph-renderer";
 import { pairKey } from "@kayfabe/graph-contract";
+import { selectSemanticEmphasis, semanticEmphasisChanged } from "../graph/semanticEmphasis";
+import { loadChampionships } from "../data/loader";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
 import { markMorphCameraTouched } from "./morphUrl";
@@ -9,7 +11,7 @@ import { useMorph } from "./morphStore";
 /**
  * Owns the MorphRenderer. React renders exactly two hosts (canvas + label
  * layer) and never re-renders per frame — store subscriptions drive the
- * renderer imperatively, the same contract StageCanvas and AtlasCanvas obey.
+ * renderer imperatively, the same contract StageCanvas obeys.
  */
 export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,6 +19,10 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   const rendererRef = useRef<MorphRenderer | null>(null);
   const lastModeRef = useRef<string | null>(null);
   const lastAnchorRef = useRef<string | null>(null);
+  const [rendererFailure, setRendererFailure] = useState<string | null>(null);
+  const [contextLost, setContextLost] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
+  const hoverRelatedRef = useRef<readonly string[]>([]);
 
   // ---------- create / destroy ----------
   // Keyed on `data`: boot resolves after the first mount, and an effect with
@@ -25,24 +31,73 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   useEffect(() => {
     const data = morphData;
     if (!canvasRef.current || !labelsRef.current || rendererRef.current || !data) return;
-    const r = new MorphRenderer(canvasRef.current, labelsRef.current);
+    let r: MorphRenderer;
+    try {
+      r = new MorphRenderer(canvasRef.current, labelsRef.current);
+      setRendererFailure(null);
+    } catch (error) {
+      setRendererFailure(
+        `Morph Lab could not create a WebGL renderer. ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
     rendererRef.current = r;
     (window as { __kayfabeMorph?: MorphRenderer }).__kayfabeMorph = r;
     r.setGraph(data.graph, (slot) => data.idOf(slot));
     r.setReducedMotion(useStore.getState().reducedMotion);
 
+    let hoverResolveToken = 0;
     r.onPick = (hit) => {
       if (!hit) return;
+      hoverRelatedRef.current = [];
       useMorph.getState().leaveTissue();
       useStore.getState().select({ kind: "node", id: hit.id });
     };
-    r.onHover = (id) => useStore.getState().hover(id);
+    r.onHover = (id) => {
+      const token = ++hoverResolveToken;
+      hoverRelatedRef.current = [];
+      const shared = useStore.getState();
+      shared.hover(id);
+      const selected = shared.selection?.kind === "node" ? shared.selection.id : null;
+      const promotion = useMorph.getState().promotion;
+      if (!id?.startsWith("t:") || !selected?.startsWith("pr:") || !promotion?.titles.some((t) => t.t === id)) return;
+      void loadChampionships().then((records) => {
+        const now = useStore.getState();
+        if (
+          token !== hoverResolveToken ||
+          now.hoverId !== id ||
+          now.selection?.kind !== "node" ||
+          now.selection.id !== selected
+        ) return;
+        useMorph.setState({ championships: records });
+        const population = new Set(now.members.ids);
+        hoverRelatedRef.current = [...new Set((records[id]?.reigns ?? []).flatMap((reign) => reign.holders))]
+          .filter((holder) => population.has(holder));
+        applyEmphasisFrom(r, hoverRelatedRef.current);
+      }).catch(() => {
+        // Optional hover detail degrades to ordinary title hover; the cached
+        // loader remains retryable on the next hover.
+      });
+    };
+    r.labels.onAction = (id, action) => {
+      const st = useStore.getState();
+      if (action === "pin") st.togglePin(id);
+      else if (action === "a") st.setPathEndpoint("a", st.pathA === id ? null : id);
+      else if (action === "b") st.setPathEndpoint("b", st.pathB === id ? null : id);
+      else {
+        st.select({ kind: "node", id });
+        st.setLens("connectome");
+        if (st.model?.indexOfId.has(id)) st.focus(id);
+      }
+    };
     r.onLabelReport = (rep) => useMorph.getState().setLabelReport(rep.shown, rep.wanted);
     r.onTierChange = (t) => useMorph.getState().setTier(t);
     r.onCameraChange = () => {
       markMorphCameraTouched(true);
       useMorph.getState().setCamera(r.cam.snapshot());
     };
+    r.onContextState = (state) => setContextLost(state === "lost");
+    applyMorphViewport(r, useMorph.getState().sheet, false);
 
     // replay whatever layout existed before this subscription registered
     const s0 = useMorph.getState();
@@ -53,24 +108,38 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         r.cam.restore(pending);
         useMorph.setState({ pendingCamera: null });
       } else {
-        r.fitLayout(0);
+        r.fitLayout(0, true);
         markMorphCameraTouched(false);
       }
       lastModeRef.current = s0.layout.mode;
       lastAnchorRef.current = s0.layout.anchorId;
     }
-    applyEmphasisFrom(r);
+    applyEmphasisFrom(r, hoverRelatedRef.current);
     r.start();
 
-    const onResize = () => r.resize();
+    let resizeFitTimer: number | null = null;
+    const onResize = () => {
+      // Resolution, label clipping and obstruction insets update immediately;
+      // the trailing fit avoids restarting a camera flight on every pixel of
+      // an interactive desktop resize while still handling rotation/crossing
+      // the mobile breakpoint without requiring a sheet toggle.
+      applyMorphViewport(r, useMorph.getState().sheet, false);
+      if (resizeFitTimer !== null) window.clearTimeout(resizeFitTimer);
+      resizeFitTimer = window.setTimeout(() => {
+        resizeFitTimer = null;
+        applyMorphViewport(r, useMorph.getState().sheet, true);
+      }, 120);
+    };
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
+      if (resizeFitTimer !== null) window.clearTimeout(resizeFitTimer);
       r.dispose();
+      hoverResolveToken++;
       rendererRef.current = null;
       delete (window as { __kayfabeMorph?: MorphRenderer }).__kayfabeMorph;
     };
-  }, [morphData]);
+  }, [morphData, retryToken]);
 
   // ---------- layout → renderer ----------
   useEffect(() => {
@@ -89,7 +158,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         }
         // reframe on a semantic change, never on a control tweak
         if (s.layout.mode !== lastModeRef.current || s.layout.anchorId !== lastAnchorRef.current) {
-          r.fitLayout(0.85);
+          r.fitLayout(0.85, true);
           markMorphCameraTouched(false);
         }
         lastModeRef.current = s.layout.mode;
@@ -101,7 +170,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
       }
       // re-derive emphasis once a rebuild lands: the dim was suspended while
       // roles belonged to the outgoing layout
-      if (s.building !== prev.building && !s.building) applyEmphasisFrom(r);
+      if (s.building !== prev.building && !s.building) applyEmphasisFrom(r, hoverRelatedRef.current);
     });
     return unsub;
   }, []);
@@ -111,13 +180,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
     const unsub = useStore.subscribe((s, prev) => {
       const r = rendererRef.current;
       if (!r) return;
-      if (
-        s.selection !== prev.selection ||
-        s.hoverId !== prev.hoverId ||
-        s.pinned !== prev.pinned ||
-        s.pathResult !== prev.pathResult
-      ) {
-        applyEmphasisFrom(r);
+      if (semanticEmphasisChanged(s, prev)) {
+        if (s.selection !== prev.selection) hoverRelatedRef.current = [];
+        applyEmphasisFrom(r, hoverRelatedRef.current);
       }
       if (s.reducedMotion !== prev.reducedMotion) r.setReducedMotion(s.reducedMotion);
     });
@@ -185,13 +250,6 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         const key = pairKey(p.a, p.b);
         if (r.pulseTrace(key, color)) {
           emitted++;
-        } else {
-          const ia = idx(p.a);
-          const ib = idx(p.b);
-          if (ia !== undefined && ib !== undefined) {
-            r.pulseBetween(ia, ib, color);
-            emitted++;
-          }
         }
       }
       if (f.ev.tc === 1 && f.ev.t) {
@@ -208,7 +266,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
     if (!cv) return;
     let hoverPending = false;
     const onMove = (e: PointerEvent) => {
-      if (hoverPending || e.buttons !== 0) return;
+      if (hoverPending || e.buttons !== 0 || rendererRef.current?.cam.isDragging) return;
       hoverPending = true;
       requestAnimationFrame(() => {
         hoverPending = false;
@@ -216,7 +274,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
         if (!r) return;
         const rect = cv.getBoundingClientRect();
         const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top);
-        useStore.getState().hover(hit?.id ?? null);
+        r.onHover?.(hit?.id ?? null);
         cv.style.cursor = hit ? "pointer" : "default";
       });
     };
@@ -228,7 +286,7 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
       if (!downAt) return;
       const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
       downAt = null;
-      if (moved > 5) return; // drag = camera, not selection
+      if (moved > 5 || e.button !== 0) return; // drag/right-pan = camera, not selection
       const r = rendererRef.current;
       const st = useStore.getState();
       if (!r) return;
@@ -260,10 +318,9 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
       const rect = cv.getBoundingClientRect();
       const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top);
       if (hit) {
-        // open the full dossier: the connectome owns that reading
+        // Double click is a Morph camera action; switching lenses is explicit.
         st.select({ kind: "node", id: hit.id });
-        st.setLens("connectome");
-        if (useStore.getState().model?.indexOfId.has(hit.id)) st.focus(hit.id);
+        r.focusId(hit.id);
       }
     };
     cv.addEventListener("pointermove", onMove);
@@ -286,22 +343,54 @@ export function MorphCanvas({ engine }: { engine: TimelineEngine }) {
   useEffect(() => {
     const r = rendererRef.current;
     if (!r) return;
-    const narrow = window.innerWidth <= 820;
-    r.labels.setPinInset(narrow ? 8 : 316);
-    r.cam.setBottomInset(narrow && sheet !== "hidden" ? Math.round(window.innerHeight * 0.42) : 0);
-    if (narrow) r.fitLayout(0.4);
+    applyMorphViewport(r, sheet, window.innerWidth <= 820);
   }, [sheet, morphData]);
 
   return (
     <>
       <canvas ref={canvasRef} className="morph-gl" aria-hidden="true" data-testid="morph-canvas" />
-      <div ref={labelsRef} className="morph-labels" aria-hidden="true" />
+      <div ref={labelsRef} className="morph-labels" aria-label="Interactive Morph Lab labels" />
+      {rendererFailure && (
+        <div className="boot morph-overlay morph-webgl-fallback" role="alert">
+          <div className="inner">
+            <b>3D renderer unavailable</b>
+            <p className="micro">{rendererFailure}</p>
+            <button type="button" onClick={() => setRetryToken((n) => n + 1)}>Retry renderer</button>
+          </div>
+        </div>
+      )}
+      {contextLost && !rendererFailure && (
+        <div className="boot morph-overlay morph-context-lost" role="status">
+          <div className="inner"><b>Graphics context lost</b><p className="micro">Waiting for the GPU context to restore…</p></div>
+        </div>
+      )}
     </>
   );
 }
 
-function applyEmphasisFrom(r: MorphRenderer): void {
+function applyMorphViewport(
+  renderer: MorphRenderer,
+  sheet: "controls" | "inspector" | "hidden",
+  refit: boolean,
+): void {
+  renderer.resize();
+  const narrow = window.innerWidth <= 820;
+  renderer.labels.setPinInset(narrow ? 8 : 316);
+  renderer.cam.setInsets({
+    left: narrow ? 0 : 292,
+    right: narrow ? 0 : 316,
+    top: 0,
+    bottom: narrow && sheet !== "hidden" ? Math.round(window.innerHeight * 0.42) : 0,
+  });
+  if (refit) {
+    renderer.fitLayout(0.4);
+    markMorphCameraTouched(false);
+  }
+}
+
+function applyEmphasisFrom(r: MorphRenderer, hoverRelatedIds: readonly string[] = []): void {
   const st = useStore.getState();
+  const semantic = selectSemanticEmphasis(st);
   const data = useMorph.getState().data;
   if (!data) return;
   const idx = (id: string | null): number => {
@@ -309,14 +398,35 @@ function applyEmphasisFrom(r: MorphRenderer): void {
     const i = data.indexOf(id);
     return i === undefined ? -1 : i;
   };
-  const selId = st.selection?.kind === "node" ? st.selection.id : null;
+  const slotsAndVirtuals = (ids: readonly string[]) => {
+    const slots: number[] = [];
+    const virtuals: string[] = [];
+    for (const id of ids) {
+      const slot = idx(id);
+      if (slot >= 0) slots.push(slot);
+      else virtuals.push(id);
+    }
+    return { slots, virtuals };
+  };
+  const members = slotsAndVirtuals(semantic.members);
+  const anchors = slotsAndVirtuals(semantic.anchors);
+  const selId = semantic.selected;
   r.applyEmphasis({
     selected: idx(selId),
-    hovered: idx(st.hoverId),
+    hovered: idx(semantic.hovered),
     selectedId: selId && idx(selId) < 0 ? selId : null,
-    hoveredId: st.hoverId && idx(st.hoverId) < 0 ? st.hoverId : null,
-    pinned: st.pinned.map(idx).filter((v) => v >= 0),
-    pathNodes: (st.pathResult?.nodes ?? []).map(idx).filter((v) => v >= 0),
-    dimBackground: !useMorph.getState().building,
+    hoveredId: semantic.hovered && idx(semantic.hovered) < 0 ? semantic.hovered : null,
+    pinned: semantic.pinned.map(idx).filter((v) => v >= 0),
+    pathNodes: semantic.pathNodes.map(idx).filter((v) => v >= 0),
+    hoverMembers: hoverRelatedIds.map(idx).filter((v) => v >= 0),
+    members: members.slots,
+    anchors: anchors.slots,
+    virtualMembers: members.virtuals,
+    virtualAnchors: anchors.virtuals,
+    memberGroup: semantic.memberGroup,
+    basis: semantic.basis,
+    caveat: semantic.caveat,
+    coverageWarnings: semantic.coverageWarnings,
+    dimBackground: semantic.isolate && !useMorph.getState().building,
   });
 }

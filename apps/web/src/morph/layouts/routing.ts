@@ -42,6 +42,45 @@ export function sampleOrganicBow(
 }
 
 /**
+ * A readable 3D connection between two organized nodes. The two controls fan
+ * away from the anchor in world space, so traces separate under orbit rather
+ * than collapsing into a shared XY bus. Output identity/vertex count matches
+ * the organic fiber and is therefore safe for GPU interpolation.
+ */
+export function sampleSpatialCurve(
+  ax: number, ay: number, az: number,
+  bx: number, by: number, bz: number,
+  lane: number,
+  seed: number,
+): Float32Array {
+  const out = new Float32Array(TRACE_SAMPLES * 3);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dz = bz - az;
+  const length = Math.max(1, Math.hypot(dx, dy, dz));
+  const side = hash01(seed) < 0.5 ? -1 : 1;
+  const fan = Math.min(95, 18 + length * 0.09) + lane;
+  const c1x = ax + dx * 0.24 + side * Math.min(26, fan * 0.22);
+  const c1y = ay + dy * 0.17 + fan * 0.28;
+  const c1z = az + dz * 0.2 + side * fan;
+  const c2x = ax + dx * 0.72 - side * Math.min(18, fan * 0.16);
+  const c2y = ay + dy * 0.82 + fan * 0.14;
+  const c2z = az + dz * 0.76 + side * fan * 0.45;
+  for (let s = 0; s < TRACE_SAMPLES; s++) {
+    const t = s / (TRACE_SAMPLES - 1);
+    const u = 1 - t;
+    const a = u * u * u;
+    const b = 3 * u * u * t;
+    const c = 3 * u * t * t;
+    const d = t * t * t;
+    out[s * 3] = a * ax + b * c1x + c * c2x + d * bx;
+    out[s * 3 + 1] = a * ay + b * c1y + c * c2y + d * by;
+    out[s * 3 + 2] = a * az + b * c1z + c * c2z + d * bz;
+  }
+  return out;
+}
+
+/**
  * Resample an arbitrary polyline to exactly TRACE_SAMPLES points, evenly by
  * arc length — every routed trace has the same vertex budget as its organic
  * ancestor, which is what makes the two interpolable.
@@ -65,6 +104,38 @@ export function resample(points: number[], z: number): Float32Array {
     out[s * 3] = points[seg * 2]! + (points[(seg + 1) * 2]! - points[seg * 2]!) * t;
     out[s * 3 + 1] = points[seg * 2 + 1]! + (points[(seg + 1) * 2 + 1]! - points[seg * 2 + 1]!) * t;
     out[s * 3 + 2] = z;
+  }
+  return out;
+}
+
+/** Resample an xyz polyline by true 3D arc length. Spatial layouts use this
+ * instead of flattening meaningful depth into one decorative z constant. */
+export function resample3D(points: readonly number[]): Float32Array {
+  const n = Math.floor(points.length / 3);
+  if (n < 2) throw new Error("resample3D needs at least two xyz points");
+  const out = new Float32Array(TRACE_SAMPLES * 3);
+  const cumulative = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    const a = (i - 1) * 3;
+    const b = i * 3;
+    cumulative[i] = cumulative[i - 1]! + Math.hypot(
+      points[b]! - points[a]!,
+      points[b + 1]! - points[a + 1]!,
+      points[b + 2]! - points[a + 2]!,
+    );
+  }
+  const total = cumulative[n - 1]!;
+  let segment = 0;
+  for (let sample = 0; sample < TRACE_SAMPLES; sample++) {
+    const target = total > 0 ? (sample / (TRACE_SAMPLES - 1)) * total : 0;
+    while (segment < n - 2 && cumulative[segment + 1]! < target) segment++;
+    const span = cumulative[segment + 1]! - cumulative[segment]!;
+    const t = span > 0 ? (target - cumulative[segment]!) / span : 0;
+    const a = segment * 3;
+    const b = (segment + 1) * 3;
+    for (let axis = 0; axis < 3; axis++) {
+      out[sample * 3 + axis] = points[a + axis]! + (points[b + axis]! - points[a + axis]!) * t;
+    }
   }
   return out;
 }

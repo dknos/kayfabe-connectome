@@ -97,7 +97,7 @@ Reduced motion preserves every analytical function and removes only movement:
 | travelling arc | static, longer-lived |
 
 Automatic camera follow is off by default in reduced motion, and the full card
-readout, all counters, the inspector and the GEO table are unchanged. The
+readout, all counters and the inspector are unchanged. The
 Playwright reduced-motion journey asserts that ripple and column counts are
 exactly zero while the record still advances.
 

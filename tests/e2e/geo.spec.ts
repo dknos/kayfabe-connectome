@@ -42,6 +42,36 @@ test.describe("geo replay", () => {
     await expect(page.getByTestId("geo-scope-label")).toContainText("cards in scope");
   }
 
+  test("WebGL globe creation failure is visible and retryable", async ({ page, isMobile }) => {
+    test.skip(!!isMobile, "one desktop renderer fallback pass is sufficient");
+    await page.goto("/");
+    await expect(page.locator("canvas.gl")).toBeVisible({ timeout: 40_000 });
+
+    await page.evaluate(() => {
+      const proto = HTMLCanvasElement.prototype as any;
+      (window as any).__qaOriginalGeoGetContext = proto.getContext;
+      proto.getContext = function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
+        if (this.closest(".geo-globe") && kind.startsWith("webgl")) return null;
+        return (window as any).__qaOriginalGeoGetContext.call(this, kind, ...args);
+      };
+    });
+
+    await page.getByRole("button", { name: "Geo Replay" }).click();
+    const fallback = page.getByTestId("geo-renderer-error");
+    await expect(fallback).toBeVisible({ timeout: 90_000 });
+    await expect(fallback).toContainText("could not create its WebGL globe");
+
+    await page.evaluate(() => {
+      const original = (window as any).__qaOriginalGeoGetContext;
+      if (original) HTMLCanvasElement.prototype.getContext = original;
+    });
+    await fallback.getByRole("button", { name: "Retry globe" }).click();
+    await page.waitForFunction(() => Boolean((window as any).__kayfabeGeo), undefined, {
+      timeout: 90_000,
+    });
+    await expect(fallback).toHaveCount(0);
+  });
+
   test("WWF replay: scope, play, beacon, city evidence, share and reload", async ({
     page, isMobile,
   }) => {
@@ -55,7 +85,11 @@ test.describe("geo replay", () => {
     await selectPromotion(page, "WWF");
     await expect(page.getByTestId("geo-scope-label")).toContainText("3,066");
 
-    await page.getByRole("button", { name: "Play", exact: true }).first().click();
+    // Space is lens-scoped: Geo keeps its documented playback shortcut while
+    // Morph consumes the same key in its own capture-phase handler.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press("Space");
+    await expect(page.getByRole("button", { name: "Pause", exact: true }).first()).toBeVisible();
     await expect(page.getByTestId("geo-current-card")).toBeVisible({ timeout: 20000 });
     // the current card advances
     const first = await page.getByTestId("geo-date").textContent();
@@ -73,7 +107,8 @@ test.describe("geo replay", () => {
     await expect(page.getByTestId("geo-location")).not.toBeEmpty();
     await expect(page.getByTestId("geo-match-count")).not.toBeEmpty();
 
-    await page.getByRole("button", { name: "Pause", exact: true }).first().click();
+    await page.keyboard.press("Space");
+    await expect(page.getByRole("button", { name: "Play", exact: true }).first()).toBeVisible();
     const paused = await page.getByTestId("geo-progress").textContent();
     await page.waitForTimeout(1200);
     expect(await page.getByTestId("geo-progress").textContent()).toBe(paused);
@@ -228,29 +263,29 @@ test.describe("geo replay", () => {
     });
     expect(unresolved).toBeGreaterThan(0);
 
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByTestId("geo-table")).toBeVisible({ timeout: 20000 });
-    await page.getByRole("tab", { name: "unplotted" }).click();
-    await expect(page.getByTestId("geo-table")).toContainText("unresolved");
+    await expect(page.getByTestId("geo-scope-summary")).toContainText("not plotted");
     expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
   });
 
-  test("geo table carries the same scope as the globe", async ({ page, isMobile }) => {
+  test("geo inspector carries the same accessible scope as the globe", async ({ page, isMobile }) => {
     test.skip(!!isMobile, "desktop journey");
     const errors = await openGeo(page);
     await selectPromotion(page, "WWF");
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByTestId("geo-table")).toContainText("3,066 cards in scope");
-    // sortable, non-canvas, and every geographic column is present
-    for (const col of ["Date", "Location", "Country", "Precision", "Title changes", "Card id"]) {
-      await expect(page.getByRole("button", { name: new RegExp(col) }).first()).toBeVisible();
-    }
-    await page.getByRole("tab", { name: "places" }).click();
-    await expect(page.getByTestId("geo-table")).toContainText("Coordinate");
+    await expect.poll(() => page.url()).toContain("gs=promotion");
+    const wwfHash = new URL(page.url()).hash;
+    await page.getByLabel("Scope", { exact: true }).selectOption("corpus");
+    await expect(page.getByTestId("geo-total-cards")).not.toHaveText("3,066");
+    await page.evaluate((hash) => { location.hash = hash; }, wwfHash);
+    await expect(page.getByTestId("geo-scope-label")).toContainText("3,066", { timeout: 30_000 });
+    await expect(page.getByRole("complementary", { name: "Geographic inspector" })).toBeVisible();
+    await expect(page.getByTestId("geo-total-cards")).toHaveText("3,066");
+    await expect(page.getByTestId("geo-scope-summary")).toContainText("cards");
+    await expect(page.getByTestId("geo-scope-summary")).toContainText("places");
+    await expect(page.getByTestId("geo-scope-summary")).toContainText("title matches");
     expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
   });
 
-  test("mobile: globe operable, city inspected, table reachable, follow disabled", async ({
+  test("mobile: globe operable, city inspector reachable, follow disabled", async ({
     page, isMobile,
   }) => {
     test.skip(!isMobile, "mobile journey");
@@ -279,9 +314,6 @@ test.describe("geo replay", () => {
     await page.getByRole("tab", { name: "controls" }).click();
     await page.getByLabel("Camera").selectOption("free");
     await expect(page.getByLabel("Camera")).toHaveValue("free");
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByTestId("geo-table")).toBeVisible({ timeout: 20000 });
-    await page.getByRole("button", { name: "Geo Replay" }).click();
     await expect(page.getByTestId("geo-globe")).toBeVisible();
     expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
   });

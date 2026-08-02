@@ -9,7 +9,12 @@ import {
 } from "@kayfabe/morph-renderer";
 import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
 import { pairKey } from "@kayfabe/graph-contract";
-import { loadAtlasCore, loadPersonRoutes, loadPromotionDetail, type AtlasData } from "../atlas/atlasLoader";
+import {
+  loadChronologyCore,
+  loadChronologyPersonRoutes,
+  loadChronologyPromotionDetail,
+  type ChronologyData,
+} from "../data/chronology/loader";
 import type { AtlasPersonRoutes, AtlasPromotionDetail } from "@kayfabe/graph-contract";
 import { useStore } from "../state/store";
 import { buildMorphData, type MorphData } from "./morphAdapter";
@@ -24,7 +29,7 @@ import { DEFAULT_MORPH_CONTROLS, type MorphControlsState } from "./layouts/layou
 /**
  * MORPH LAB state.
  *
- * Like GEO and ATLAS it owns almost nothing: the selected entity, history,
+ * Like the other secondary views it owns almost nothing: the selected entity, history,
  * pins, path endpoints, filters, timeline and reduced-motion all live in the
  * shared store — that is what makes lens switches keep the reader's place.
  * What lives here: which topology is showing, how it is sorted, the built
@@ -70,7 +75,7 @@ export const morphModeFor = (
 
 interface MorphStore {
   data: MorphData | null;
-  atlas: AtlasData | null;
+  chronology: ChronologyData | null;
   loading: boolean;
   error: string | null;
 
@@ -115,7 +120,7 @@ let buildToken = 0;
 
 export const useMorph = create<MorphStore>((set, get) => ({
   data: null,
-  atlas: null,
+  chronology: null,
   loading: false,
   error: null,
   controls: { ...DEFAULT_MORPH_CONTROLS },
@@ -142,13 +147,13 @@ export const useMorph = create<MorphStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = buildMorphData(main.model, main.core);
-      let atlas: AtlasData | null = null;
+      let chronology: ChronologyData | null = null;
       try {
-        atlas = await loadAtlasCore();
+        chronology = await loadChronologyCore();
       } catch {
         // names of node-less titles degrade to ids; the lens still works
       }
-      set({ data, atlas, loading: false });
+      set({ data, chronology, loading: false });
       await get().rebuild();
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
@@ -211,9 +216,9 @@ export const useMorph = create<MorphStore>((set, get) => ({
       return;
     }
     if (id.startsWith("t:")) {
-      const a = get().atlas;
-      const ti = a?.titleIndex.get(id);
-      const pr = ti !== undefined ? a!.titles.pr[ti]! : "";
+      const chronology = get().chronology;
+      const ti = chronology?.titleIndex.get(id);
+      const pr = ti !== undefined ? chronology!.titles.pr[ti]! : "";
       main.select(pr ? { kind: "node", id: pr } : null);
       return;
     }
@@ -249,14 +254,14 @@ export const useMorph = create<MorphStore>((set, get) => ({
         const bucket = await loadPersonDossier(id).catch(() => null);
         if (token !== buildToken) return;
         const dossier = bucket?.[id] ?? null;
-        const atlas = s.atlas;
+        const chronology = s.chronology;
         const layout = buildLoom(
           data,
           id,
           dossier,
           (t) => {
-            const ti = atlas?.titleIndex.get(t);
-            return ti !== undefined ? (atlas!.titles.name[ti] ?? null) : null;
+            const ti = chronology?.titleIndex.get(t);
+            return ti !== undefined ? (chronology!.titles.name[ti] ?? null) : null;
           },
           s.controls,
           Math.max(60, traceCap - 60),
@@ -272,12 +277,12 @@ export const useMorph = create<MorphStore>((set, get) => ({
         let detail: AtlasPromotionDetail | null = null;
         let shardFailed = false;
         try {
-          detail = await loadPromotionDetail(id);
+          detail = await loadChronologyPromotionDetail(id);
         } catch {
           shardFailed = true;
         }
         if (token !== buildToken) return;
-        const layout = buildMotherboard(data, id, detail, s.atlas, s.controls, shardFailed);
+        const layout = buildMotherboard(data, id, detail, s.controls, shardFailed);
         if (token !== buildToken) return;
         set({ layout, promotion: detail, dossier: null, personRoutes: null, building: false });
         return;
@@ -285,13 +290,24 @@ export const useMorph = create<MorphStore>((set, get) => ({
 
       if (effMode === "career" && id) {
         const [routes, bucket] = await Promise.all([
-          loadPersonRoutes(id).catch(() => null),
+          loadChronologyPersonRoutes(id).catch(() => null),
           loadPersonDossier(id).catch(() => null),
         ]);
         if (token !== buildToken) return;
         const dossier = bucket?.[id] ?? null;
-        const layout = buildCareer(data, id, routes, dossier, s.atlas, s.controls);
+        const layout = buildCareer(data, id, routes, dossier, s.chronology, s.controls);
         if (token !== buildToken) return;
+        // Career playback must enter on the first documented point of the
+        // rendered spine. A global/off playhead otherwise starts decades away
+        // from the geometry and emits a long stretch of unrelated corpus time.
+        const axis = layout.timeAxis;
+        const timeline = useStore.getState().timeline;
+        if (
+          axis &&
+          (timeline.mode === "off" || timeline.day < axis.dayMin || timeline.day > axis.dayMax)
+        ) {
+          useStore.getState().setTimeline({ day: axis.dayMin });
+        }
         set({ layout, dossier, personRoutes: routes, promotion: null, building: false });
         return;
       }
@@ -300,11 +316,26 @@ export const useMorph = create<MorphStore>((set, get) => ({
         const pair = h2hPair();
         if (pair) {
           const key = pairKey(pair[0], pair[1]);
-          const bucket = await loadEvidenceForPair(key).catch(() => null);
+          const [bucket, dossierBucket] = await Promise.all([
+            loadEvidenceForPair(key).catch(() => null),
+            id?.startsWith("p:") ? loadPersonDossier(id).catch(() => null) : Promise.resolve(null),
+          ]);
           if (token !== buildToken) return;
-          const layout = buildHeadToHead(data, pair[0], pair[1], bucket?.[key] ?? []);
+          const layout = buildHeadToHead(
+            data,
+            pair[0],
+            pair[1],
+            bucket?.[key] ?? [],
+            s.controls,
+          );
           if (token !== buildToken) return;
-          set({ layout, dossier: null, promotion: null, personRoutes: null, building: false });
+          set({
+            layout,
+            dossier: id ? dossierBucket?.[id] ?? null : null,
+            promotion: null,
+            personRoutes: null,
+            building: false,
+          });
           return;
         }
       }
@@ -312,7 +343,13 @@ export const useMorph = create<MorphStore>((set, get) => ({
       if (effMode === "lineage" && id) {
         const champs = await loadChampionships().catch(() => null);
         if (token !== buildToken) return;
-        const layout = buildLineage(data, id, champs?.[id] ?? null, s.atlas);
+        const layout = buildLineage(
+          data,
+          id,
+          champs?.[id] ?? null,
+          s.chronology,
+          s.controls,
+        );
         if (token !== buildToken) return;
         set({ layout, championships: champs, dossier: null, promotion: null, personRoutes: null, building: false });
         return;

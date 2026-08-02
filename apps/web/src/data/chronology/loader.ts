@@ -11,19 +11,32 @@ import type {
 import { bucketOf } from "@kayfabe/graph-contract";
 
 /**
- * ATLAS data, loaded lazily in three tiers.
+ * Chronology data, loaded lazily in three tiers.
  *
- * A reader who never opens ATLAS pays nothing. Opening it costs the overview
- * (two compact columnar files); selecting a promotion costs that promotion's
- * shard; selecting a wrestler costs that wrestler's route shard. Nothing here
- * is added to the connectome's boot payload, which is the whole reason the
- * projection is a separate tree rather than more fields on nodes.json.
+ * The on-wire `data/atlas` path and graph-contract `Atlas*` types are the
+ * versioned chronology schema and remain compatible with existing materialized
+ * corpora. Consumers use neutral names so the useful projection does not belong
+ * to any one interface lens.
  */
 
 const BASE = import.meta.env.BASE_URL;
+const LOAD_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`Timed out loading ${url}`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}data/atlas/${path}`);
+  const res = await fetchWithTimeout(`${BASE}data/atlas/${path}`);
   if (!res.ok) throw new Error(`GET /data/atlas/${path} → ${res.status}`);
   return (await res.json()) as T;
 }
@@ -53,7 +66,7 @@ function assertColumnar(name: string, count: number, cols: Record<string, unknow
   }
 }
 
-export interface AtlasData {
+export interface ChronologyData {
   manifest: AtlasManifest;
   promotions: AtlasPromotionsFile;
   titles: AtlasTitlesFile;
@@ -71,15 +84,16 @@ export interface AtlasData {
   maxTitleMatches: number;
 }
 
-let corePromise: Promise<AtlasData> | null = null;
+let corePromise: Promise<ChronologyData> | null = null;
 
-export function loadAtlasCore(): Promise<AtlasData> {
-  corePromise ??= (async () => {
+export function loadChronologyCore(): Promise<ChronologyData> {
+  if (corePromise) return corePromise;
+  const request = (async () => {
     const manifestRaw = await getJSON<unknown>("manifest.json");
     const manifest = manifestSchema.parse(manifestRaw) as unknown as AtlasManifest;
     if (!manifest.validation.passed) {
       throw new Error(
-        "The Atlas projection failed its own validation — refusing to render unverified data.",
+        "The chronology projection failed its own validation — refusing to render unverified data.",
       );
     }
     const [promotions, titles] = await Promise.all([
@@ -159,35 +173,47 @@ export function loadAtlasCore(): Promise<AtlasData> {
       maxTitleMatches,
     };
   })();
-  return corePromise;
+  corePromise = request;
+  void request.catch(() => {
+    if (corePromise === request) corePromise = null;
+  });
+  return request;
 }
 
 /* ---------- lazy detail shards ---------- */
 
 const promoBuckets = new Map<string, Promise<AtlasPromotionsBucket>>();
-export async function loadPromotionDetail(id: string): Promise<AtlasPromotionDetail | null> {
+export async function loadChronologyPromotionDetail(
+  id: string,
+): Promise<AtlasPromotionDetail | null> {
   const b = bucketOf(id);
   let p = promoBuckets.get(b);
   if (!p) {
     p = getJSON<AtlasPromotionsBucket>(`promotions/${b}.json`);
     promoBuckets.set(b, p);
+    void p.catch(() => {
+      if (promoBuckets.get(b) === p) promoBuckets.delete(b);
+    });
   }
   return (await p)[id] ?? null;
 }
 
 const peopleBuckets = new Map<string, Promise<AtlasPeopleBucket>>();
-export async function loadPersonRoutes(id: string): Promise<AtlasPersonRoutes | null> {
+export async function loadChronologyPersonRoutes(id: string): Promise<AtlasPersonRoutes | null> {
   const b = bucketOf(id);
   let p = peopleBuckets.get(b);
   if (!p) {
     p = getJSON<AtlasPeopleBucket>(`people/${b}.json`);
     peopleBuckets.set(b, p);
+    void p.catch(() => {
+      if (peopleBuckets.get(b) === p) peopleBuckets.delete(b);
+    });
   }
   return (await p)[id] ?? null;
 }
 
 /** Test seam: forget everything so a fixture can be loaded twice. */
-export function __resetAtlasCache(): void {
+export function __resetChronologyCache(): void {
   corePromise = null;
   promoBuckets.clear();
   peopleBuckets.clear();

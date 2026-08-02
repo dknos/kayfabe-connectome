@@ -1,27 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectomeRenderer } from "@kayfabe/renderer";
-import { useStore } from "./state/store";
+import { restoreFromUrl, useStore } from "./state/store";
 import { TimelineEngine } from "./timeline/TimelineEngine";
 import { LeftPanel } from "./ui/LeftPanel";
 import { RightPanel } from "./ui/RightPanel";
 import { StageCanvas } from "./ui/StageCanvas";
-import { TableView } from "./ui/TableView";
 import { TimelineBar } from "./ui/TimelineBar";
 import { TopBar } from "./ui/TopBar";
 import { GeoAnnouncer } from "./geo/GeoAnnouncer";
 import { GeoControls } from "./geo/GeoControls";
 import { GeoInspector } from "./geo/GeoInspector";
 import { GeoLens } from "./geo/GeoLens";
-import { GeoTable } from "./geo/GeoTable";
 import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
 import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
 import { scheduler, useGeo } from "./geo/geoStore";
-import { AtlasLens } from "./atlas/AtlasLens";
-import { useAtlas } from "./atlas/atlasStore";
-import { installAtlasUrl } from "./atlas/atlasUrl";
 import { MorphLab } from "./morph/MorphLab";
 import { useMorph } from "./morph/morphStore";
-import { installMorphUrl } from "./morph/morphUrl";
+import { applyPendingMorphUrl, installMorphUrl } from "./morph/morphUrl";
 
 export function App() {
   const bootError = useStore((s) => s.bootError);
@@ -37,27 +32,41 @@ export function App() {
 
   // Playback follows the selection: choosing a wrestler and pressing play
   // replays that career.
-  // The ATLAS and MORPH lenses own the scope while mounted (a promotion lane
-  // and a title lineage are scopes too), and restore this one on the way out.
+  // Morph owns the scope while mounted (a promotion network and a title
+  // lineage are scopes too), and restores this one on the way out.
   const selection = useStore((s) => s.selection);
   useEffect(() => {
-    if (lens === "atlas" || lens === "morph") return;
+    if (lens === "morph") return;
     const id = selection?.kind === "node" && selection.id.startsWith("p:") ? selection.id : null;
     engineRef.current.setParticipant(id);
   }, [selection, lens]);
 
   useEffect(() => {
     installGeoUrl();
-    installAtlasUrl();
     installMorphUrl();
     void useStore.getState().boot();
+    // Opening or pasting an old shared fragment into an already-running tab
+    // is a same-document navigation, so boot does not run again. Restore it
+    // here as well as at startup; replaceState writes do not emit hashchange.
+    const onHashChange = () => {
+      restoreFromUrl();
+      const activeLens = useStore.getState().lens;
+      // Lens restorers stage their own namespaced state because cold links may
+      // arrive before lazy data. If the lens is already mounted, consume that
+      // state now as well; otherwise a second pasted Morph/Geo link would only
+      // restore the shared selection and silently ignore its camera/scope.
+      if (activeLens === "morph") void applyPendingMorphUrl();
+      else if (activeLens === "geo") void applyPendingGeoUrl();
+      void useStore.getState().applyView();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   // The geo projection loads only when the lens is first opened; a reader who
   // never opens GEO never pays for 16 MB of geographic data.
-  const geoActive = lens === "geo" || lens === "geoTable";
+  const geoActive = lens === "geo";
   const geoSheet = useGeo((s) => s.sheet);
-  const atlasSheet = useAtlas((s) => s.sheet);
   const morphSheet = useMorph((s) => s.sheet);
   useEffect(() => {
     if (!geoActive) return;
@@ -70,7 +79,7 @@ export function App() {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "select" || tag === "textarea") return;
       const st = useStore.getState();
-      if (e.key === " ") {
+      if (e.key === " " && (st.lens === "connectome" || st.lens === "geo")) {
         e.preventDefault();
         document.querySelector<HTMLButtonElement>('[aria-label="Play"], [aria-label="Pause"]')?.click();
       } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) {
@@ -79,9 +88,9 @@ export function App() {
       } else if (e.key === "Escape") {
         if (st.selection) st.select(null);
         else if (st.focusId) st.focus(null);
-      } else if (e.key === "f" && st.selection?.kind === "node") {
+      } else if (st.lens === "connectome" && e.key === "f" && st.selection?.kind === "node") {
         st.focus(st.selection.id);
-      } else if (e.key === "r") {
+      } else if (st.lens === "connectome" && e.key === "r") {
         rendererRef.current?.fitAll();
       } else if (st.lens === "geo" && (e.key === "f" || e.key === "F")) {
         const g = useGeo.getState();
@@ -163,13 +172,14 @@ export function App() {
             run `pnpm data:materialize` to build the graph, then reload. The renderer refuses
             fabricated placeholder data by design.
           </p>
+          <button type="button" onClick={() => void useStore.getState().boot()}>Retry corpus load</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-atlas-sheet={atlasSheet} data-morph-sheet={morphSheet}>
+    <div className="app" data-lens={lens} data-geo-sheet={geoSheet} data-morph-sheet={morphSheet}>
       <TopBar onScreenshot={screenshot} />
       <main className="stage">
         {model && <StageCanvas engine={engineRef.current} onRenderer={onRenderer} onDropChange={onDropChange} />}
@@ -177,14 +187,11 @@ export function App() {
           <LeftPanel shownEdges={edgeStats.shown} droppedEdges={edgeStats.dropped} tier={tier} />
         )}
         {model && lens === "connectome" && <RightPanel />}
-        {model && lens === "atlas" && <AtlasLens engine={engineRef.current} />}
         {model && lens === "morph" && <MorphLab engine={engineRef.current} />}
-        {model && lens === "table" && <TableView />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
         {model && lens === "geo" && <GeoInspector />}
         {model && lens === "geo" && <GeoAnnouncer />}
-        {model && lens === "geoTable" && <GeoTable />}
         {!model && (
           <div className="boot">
             <div className="inner">

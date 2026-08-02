@@ -83,19 +83,21 @@ async function reducedFlow() {
   await ctx.close();
 }
 
-async function tableFlow() {
+async function semanticInspectorFlow() {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(BASE);
   await page.waitForSelector("canvas.gl", { timeout: 30000 });
-  await page.getByRole("button", { name: "Table", exact: true }).click();
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${OUT}/9-table.png` });
+  const search = page.getByRole("combobox", { name: /Search/ });
+  await search.fill("Ric Flair");
+  await page.getByRole("option").first().click({ force: true });
+  await page.waitForTimeout(1600);
+  await page.screenshot({ path: `${OUT}/9-semantic-inspector.png` });
   await ctx.close();
 }
 
 async function globalCorpusFlow() {
-  // v2: the csv merge made the atlas global — verify the NJPW region and
+  // v2: the csv merge made the corpus global — verify the NJPW region and
   // Meltzer-starred evidence rows on a rated rivalry
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const page = await ctx.newPage();
@@ -120,7 +122,7 @@ async function globalCorpusFlow() {
 await desktopFlow();
 await mobileFlow();
 await reducedFlow();
-await tableFlow();
+await semanticInspectorFlow();
 await globalCorpusFlow();
 await browser.close();
 console.log(errors.length ? `CONSOLE ERRORS (${errors.length}):\n` + errors.slice(0, 20).join("\n") : "NO CONSOLE ERRORS");

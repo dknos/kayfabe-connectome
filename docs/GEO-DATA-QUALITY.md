@@ -65,8 +65,8 @@ venue precision; none do. The UI says "city-level coordinate" on every card.
 ## What is still unresolved
 
 The largest single unresolved location carries 22 cards. The full ledger ships
-as `data/materialized/geo/unresolved.json` and is browsable in the GEO table's
-`unplotted` tab.
+as `data/materialized/geo/unresolved.json`; the Geo inspector discloses the
+unplotted count in context while every unresolved card remains in totals.
 
 | location | cards | verdict |
 |---|---|---|

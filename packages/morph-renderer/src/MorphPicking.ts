@@ -1,12 +1,12 @@
-import type { MorphCamera } from "./MorphCamera";
+import type { MorphCamera, MorphScreenPoint } from "./MorphCamera";
 import type { MorphNodes } from "./MorphNodes";
-import type { MorphRegion, MorphPickResult } from "./types";
+import { easeQuintic, elementProgress, type MorphRegion, type MorphPickResult } from "./types";
 
 /**
- * CPU picking. Nodes are tested against their DESTINATION — a click during a
- * morph selects what the reader aimed at, not the in-flight position (the
- * atlas invariant). Nodes win outright over regions; region ties resolve to
- * the smallest area so a module on a backplate stays clickable.
+ * Current-position picking. CPU work stays allocation-free and uses the exact
+ * from/to/delay interpolation that the GPU node shader uses. Ambient context
+ * below the visibility threshold is intentionally not pickable; every active
+ * or emphasized corpus/virtual node remains eligible throughout a morph.
  */
 export function pickAt(
   cam: MorphCamera,
@@ -14,22 +14,36 @@ export function pickAt(
   corpusCount: number,
   idOfSlot: (slot: number) => string | null,
   regions: MorphRegion[],
+  raw: number,
   px: number,
   py: number,
   slopPx = 8,
 ): MorphPickResult | null {
-  // nearest node within slop, screen-space, destination positions
   let bestSlot = -1;
-  let bestD = slopPx * 1.6;
+  let bestD2 = (slopPx * 2.1) ** 2;
+  const projected: MorphScreenPoint = { x: 0, y: 0, front: false, depth: 0 };
+
   for (let i = 0; i < nodes.total; i++) {
-    if (nodes.alphaTo[i]! < 0.02) continue;
-    const p = cam.worldToScreen(nodes.to[i * 3]!, nodes.to[i * 3 + 1]!, nodes.to[i * 3 + 2]!);
-    if (!p.front) continue;
-    const d = Math.hypot(p.x - px, p.y - py);
-    // generous slop for emphasized chips, tight for background dust
-    const allow = nodes.alphaTo[i]! > 0.5 ? slopPx * 1.6 : slopPx;
-    if (d < allow && d < bestD) {
-      bestD = d;
+    const p = elementProgress(raw, nodes.delay[i]!);
+    const alpha = nodes.alphaFrom[i]! + (nodes.alphaTo[i]! - nodes.alphaFrom[i]!) * p;
+    if (alpha < 0.012) continue;
+    const e = easeQuintic(p);
+    const i3 = i * 3;
+    const x = nodes.from[i3]! + (nodes.to[i3]! - nodes.from[i3]!) * e;
+    const y = nodes.from[i3 + 1]! + (nodes.to[i3 + 1]! - nodes.from[i3 + 1]!) * e;
+    const z = nodes.from[i3 + 2]! + (nodes.to[i3 + 2]! - nodes.from[i3 + 2]!) * e;
+    cam.projectInto(x, y, z, projected);
+    if (!projected.front) continue;
+    const dx = projected.x - px;
+    const dy = projected.y - py;
+    const d2 = dx * dx + dy * dy;
+    const scale = nodes.scaleFrom[i]! + (nodes.scaleTo[i]! - nodes.scaleFrom[i]!) * e;
+    const semantic = nodes.semantic?.[i] ?? 0;
+    const allow = alpha > 0.45
+      ? Math.max(slopPx * 1.55, Math.min(22, scale * 0.55 + semantic * 1.2))
+      : slopPx;
+    if (d2 <= allow * allow && d2 < bestD2) {
+      bestD2 = d2;
       bestSlot = i;
     }
   }
@@ -38,20 +52,20 @@ export function pickAt(
     if (id) return { id, kind: bestSlot >= corpusCount ? "virtual" : "node" };
   }
 
-  // regions — world-plane AABB test at each region's z
+  // Bounded organized furniture remains pickable on its actual z plane.
   const halfSlop = (slopPx * cam.worldPerPixel) / 2;
   let best: MorphRegion | null = null;
   let bestArea = Infinity;
-  for (const r of regions) {
-    if (!r.pick) continue;
-    const [wx, wy] = cam.screenToPlane(px, py, r.z);
-    const hw = Math.max(r.w / 2, halfSlop);
-    const hh = Math.max(r.h / 2, halfSlop);
-    if (Math.abs(wx - r.x) <= hw && Math.abs(wy - r.y) <= hh) {
-      const area = r.w * r.h;
+  for (const region of regions) {
+    if (!region.pick) continue;
+    const [wx, wy] = cam.screenToPlane(px, py, region.z);
+    const hw = Math.max(region.w / 2, halfSlop);
+    const hh = Math.max(region.h / 2, halfSlop);
+    if (Math.abs(wx - region.x) <= hw && Math.abs(wy - region.y) <= hh) {
+      const area = region.w * region.h;
       if (area < bestArea) {
         bestArea = area;
-        best = r;
+        best = region;
       }
     }
   }

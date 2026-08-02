@@ -28,7 +28,7 @@ async function boot(page: Page): Promise<string[]> {
  * assert the opposite of the required behaviour.
  */
 async function openMorph(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Morph Lab β", exact: true }).click();
+  await page.getByRole("button", { name: "Morph Lab", exact: true }).click();
   await expect(page.locator("canvas.morph-gl")).toBeVisible({ timeout: 30000 });
   await page.waitForFunction(
     () => (window as any).__kayfabeMorph?.currentLayout != null,
@@ -311,17 +311,17 @@ test.describe("morph lab lens", () => {
     await openMorph(page);
     await settledIn(page, "organic");
 
-    // a promotion re-forms the tissue as its motherboard
+    // a promotion re-forms the tissue as its documented network
     await search(page, "WWF");
     await settledIn(page, "motherboard");
-    await expect(page.locator(".morph-crumbs")).toContainText("Promotion Motherboard");
+    await expect(page.locator(".morph-crumbs")).toContainText("Promotion Network");
 
     // a championship row in the right rail opens that belt's lineage
     const row = page.locator(".rail.right.morph-rail .ev-row").first();
     await expect(row).toBeVisible({ timeout: 20000 });
     await row.click();
     await settledIn(page, "lineage");
-    await expect(page.locator(".morph-crumbs")).toContainText("Championship Lineage");
+    await expect(page.locator(".morph-crumbs")).toContainText("Title Lineage");
   });
 
   test("return to tissue restores exact organic positions", async ({ page, isMobile }) => {
@@ -346,7 +346,7 @@ test.describe("morph lab lens", () => {
     await search(page, "Undertaker");
     await settledIn(page, "loom");
 
-    await page.getByRole("button", { name: /Return to tissue/ }).click();
+    await page.getByRole("button", { name: "Return to Tissue", exact: true }).click();
     await settledIn(page, "organic");
 
     // EXACT float equality — the organic layout never computes a position, it
@@ -373,7 +373,7 @@ test.describe("morph lab lens", () => {
     // …the connectome's loop is suspended rather than disposed…
     expect(await page.evaluate(() => (window as any).__kayfabeRenderer.isActive)).toBe(false);
     // …and back out through the tissue
-    await page.getByRole("button", { name: /Return to tissue/ }).click();
+    await page.getByRole("button", { name: "Return to Tissue", exact: true }).click();
     await settledIn(page, "organic");
 
     await page.getByRole("button", { name: "Connectome", exact: true }).click();
@@ -387,13 +387,262 @@ test.describe("morph lab lens", () => {
     // no unexpected fit-all: the framing came back as it was
     expect(Math.abs(after.dist - before.dist)).toBeLessThan(0.5);
 
-    // the other lenses still function after a lab visit
-    await page.getByRole("button", { name: "Table", exact: true }).click();
-    await expect(page.getByRole("region", { name: /People table/ })).toBeVisible();
-    await page.getByRole("button", { name: "Connectome", exact: true }).click();
-    await expect(page.locator("canvas.gl")).toBeVisible();
+    // the production lens set is deliberately narrow after a lab visit
+    const lenses = page.getByRole("group", { name: "Lens" });
+    await expect(lenses.getByRole("button")).toHaveCount(3);
+    await expect(lenses.getByRole("button", { name: "Atlas", exact: true })).toHaveCount(0);
+    await expect(lenses.getByRole("button", { name: "Table", exact: true })).toHaveCount(0);
 
     expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
+  });
+
+  test("spatial regression: wrestler targets are deterministic, finite, unique, and restore organic bytes", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop", "one full-corpus spatial audit is sufficient");
+    const errors = await boot(page);
+    await openMorph(page);
+    await settledIn(page, "organic");
+
+    const digestTargets = () =>
+      page.evaluate(async () => {
+        const targets = (window as any).__kayfabeMorph.currentLayout.nodeTargets as Float32Array;
+        const bytes = new Uint8Array(targets.buffer, targets.byteOffset, targets.byteLength);
+        const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+        return {
+          bytes: bytes.byteLength,
+          sha256: [...hash].map((v) => v.toString(16).padStart(2, "0")).join(""),
+        };
+      });
+
+    const organicBefore = await digestTargets();
+    await search(page, "Undertaker");
+    await settledIn(page, "loom");
+
+    const auditLoom = () =>
+      page.evaluate(async () => {
+        const r = (window as any).__kayfabeMorph;
+        const l = r.currentLayout;
+        const count = r.corpusSlotCount as number;
+        const finiteIssues: string[] = [];
+        const check = (name: string, values: ArrayLike<number>) => {
+          for (let i = 0; i < values.length; i++) {
+            if (!Number.isFinite(values[i])) {
+              finiteIssues.push(`${name}[${i}]=${values[i]}`);
+              if (finiteIssues.length >= 12) return;
+            }
+          }
+        };
+        check("targets", l.nodeTargets);
+        check("opacity", l.nodeOpacity);
+        check("scale", l.nodeScale);
+        check("delay", l.nodeDelay);
+        for (const [key, value] of Object.entries(l.bounds)) {
+          if (!Number.isFinite(value as number)) finiteIssues.push(`bounds.${key}=${value}`);
+        }
+        for (const [key, value] of Object.entries(l.fitBounds ?? {})) {
+          if (!Number.isFinite(value as number)) finiteIssues.push(`fitBounds.${key}=${value}`);
+        }
+        l.routes.forEach((route: any, i: number) => check(`route[${i}]`, route.points));
+        l.virtuals.forEach((v: any, i: number) => check(`virtual[${i}]`, [v.x, v.y, v.z, v.scale, v.opacity]));
+        l.regions.forEach((v: any, i: number) => check(`region[${i}]`, [v.x, v.y, v.z, v.w, v.h, v.alpha]));
+
+        const ids = Array.from({ length: count }, (_, slot) => r.idAtSlot(slot) as string | null);
+        const liveIds = ids.filter((id): id is string => typeof id === "string" && id.length > 0);
+        const roundTripFailures = ids
+          .flatMap((id, slot) => id && r.slotOfId(id) !== slot ? [id] : [])
+          .slice(0, 12);
+
+        const activeZ: number[] = [];
+        const relationZ: number[] = [];
+        for (let slot = 0; slot < count; slot++) {
+          const role = l.nodeRole[slot] as number;
+          const alpha = l.nodeOpacity[slot] as number;
+          const z = l.nodeTargets[slot * 3 + 2] as number;
+          if (role !== 0 && alpha >= 0.02) activeZ.push(z);
+          if (role >= 2 && role <= 5 && alpha >= 0.02) relationZ.push(z);
+        }
+        for (const v of l.virtuals) if (v.opacity >= 0.02) activeZ.push(v.z);
+        const spread = (values: number[]) => values.length ? Math.max(...values) - Math.min(...values) : 0;
+        const bytes = new Uint8Array(l.nodeTargets.buffer, l.nodeTargets.byteOffset, l.nodeTargets.byteLength);
+        const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+        return {
+          count,
+          targetSlots: l.nodeTargets.length / 3,
+          representedCount: l.representedCount,
+          missingIds: count - liveIds.length,
+          uniqueIds: new Set(liveIds).size,
+          roundTripFailures,
+          finiteIssues,
+          bounds: l.bounds,
+          fitBounds: l.fitBounds,
+          activeZSpread: spread(activeZ),
+          relationZSpread: spread(relationZ),
+          activeZLayers: new Set(activeZ.map((z) => Math.round(z / 20))).size,
+          sha256: [...hash].map((v) => v.toString(16).padStart(2, "0")).join(""),
+        };
+      });
+
+    const first = await auditLoom();
+    expect(first.targetSlots).toBe(first.count);
+    expect(first.representedCount).toBe(first.count);
+    expect(first.missingIds).toBe(0);
+    expect(first.uniqueIds).toBe(first.count);
+    expect(first.roundTripFailures).toEqual([]);
+    expect(first.finiteIssues).toEqual([]);
+    expect(first.bounds.maxX).toBeGreaterThan(first.bounds.minX);
+    expect(first.bounds.maxY).toBeGreaterThan(first.bounds.minY);
+    expect(first.fitBounds.maxX).toBeGreaterThan(first.fitBounds.minX);
+    expect(first.fitBounds.maxY).toBeGreaterThan(first.fitBounds.minY);
+    expect(first.activeZSpread, "organized context must occupy a genuine 3D volume").toBeGreaterThan(400);
+    expect(first.relationZSpread, "relationship depth must carry chronology, not decorative jitter").toBeGreaterThan(180);
+    expect(first.activeZLayers).toBeGreaterThan(8);
+
+    // Rebuild the same wrestler after a different topology. Pure deterministic
+    // layout output must be byte-identical, independent of the live retarget.
+    await search(page, "Kane");
+    await settledIn(page, "loom");
+    await search(page, "Undertaker");
+    await settledIn(page, "loom");
+    const rebuilt = await auditLoom();
+    expect(rebuilt.sha256).toBe(first.sha256);
+
+    await page.getByRole("button", { name: /Return to tissue/i }).click();
+    await settledIn(page, "organic");
+    const organicAfter = await digestTargets();
+    expect(organicAfter.bytes).toBe(organicBefore.bytes);
+    expect(organicAfter.sha256, "all Float32 organic target bytes must restore exactly").toBe(organicBefore.sha256);
+    expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
+  });
+
+  test("spatial regression: Morph camera is perspective with attenuation and parallax", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop", "one deterministic camera proof is sufficient");
+    await boot(page);
+    await openMorph(page);
+    await settledIn(page, "organic");
+    await search(page, "Undertaker");
+    await settledIn(page, "loom");
+
+    const proof = await page.evaluate(() => {
+      const r = (window as any).__kayfabeMorph;
+      r.fitLayout(0, true);
+      const ctl = r.cam;
+      const camera = ctl.camera;
+      const initial = ctl.snapshot();
+      const e = camera.matrixWorld.elements as number[];
+      const right = [e[0], e[1], e[2]];
+      const forward = [-e[8], -e[9], -e[10]];
+      const target = ctl.target as [number, number, number];
+      const add = (a: number[], b: number[], k: number) => [a[0]! + b[0]! * k, a[1]! + b[1]! * k, a[2]! + b[2]! * k];
+      const widthAt = (centre: number[], halfWidth: number) => {
+        const a = add(centre, right, -halfWidth);
+        const b = add(centre, right, halfWidth);
+        const pa = ctl.worldToScreen(a[0], a[1], a[2]);
+        const pb = ctl.worldToScreen(b[0], b[1], b[2]);
+        return { px: Math.hypot(pb.x - pa.x, pb.y - pa.y), front: pa.front && pb.front };
+      };
+
+      const farCentre = add(target, forward, initial.distance * 0.5);
+      const nearWidth = widthAt(target, 36);
+      const farWidth = widthAt(farCentre, 36);
+      const nearBefore = ctl.worldToScreen(target[0], target[1], target[2]);
+      const farBefore = ctl.worldToScreen(farCentre[0], farCentre[1], farCentre[2]);
+      ctl.restore({ ...initial, theta: initial.theta + 0.22 });
+      const nearAfter = ctl.worldToScreen(target[0], target[1], target[2]);
+      const farAfter = ctl.worldToScreen(farCentre[0], farCentre[1], farCentre[2]);
+      const nearMove = [nearAfter.x - nearBefore.x, nearAfter.y - nearBefore.y];
+      const farMove = [farAfter.x - farBefore.x, farAfter.y - farBefore.y];
+      const differentialParallax = Math.hypot(farMove[0]! - nearMove[0]!, farMove[1]! - nearMove[1]!);
+      ctl.restore(initial);
+      return {
+        isPerspectiveCamera: camera.isPerspectiveCamera === true,
+        isOrthographicCamera: camera.isOrthographicCamera === true,
+        fov: camera.fov,
+        near: camera.near,
+        far: camera.far,
+        nearWidth,
+        farWidth,
+        differentialParallax,
+        restored: ctl.snapshot(),
+        initial,
+      };
+    });
+
+    expect(proof.isPerspectiveCamera).toBe(true);
+    expect(proof.isOrthographicCamera).toBe(false);
+    expect(proof.fov).toBeGreaterThan(20);
+    expect(proof.fov).toBeLessThan(90);
+    expect(proof.near).toBeGreaterThan(0);
+    expect(proof.far).toBeGreaterThan(proof.near);
+    expect(proof.nearWidth.front && proof.farWidth.front).toBe(true);
+    expect(proof.nearWidth.px, "equal world sizes must shrink with camera depth").toBeGreaterThan(proof.farWidth.px * 1.3);
+    expect(proof.differentialParallax, "orbiting must move far geometry relative to the focus plane").toBeGreaterThan(8);
+    expect(proof.restored).toEqual(proof.initial);
+  });
+
+  test("spatial regression: picking follows the current interpolated node position", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop", "full-corpus interpolation/picking proof");
+    await boot(page);
+    await openMorph(page);
+    await settledIn(page, "organic");
+
+    const observed = page.evaluate(
+      () =>
+        new Promise<any>((resolve) => {
+          const r = (window as any).__kayfabeMorph;
+          const organic = new Float32Array(r.currentLayout.nodeTargets);
+          const started = performance.now();
+          let sawMorph = false;
+          const look = () => {
+            const l = r.currentLayout;
+            if (r.morphing && l?.mode === "loom" && l.anchorId) {
+              sawMorph = true;
+              const slot = r.slotOfId(l.anchorId);
+              if (slot != null) {
+                const current = r.currentPositionOf(slot);
+                const screen = r.projectSlot(slot);
+                const source = [organic[slot * 3], organic[slot * 3 + 1], organic[slot * 3 + 2]];
+                const target = [l.nodeTargets[slot * 3], l.nodeTargets[slot * 3 + 1], l.nodeTargets[slot * 3 + 2]];
+                const sourceScreen = r.cam.worldToScreen(source[0], source[1], source[2]);
+                const targetScreen = r.cam.worldToScreen(target[0], target[1], target[2]);
+                const sourcePx = Math.hypot(screen.x - sourceScreen.x, screen.y - sourceScreen.y);
+                const targetPx = Math.hypot(screen.x - targetScreen.x, screen.y - targetScreen.y);
+                const sourceWorld = Math.hypot(current[0] - source[0], current[1] - source[1], current[2] - source[2]);
+                const targetWorld = Math.hypot(current[0] - target[0], current[1] - target[1], current[2] - target[2]);
+                if (
+                  r.morphProgress > 0.08 && r.morphProgress < 0.9 && screen.front &&
+                  Math.min(sourcePx, targetPx) > 3 && Math.min(sourceWorld, targetWorld) > 3
+                ) {
+                  const hit = r.pick(screen.x, screen.y, 2);
+                  return resolve({
+                    progress: r.morphProgress,
+                    expected: l.anchorId,
+                    hit,
+                    sourcePx,
+                    targetPx,
+                    sourceWorld,
+                    targetWorld,
+                    current,
+                    source,
+                    target,
+                  });
+                }
+              }
+            } else if (sawMorph && !r.morphing) {
+              return resolve(null);
+            }
+            if (performance.now() - started > 25000) return resolve(null);
+            requestAnimationFrame(look);
+          };
+          requestAnimationFrame(look);
+        }),
+    );
+
+    await search(page, "Undertaker");
+    const proof = await observed;
+    expect(proof, "a genuinely intermediate, pickable anchor sample must be observed").not.toBeNull();
+    expect(proof.hit).toEqual({ id: proof.expected, kind: "node" });
+    expect(Math.min(proof.sourcePx, proof.targetPx)).toBeGreaterThan(3);
+    expect(Math.min(proof.sourceWorld, proof.targetWorld)).toBeGreaterThan(3);
+    await settledIn(page, "loom");
   });
 
   test("reduced motion applies the layout at once", async ({ page }) => {
@@ -446,10 +695,28 @@ test.describe("morph lab lens", () => {
     expect(got.moved).toBeLessThan(0.001);
   });
 
+  test("an active Morph hash link immediately applies its local topology", async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "one same-document URL replay is sufficient");
+    const errors = await boot(page);
+    await openMorph(page);
+    await search(page, "Ric Flair");
+    await settledIn(page, "loom");
+    await expect.poll(() => page.url()).toContain("sel=");
+
+    // This is a same-document navigation while Morph is already mounted. Its
+    // namespaced state must not wait for another mount before taking effect.
+    await page.evaluate(() => {
+      location.hash = `${location.hash}/mom=career`;
+    });
+    await settledIn(page, "career");
+    await expect(page.getByRole("button", { name: "Career", exact: true })).toHaveAttribute("aria-pressed", "true");
+    expect(errors, `console errors: ${errors.join("\n")}`).toHaveLength(0);
+  });
+
   test("mobile: lab operable, sheet tabs work", async ({ page, isMobile }) => {
     test.skip(!isMobile, "mobile journey");
     const errors = await boot(page);
-    await page.getByRole("button", { name: "Morph Lab β", exact: true }).click();
+    await page.getByRole("button", { name: "Morph Lab", exact: true }).click();
     await expect(page.locator("canvas.morph-gl")).toBeVisible({ timeout: 30000 });
 
     const app = page.locator(".app");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArcSpec, BeaconSpec, GeoReplayEngine, GeoPulseIntent } from "@kayfabe/geo-renderer";
 import { useStore } from "../state/store";
 import { scheduler, useGeo } from "./geoStore";
@@ -45,6 +45,8 @@ function energyOf(intent: GeoPulseIntent, metric: string): number {
 export function GeoLens() {
   const hostRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GeoReplayEngine | null>(null);
+  const [rendererError, setRendererError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const rafRef = useRef(0);
   const lastRef = useRef(0);
   /** Last plotted place + batch, for chronological record arcs. */
@@ -71,24 +73,35 @@ export function GeoLens() {
     if (!host || engineRef.current) return;
     let cancelled = false;
     let created: GeoReplayEngine | null = null;
+    setRendererError(null);
     void (async () => {
-      const { GeoReplayEngine: Engine } = await import("@kayfabe/geo-renderer");
-      if (cancelled) return;
-      created = await Engine.create(host, {
-        baseUrl: `${import.meta.env.BASE_URL}cesium/`,
-        reducedMotion: useStore.getState().reducedMotion,
-        tier: useGeo.getState().tier,
-        onPick: (placeIdx) => useGeo.getState().selectPlace(placeIdx ?? -1),
-        onTierChange: (t) => useGeo.getState().setTier(t),
-      });
-      if (cancelled) {
-        created.destroy();
-        return;
+      try {
+        const { GeoReplayEngine: Engine } = await import("@kayfabe/geo-renderer");
+        if (cancelled) return;
+        created = await Engine.create(host, {
+          baseUrl: `${import.meta.env.BASE_URL}cesium/`,
+          reducedMotion: useStore.getState().reducedMotion,
+          tier: useGeo.getState().tier,
+          onPick: (placeIdx) => useGeo.getState().selectPlace(placeIdx ?? -1),
+          onTierChange: (t) => useGeo.getState().setTier(t),
+        });
+        if (cancelled) {
+          created.destroy();
+          return;
+        }
+        engineRef.current = created;
+        (window as { __kayfabeGeo?: GeoReplayEngine }).__kayfabeGeo = created; // QA seam
+        const st = useGeo.getState();
+        if (st.data) created.setPlaces(placesFor(st.data, st.scopePlaces));
+      } catch (err) {
+        if (!cancelled) {
+          // Cesium installs its own modal error panel before its constructor
+          // rejects. Remove that partial widget so it cannot sit above the
+          // app-owned, retryable fallback or poison the next creation attempt.
+          host.replaceChildren();
+          setRendererError(err instanceof Error ? err.message : String(err));
+        }
       }
-      engineRef.current = created;
-      (window as { __kayfabeGeo?: GeoReplayEngine }).__kayfabeGeo = created; // QA seam
-      const st = useGeo.getState();
-      if (st.data) created.setPlaces(placesFor(st.data, st.scopePlaces));
     })();
     return () => {
       cancelled = true;
@@ -96,8 +109,9 @@ export function GeoLens() {
       engineRef.current = null;
       created?.destroy();
       delete (window as { __kayfabeGeo?: GeoReplayEngine }).__kayfabeGeo;
+      host.replaceChildren();
     };
-  }, []);
+  }, [retryToken]);
 
   // The connectome's render loop is suspended for as long as another lens is
   // up, but StageCanvas owns that toggle (it is the component that knows the
@@ -280,6 +294,22 @@ export function GeoLens() {
         <div className="geo-boot error-note" role="alert">
           {error}
           <div className="micro">run `pnpm geo:materialize` to build the geographic projection.</div>
+          <button
+            type="button"
+            onClick={() => {
+              useGeo.setState({ data: null, error: null, loading: false });
+              void useGeo.getState().boot();
+            }}
+          >Retry geographic data</button>
+        </div>
+      )}
+      {rendererError && (
+        <div className="geo-boot error-note" role="alert" data-testid="geo-renderer-error">
+          Geo Replay could not create its WebGL globe: {rendererError}
+          <div className="micro">Check that hardware acceleration and WebGL are available, then retry.</div>
+          <button type="button" onClick={() => setRetryToken((token) => token + 1)}>
+            Retry globe
+          </button>
         </div>
       )}
     </>

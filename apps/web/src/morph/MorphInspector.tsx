@@ -14,9 +14,10 @@ export function MorphInspector() {
   const data = useMorph((s) => s.data);
   const dossier = useMorph((s) => s.dossier);
   const promotion = useMorph((s) => s.promotion);
-  const atlas = useMorph((s) => s.atlas);
+  const chronology = useMorph((s) => s.chronology);
   const championships = useMorph((s) => s.championships);
   const building = useMorph((s) => s.building);
+  const members = useStore((s) => s.members);
 
   if (!data) return null;
   const select = (id: string) => useStore.getState().select({ kind: "node", id });
@@ -27,9 +28,9 @@ export function MorphInspector() {
       <div className="panel">
         <h2>Morph Lab <span className="line" /></h2>
         <p className="micro">
-          Click a wrestler for their Relationship Loom, a promotion for its
-          Motherboard, a championship for its Lineage. Background click steps
-          one level back; “Return to tissue” restores the organic positions
+          Click a wrestler for their 3D Relationship Array, a promotion for its
+          Promotion Network, or a championship for its Title Lineage. Background click steps
+          one level back; “Return to Tissue” restores the organic positions
           exactly.
         </p>
       </div>
@@ -63,11 +64,14 @@ export function MorphInspector() {
               </button>
             ))}
             <button className="ev-row" onClick={() => useMorph.getState().setModeOverride("career")}>
-              Open Career Circuit →
+              Open Career Spine →
             </button>
           </>
         ) : (
-          <p className="micro">{building ? "loading dossier…" : "no dossier for this id"}</p>
+          <>
+            <p className="micro">{building ? "loading dossier…" : "person detail unavailable"}</p>
+            {!building && <button type="button" onClick={() => void useMorph.getState().rebuild()}>Retry person detail</button>}
+          </>
         )}
         <p className="micro derivation-note">appearance on a card — not employment.</p>
       </div>
@@ -98,18 +102,21 @@ export function MorphInspector() {
             ) : null}
           </>
         ) : (
-          <p className="micro">{building ? "loading promotion shard…" : "registry data only"}</p>
+          <>
+            <p className="micro">{building ? "loading promotion shard…" : "promotion detail unavailable · registry data only"}</p>
+            {!building && <button type="button" onClick={() => void useMorph.getState().rebuild()}>Retry promotion detail</button>}
+          </>
         )}
-        <p className="micro derivation-note">membership = documented appearance on a card, never a contract claim.</p>
+        <p className="micro derivation-note">membership = documented appearance on a card, not employment.</p>
       </div>
     );
   } else if (selId.startsWith("t:")) {
     const rec = championships?.[selId] ?? null;
-    const ti = atlas?.titleIndex.get(selId);
+    const ti = chronology?.titleIndex.get(selId);
     body = (
       <div className="panel">
-        <h2>{(ti !== undefined ? atlas!.titles.name[ti] : null) ?? data.nameOf(selId) ?? selId} <span className="line" /></h2>
-        {ti !== undefined && atlas!.titles.artifact[ti] === 1 && (
+        <h2>{(ti !== undefined ? chronology!.titles.name[ti] : null) ?? data.nameOf(selId) ?? selId} <span className="line" /></h2>
+        {ti !== undefined && chronology!.titles.artifact[ti] === 1 && (
           <p className="micro derivation-note">source artifact — the recorded name is preserved, not repaired.</p>
         )}
         {rec && rec.reigns.length > 0 ? (
@@ -130,7 +137,7 @@ export function MorphInspector() {
           </>
         ) : (
           <p className="micro derivation-note">
-            {ti !== undefined && atlas!.titles.lineage[ti] === "no-changes"
+            {ti !== undefined && chronology!.titles.lineage[ti] === "no-changes"
               ? "this belt's source has no title-change field — reigns are not derived and not guessed."
               : building
                 ? "loading championship record…"
@@ -138,11 +145,57 @@ export function MorphInspector() {
           </p>
         )}
         <p className="micro derivation-note">gaps between records stay unrecorded — never called vacancies.</p>
+        {!building && !championships && (
+          <button type="button" onClick={() => void useMorph.getState().rebuild()}>Retry title records</button>
+        )}
       </div>
     );
   } else {
     body = <div className="panel"><p className="micro">selected: {selId}</p></div>;
   }
 
-  return <div className="rail right morph-rail">{body}</div>;
+  const residentPreview = members.ids.slice(0, 32);
+  const nonResident = members.nonResident ?? [];
+  const nonResidentPreview = nonResident.slice(0, 32);
+  return (
+    <div className="rail right morph-rail">
+      {body}
+      {(members.basis || nonResident.length > 0 || (members.coverageWarnings?.length ?? 0) > 0) && (
+        <div className="panel morph-member-results" aria-label="Semantic member results">
+          <h2>Illuminated population <span className="line" /></h2>
+          <p className="micro">{members.basis}</p>
+          {members.caveat && <p className="micro derivation-note">{members.caveat}</p>}
+          {members.coverageWarnings?.map((warning) => (
+            <p key={warning} className="micro error-note">{warning}</p>
+          ))}
+          {residentPreview.length > 0 && (
+            <details>
+              <summary className="micro">Browse lit nodes ({members.ids.length.toLocaleString()})</summary>
+              <div className="morph-member-list">
+                {residentPreview.map((id) => (
+                  <button key={id} className="ev-row search-row" onClick={() => select(id)}>
+                    <span>{data.nameOf(id) ?? id}</span><span className="micro">node lit</span>
+                  </button>
+                ))}
+              </div>
+              {members.ids.length > residentPreview.length && (
+                <p className="micro">{(members.ids.length - residentPreview.length).toLocaleString()} additional graph-resident members are lit in the visualization.</p>
+              )}
+            </details>
+          )}
+          {nonResidentPreview.map((member) => (
+            <div key={member.id} className="ev-row morph-nonresident">
+              <span>{member.name ?? member.id}</span>
+              <span className="micro">documented member · no graph node to light</span>
+            </div>
+          ))}
+          {nonResident.length > nonResidentPreview.length && (
+            <p className="micro">
+              {(nonResident.length - nonResidentPreview.length).toLocaleString()} additional documented members have no graph node to light.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

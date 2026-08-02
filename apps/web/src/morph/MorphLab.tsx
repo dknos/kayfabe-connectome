@@ -6,14 +6,14 @@ import { MorphCanvas } from "./MorphCanvas";
 import { MorphControls } from "./MorphControls";
 import { MorphInspector } from "./MorphInspector";
 import { applyPendingMorphUrl } from "./morphUrl";
-import { useMorph } from "./morphStore";
+import { h2hPair, useMorph } from "./morphStore";
 
 /**
- * MORPH LAB β — one persistent set of corpus entities transforming between
+ * MORPH LAB — one persistent set of corpus entities transforming between
  * readable topologies. Mounted only while the lens is active; its renderer
  * (a second WebGL context) is created on mount and disposed on unmount, so a
  * reader who never opens the lab pays nothing. The connectome underneath
- * stays mounted and suspended, exactly as it does for ATLAS and GEO.
+ * stays mounted and suspended while this secondary renderer is active.
  */
 export function MorphLab({ engine }: { engine: TimelineEngine }) {
   const error = useMorph((s) => s.error);
@@ -35,7 +35,7 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
   }, [selId]);
 
   // playback scope: the lab owns it while mounted, and restores the
-  // connectome's person-only scope on the way out (the atlas contract)
+  // connectome's person-only scope on the way out
   useEffect(() => {
     if (!selId) {
       engine.setScope(null);
@@ -54,19 +54,29 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
   // lens-local keyboard (guarded so the global map cannot double-handle)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "select" || tag === "textarea") return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.closest("input, select, textarea, [contenteditable='true'], [role='textbox']")) return;
       if (useStore.getState().lens !== "morph") return;
       if (e.key === "r" || e.key === "R") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         useMorph.getState().requestFit();
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        (window as { __kayfabeMorph?: { focusSelection(): boolean } }).__kayfabeMorph?.focusSelection();
       } else if (e.key === "Escape") {
         e.preventDefault();
         e.stopImmediatePropagation();
         useMorph.getState().ascend();
       } else if (e.key === "t" || e.key === "T") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         useMorph.getState().returnToTissue();
+      } else if (e.key === " ") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        document.querySelector<HTMLButtonElement>('[aria-label="Play"], [aria-label="Pause"]')?.click();
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -78,19 +88,23 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
   const lastAnnounce = useRef("");
   useEffect(() => {
     if (!layout) return;
-    const name = selId ? (useMorph.getState().data?.nameOf(selId) ?? selId) : null;
+    const data = useMorph.getState().data;
+    const name = selId ? (data?.nameOf(selId) ?? selId) : null;
+    const pair = layout.mode === "h2h" ? h2hPair() : null;
     const msg =
       layout.mode === "organic"
         ? "Morph Lab — organic tissue positions."
         : layout.mode === "loom"
-          ? `Relationship Loom around ${name}. Opponents left, partners right, promotions above, championships on the gold bus.`
+          ? `3D Relationship Array around ${name}. Height represents relationship strength and depth represents first documented encounter.`
           : layout.mode === "motherboard"
-            ? `Promotion Motherboard for ${name}.`
+            ? `3D Promotion Network for ${name}.`
             : layout.mode === "career"
-              ? `Career Circuit for ${name} — time runs left to right.`
+              ? `Career Spine for ${name} — time runs left to right.`
               : layout.mode === "lineage"
                 ? `Championship Lineage for ${name} — documented reigns on the gold rail.`
-                : "Morph Lab.";
+                : layout.mode === "h2h" && pair
+                  ? `Head-to-Head comparison: ${data?.nameOf(pair[0]) ?? pair[0]} and ${data?.nameOf(pair[1]) ?? pair[1]}. Direct documented matches are chronological rungs; shared graph connections are labeled separately.`
+                  : "Morph Lab.";
     if (msg !== lastAnnounce.current) {
       lastAnnounce.current = msg;
       useStore.getState().announce(msg);
@@ -101,9 +115,16 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
     return (
       <div className="boot morph-overlay">
         <div className="inner">
-          <div className="brand"><b>MORPH LAB β</b></div>
+          <div className="brand"><b>MORPH LAB</b></div>
           <p className="error-note" role="alert">{error}</p>
           <p className="micro">the lab reads the same materialized corpus as the connectome — run `pnpm data:materialize` if it is missing.</p>
+          <button
+            type="button"
+            onClick={() => {
+              useMorph.setState({ data: null, error: null, loading: false });
+              void useMorph.getState().boot();
+            }}
+          >Retry data</button>
         </div>
       </div>
     );
@@ -119,7 +140,7 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
       {(loading || !data) && (
         <div className="boot morph-overlay">
           <div className="inner">
-            <div className="brand"><b>MORPH LAB β</b> <span className="micro">preparing the tissue</span></div>
+            <div className="brand"><b>MORPH LAB</b> <span className="micro">preparing the tissue</span></div>
           </div>
         </div>
       )}
@@ -127,7 +148,7 @@ export function MorphLab({ engine }: { engine: TimelineEngine }) {
   );
 }
 
-/** narrow-viewport 3-way sheet switcher, mirroring the atlas pattern */
+/** narrow-viewport 3-way sheet switcher */
 function MorphSheetTabs({ sheet }: { sheet: "controls" | "inspector" | "hidden" }) {
   const setSheet = useMorph((s) => s.setSheet);
   return (

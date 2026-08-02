@@ -1,23 +1,20 @@
 import {
-  M,
   MR,
-  RK,
   hash01,
-  rgb,
   type LayoutBounds,
   type MorphLabel,
   type MorphRegion,
 } from "@kayfabe/morph-renderer";
 import type { MorphData } from "../morphAdapter";
-import { PRIORITY, RACK, Z, growBounds } from "./layoutTypes";
+import { RACK, growBounds } from "./layoutTypes";
 
 /**
- * Deterministic compression of everything that is not part of the active
- * reading. The graph visibly reorganises rather than vanishing: promotions
- * dock into a labeled top shelf, championships into a gold lower shelf, and
- * every remaining person packs into contiguous community grids in a context
- * field below the board — grouped by community (largest first), ordered by
- * degree inside each block. Same corpus, same board → identical packing.
+ * Put non-participating corpus nodes into a distant volumetric context shell.
+ *
+ * This is intentionally not a second diagram. It preserves identity and a
+ * sense of the full corpus while the active structure remains readable. The
+ * shell is deterministic, community-banded and extremely low exposure; when
+ * context is hidden its alpha also falls below the pick threshold.
  */
 export function packBackground(
   data: MorphData,
@@ -29,175 +26,71 @@ export function packBackground(
   role: Uint8Array,
   delay: Float32Array,
   bounds: LayoutBounds,
+  contextVisible = true,
 ): { regions: MorphRegion[]; labels: MorphLabel[] } {
-  const regions: MorphRegion[] = [];
   const labels: MorphLabel[] = [];
   const model = data.model;
-  const n = data.count;
+  const cx = finiteMid(board.minX, board.maxX);
+  const cy = finiteMid(board.minY, board.maxY);
+  const span = Math.max(520, board.maxX - board.minX, board.maxY - board.minY);
+  const baseRadius = span * 0.82 + RACK.margin;
+  const alpha = contextVisible ? RACK.dimAlpha : 0.001;
+  let ambientCount = 0;
 
-  const boardW = board.maxX - board.minX;
-  const fieldW = Math.max(1200, boardW + RACK.margin * 2);
-  const fieldLeft = (board.minX + board.maxX) / 2 - fieldW / 2;
-  const cols = Math.max(40, Math.floor(fieldW / RACK.cell));
-
-  // ---- people: contiguous community blocks in the context field ----
-  const byCommunity = new Map<number, number[]>();
-  for (let i = 0; i < n; i++) {
-    if (exclude.has(i) || model.nodes.type[i] !== 0) continue;
-    const c = model.nodes.community[i]!;
-    let arr = byCommunity.get(c);
-    if (!arr) byCommunity.set(c, (arr = []));
-    arr.push(i);
-  }
-  const communities = [...byCommunity.keys()].sort((a, b) => {
-    const sa = byCommunity.get(a)!.length;
-    const sb = byCommunity.get(b)!.length;
-    return sb - sa || a - b;
-  });
-
-  const fieldTop = board.minY - RACK.margin;
-  let cursor = 0;
-  const cellX = (c: number) => fieldLeft + (c + 0.5) * RACK.cell;
-  const cellY = (r: number) => fieldTop - (r + 0.5) * RACK.cell;
-
-  let labelled = 0;
-  for (const c of communities) {
-    const membersArr = byCommunity.get(c)!;
-    membersArr.sort((a, b) => model.nodes.degree[b]! - model.nodes.degree[a]! || a - b);
-    const startRow = Math.floor(cursor / cols);
-    for (const i of membersArr) {
-      const col = cursor % cols;
-      const row = Math.floor(cursor / cols);
-      cursor++;
-      const i3 = i * 3;
-      targets[i3] = cellX(col);
-      targets[i3 + 1] = cellY(row);
-      targets[i3 + 2] = Z.rack;
-      opacity[i] = RACK.dimAlpha;
-      scale[i] = RACK.scale;
-      role[i] = MR.BACKGROUND;
-      delay[i] = 0.3 + hash01(i) * 0.7;
-      growBounds(bounds, targets[i3]!, targets[i3 + 1]!);
-    }
-    if (labelled < 10 && membersArr.length >= 250) {
-      const lab = data.core.communities.label[c];
-      if (lab) {
-        labels.push({
-          key: `rackc:${c}`,
-          x: cellX(0) - 10,
-          y: cellY(startRow),
-          z: Z.rack,
-          text: lab,
-          priority: PRIORITY.ambient + membersArr.length / 1e6,
-          tone: "muted",
-          anchor: "left",
-        });
-        labelled++;
-      }
-    }
-  }
-  const fieldRows = Math.ceil(cursor / cols);
-  if (fieldRows > 0) {
-    regions.push({
-      key: "rack:field",
-      x: fieldLeft + fieldW / 2,
-      y: fieldTop - (fieldRows * RACK.cell) / 2,
-      z: Z.backplate,
-      w: fieldW + 24,
-      h: fieldRows * RACK.cell + 24,
-      color: rgb(M.plate),
-      alpha: 0.5,
-      kind: RK.PLATE,
-    });
-    labels.push({
-      key: "rack:field:h",
-      x: fieldLeft,
-      y: fieldTop + 12,
-      z: Z.rack,
-      text: "CONTEXT — COMMUNITIES, COMPRESSED",
-      priority: PRIORITY.header - 20,
-      tone: "muted",
-      anchor: "left",
-    });
-  }
-
-  // ---- promotions: labeled top shelf ----
-  const promos: number[] = [];
-  const titles: number[] = [];
-  for (let i = 0; i < n; i++) {
+  // Golden-angle distribution avoids rows and keeps stable ids stable. A
+  // community phase makes related ambient people read as faint tissue bands.
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < data.count; i++) {
     if (exclude.has(i)) continue;
-    if (model.nodes.type[i] === 1) promos.push(i);
-    else if (model.nodes.type[i] === 2) titles.push(i);
-  }
-  promos.sort((a, b) => model.nodes.matches[b]! - model.nodes.matches[a]! || a - b);
-  titles.sort((a, b) => model.nodes.matches[b]! - model.nodes.matches[a]! || a - b);
+    const type = model.nodes.type[i]!;
+    const comm = Math.max(0, model.nodes.community[i]!);
+    const h0 = hash01(i * 17 + 11);
+    const h1 = hash01(i * 29 + 23);
+    const band = ((comm % 19) - 9) / 9;
+    const yUnit = Math.max(-0.94, Math.min(0.94, band * 0.72 + (h0 - 0.5) * 0.22));
+    const radial = Math.sqrt(Math.max(0.001, 1 - yUnit * yUnit));
+    const angle = i * golden + (comm % 31) * 0.17;
+    const radius = baseRadius * (0.92 + h1 * 0.34);
 
-  const shelfY = board.maxY + RACK.promoShelfGap;
-  const shelfCols = Math.max(20, Math.floor(fieldW / 17));
-  promos.forEach((i, k) => {
+    let x = cx + Math.cos(angle) * radial * radius;
+    let y = cy + yUnit * radius * 0.72;
+    let z = Math.sin(angle) * radial * radius;
+    let a = alpha;
+    let s: number = RACK.scale;
+
+    // Ambient entity types retain their silhouette and semantic strata, but
+    // remain subordinate to active promotion/title anchors.
+    if (type === 1) {
+      y = cy + radius * 0.55 + (h0 - 0.5) * 100;
+      z -= radius * 0.22;
+      a = contextVisible ? 0.052 : 0.001;
+      s = 2.4;
+    } else if (type === 2) {
+      y = cy + radius * 0.34 + (h0 - 0.5) * 120;
+      z += radius * 0.28;
+      a = contextVisible ? 0.044 : 0.001;
+      s = 1.8;
+    }
+
     const i3 = i * 3;
-    targets[i3] = fieldLeft + ((k % shelfCols) + 0.5) * 17;
-    targets[i3 + 1] = shelfY + Math.floor(k / shelfCols) * 15;
-    targets[i3 + 2] = Z.rack;
-    opacity[i] = 0.3;
-    scale[i] = 4.4;
+    targets[i3] = x;
+    targets[i3 + 1] = y;
+    targets[i3 + 2] = z;
+    opacity[i] = a;
+    scale[i] = s;
     role[i] = MR.BACKGROUND;
-    delay[i] = 0.25 + hash01(i) * 0.5;
-    growBounds(bounds, targets[i3]!, targets[i3 + 1]!);
-  });
-  if (promos.length > 0) {
-    const rows = Math.ceil(promos.length / shelfCols);
-    regions.push({
-      key: "rack:promoshelf",
-      x: fieldLeft + fieldW / 2,
-      y: shelfY + ((rows - 1) * 15) / 2,
-      z: Z.backplate,
-      w: fieldW + 24,
-      h: rows * 15 + 18,
-      color: rgb(M.plate),
-      alpha: 0.5,
-      kind: RK.PLATE,
-    });
-    labels.push({
-      key: "rack:promoshelf:h",
-      x: fieldLeft,
-      y: shelfY + rows * 15 + 4,
-      z: Z.rack,
-      text: "PROMOTIONS — shelf",
-      priority: PRIORITY.header - 20,
-      tone: "muted",
-      anchor: "left",
-    });
+    delay[i] = 0.35 + hash01(i) * 0.65;
+    growBounds(bounds, x, y);
+    ambientCount++;
   }
 
-  // ---- championships: gold lower shelf ----
-  const goldTop = fieldTop - fieldRows * RACK.cell - 34;
-  const goldCols = Math.max(30, Math.floor(fieldW / 9));
-  titles.forEach((i, k) => {
-    const i3 = i * 3;
-    targets[i3] = fieldLeft + ((k % goldCols) + 0.5) * 9;
-    targets[i3 + 1] = goldTop - Math.floor(k / goldCols) * 9;
-    targets[i3 + 2] = Z.rack;
-    opacity[i] = 0.2;
-    scale[i] = 2.6;
-    role[i] = MR.BACKGROUND;
-    delay[i] = 0.3 + hash01(i) * 0.6;
-    growBounds(bounds, targets[i3]!, targets[i3 + 1]!);
-  });
-  if (titles.length > 0) {
-    const rows = Math.ceil(titles.length / goldCols);
-    labels.push({
-      key: "rack:goldshelf:h",
-      x: fieldLeft,
-      y: goldTop + 10,
-      z: Z.rack,
-      text: "CHAMPIONSHIPS — shelf",
-      priority: PRIORITY.header - 21,
-      tone: "gold",
-      anchor: "left",
-    });
-    growBounds(bounds, fieldLeft, goldTop - rows * 9 - 10);
-  }
+  void ambientCount;
 
-  return { regions, labels };
+  // Regions are deliberately absent: a giant backplate would flatten the
+  // shell and reintroduce the motherboard silhouette.
+  return { regions: [], labels };
+}
+
+function finiteMid(a: number, b: number): number {
+  return Number.isFinite(a) && Number.isFinite(b) ? (a + b) * 0.5 : 0;
 }

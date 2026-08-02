@@ -157,7 +157,7 @@ export class ConnectomeRenderer {
   /**
    * Whether this renderer is the lens the reader is looking at.
    *
-   * A second lens (ATLAS, GEO) keeps the connectome MOUNTED so its camera
+   * A second lens (Morph, Geo) keeps the connectome MOUNTED so its camera
    * framing survives the round trip, but a mounted renderer must not burn a
    * requestAnimationFrame loop behind an opaque surface. `start()` is a no-op
    * while inactive, which also stops the visibility handler from resurrecting

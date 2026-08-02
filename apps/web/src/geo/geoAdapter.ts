@@ -13,8 +13,23 @@ import type {
  * scope is an index-list swap rather than a reload.
  */
 
+const LOAD_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`Timed out loading ${url}`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${import.meta.env.BASE_URL}data/geo/${path}`);
+  const res = await fetchWithTimeout(`${import.meta.env.BASE_URL}data/geo/${path}`);
   if (!res.ok) throw new Error(`GET /data/geo/${path} → ${res.status}`);
   return (await res.json()) as T;
 }
@@ -40,7 +55,7 @@ export async function loadGeo(onProgress?: (frac: number, what: string) => void)
   onProgress?.(0.3, "places");
   const raw = await getJSON<GeoPlacesFile>("places.json");
   onProgress?.(0.55, "cards");
-  const res = await fetch(`${import.meta.env.BASE_URL}data/geo/cards.bin`);
+  const res = await fetchWithTimeout(`${import.meta.env.BASE_URL}data/geo/cards.bin`);
   if (!res.ok) throw new Error(`cards.bin → ${res.status}`);
   const cards = new Uint32Array(await res.arrayBuffer());
   const expected = manifest.cards_bin.count * manifest.cards_bin.stride_u32;
@@ -121,7 +136,12 @@ const sourceMap = lazy<Record<string, SourceLocationRow>>("source-location-map.j
 
 function lazy<T>(path: string): () => Promise<T> {
   let p: Promise<T> | null = null;
-  return () => (p ??= getJSON<T>(path));
+  return () => (p ??= getJSON<T>(path).catch((error) => {
+    // A transient timeout must not poison this optional shard forever; the
+    // next explicit reader action is allowed to retry it.
+    p = null;
+    throw error;
+  }));
 }
 
 const peopleShards = new Map<string, Promise<Record<string, number[]>>>();

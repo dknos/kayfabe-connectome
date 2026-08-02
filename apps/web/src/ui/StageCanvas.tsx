@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dayToDate } from "@kayfabe/graph-contract";
 import { ConnectomeRenderer, type ViewEdges } from "@kayfabe/renderer";
 import { EF, type FilteredView, type GraphModel } from "../graph/model";
+import { selectSemanticEmphasis, semanticEmphasisChanged } from "../graph/semanticEmphasis";
 import { useStore } from "../state/store";
 import type { TimelineEngine } from "../timeline/TimelineEngine";
 
@@ -13,7 +14,7 @@ import type { TimelineEngine } from "../timeline/TimelineEngine";
  * changes — re-sorting 30,000 nodes on the 140 ms label cadence (which is what
  * this replaced) was pure waste.
  */
-function makeAtlasTier(): (m: GraphModel) => number[] {
+function makeMapTier(): (m: GraphModel) => number[] {
   let key: GraphModel | null = null;
   let val: number[] = [];
   return (m: GraphModel): number[] => {
@@ -55,23 +56,34 @@ export function StageCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<ConnectomeRenderer | null>(null);
+  const [rendererFailure, setRendererFailure] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const model = useStore((s) => s.model);
   const core = useStore((s) => s.core);
 
   // ---------- create / destroy ----------
   useEffect(() => {
     if (!model || !core || !canvasRef.current || rendererRef.current) return;
-    const r = new ConnectomeRenderer(canvasRef.current, {
-      count: model.nodes.count,
-      pos: model.nodes.pos,
-      type: model.nodes.type,
-      community: model.nodes.community,
-      degree: model.nodes.degree,
-      firstDay: model.nodes.firstDay,
-      lastDay: model.nodes.lastDay,
-      communityCenters: core.communities.center,
-      communitySizes: core.communities.size,
-    });
+    let r: ConnectomeRenderer;
+    try {
+      r = new ConnectomeRenderer(canvasRef.current, {
+        count: model.nodes.count,
+        pos: model.nodes.pos,
+        type: model.nodes.type,
+        community: model.nodes.community,
+        degree: model.nodes.degree,
+        firstDay: model.nodes.firstDay,
+        lastDay: model.nodes.lastDay,
+        communityCenters: core.communities.center,
+        communitySizes: core.communities.size,
+      });
+      setRendererFailure(null);
+    } catch (error) {
+      setRendererFailure(
+        `Connectome could not create a WebGL renderer. ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
     rendererRef.current = r;
     (window as { __kayfabeRenderer?: ConnectomeRenderer }).__kayfabeRenderer = r; // QA instrumentation
     r.onDropChange = onDropChange;
@@ -112,15 +124,16 @@ export function StageCanvas({
     // renderer would wait forever for a change that already happened.
     const s0 = useStore.getState();
     if (s0.view) r.setView(buildAdapter(model, s0.view));
+    const semantic0 = selectSemanticEmphasis(s0);
     const idx0 = (id: string | null) => (id ? (model.indexOfId.get(id) ?? null) : null);
     r.applyEmphasis({
-      selectedNode: s0.selection?.kind === "node" ? idx0(s0.selection.id) : null,
+      selectedNode: idx0(semantic0.selected),
       selectedEdge: s0.selection?.kind === "edge" ? s0.selection.edge : null,
-      hoverNode: null,
-      pathNodes: (s0.pathResult?.nodes ?? []).map(idx0).filter((v): v is number => v !== null),
+      hoverNode: idx0(semantic0.hovered),
+      pathNodes: semantic0.pathNodes.map(idx0).filter((v): v is number => v !== null),
       pathEdges: s0.pathResult?.edges ?? [],
-      pinned: s0.pinned.map(idx0).filter((v): v is number => v !== null),
-      members: s0.members.ids.map(idx0).filter((v): v is number => v !== null),
+      pinned: semantic0.pinned.map(idx0).filter((v): v is number => v !== null),
+      members: semantic0.members.map(idx0).filter((v): v is number => v !== null),
     });
     if (s0.timeline.mode !== "off" && s0.timeline.mode !== "playback") {
       r.setTimeVisibility({
@@ -143,12 +156,12 @@ export function StageCanvas({
       rendererRef.current = null;
       delete (window as { __kayfabeRenderer?: ConnectomeRenderer }).__kayfabeRenderer;
     };
-  }, [model, core, engine, onRenderer, onDropChange]);
+  }, [model, core, engine, onRenderer, onDropChange, retryToken]);
 
   // ---------- lens lifecycle ----------
   // The connectome stays MOUNTED under every lens so its camera framing and
   // GPU buffers survive the round trip; only the frame loop is suspended.
-  // Switching Connectome -> Atlas -> Connectome must therefore restore the
+  // Switching Connectome -> another lens -> Connectome must therefore restore the
   // previous framing rather than performing an unexpected fit-all.
   const lens = useStore((s) => s.lens);
   useEffect(() => {
@@ -166,22 +179,17 @@ export function StageCanvas({
           r.setView(buildAdapter(model, s.view));
         }
 
-        if (
-          s.selection !== prev.selection ||
-          s.hoverId !== prev.hoverId ||
-          s.pathResult !== prev.pathResult ||
-          s.pinned !== prev.pinned ||
-          s.members !== prev.members
-        ) {
+        if (semanticEmphasisChanged(s, prev)) {
+          const semantic = selectSemanticEmphasis(s);
           const idx = (id: string | null) => (id ? (model.indexOfId.get(id) ?? null) : null);
           r.applyEmphasis({
-            selectedNode: s.selection?.kind === "node" ? idx(s.selection.id) : null,
+            selectedNode: idx(semantic.selected),
             selectedEdge: s.selection?.kind === "edge" ? s.selection.edge : null,
-            hoverNode: idx(s.hoverId),
-            pathNodes: (s.pathResult?.nodes ?? []).map((id) => idx(id)).filter((v): v is number => v !== null),
+            hoverNode: idx(semantic.hovered),
+            pathNodes: semantic.pathNodes.map((id) => idx(id)).filter((v): v is number => v !== null),
             pathEdges: s.pathResult?.edges ?? [],
-            pinned: s.pinned.map((id) => idx(id)).filter((v): v is number => v !== null),
-            members: s.members.ids.map((id) => idx(id)).filter((v): v is number => v !== null),
+            pinned: semantic.pinned.map((id) => idx(id)).filter((v): v is number => v !== null),
+            members: semantic.members.map((id) => idx(id)).filter((v): v is number => v !== null),
           });
         }
 
@@ -339,7 +347,7 @@ export function StageCanvas({
   // strip is re-attached on every rebuild.
   const probeRef = useRef<number | null>(null);
   const labelEls = useRef(new Map<number, HTMLDivElement>());
-  const atlasTierRef = useRef(makeAtlasTier());
+  const mapTierRef = useRef(makeMapTier());
   useEffect(() => {
     /** The documented relationship between the current selection and one other
      * node, in the fiber palette's own terms. Hovering a name while someone is
@@ -498,7 +506,7 @@ export function StageCanvas({
         //    rather than a nebula. The ranking never changes, so it is computed
         //    once per corpus instead of re-sorting 30,000 nodes seven times a
         //    second, which is what this replaced.
-        for (const i of atlasTierRef.current(m)) {
+        for (const i of mapTierRef.current(m)) {
           if (wanted.length >= cap) break;
           if (seen.has(i)) continue;
           seen.add(i);
@@ -600,6 +608,15 @@ export function StageCanvas({
     <>
       <canvas ref={canvasRef} className="gl" aria-hidden="true" />
       <div ref={labelsRef} className="labels" aria-hidden="true" />
+      {rendererFailure && lens === "connectome" && (
+        <div className="boot connectome-webgl-fallback" role="alert">
+          <div className="inner">
+            <b>3D renderer unavailable</b>
+            <p className="micro">{rendererFailure}</p>
+            <button type="button" onClick={() => setRetryToken((token) => token + 1)}>Retry renderer</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

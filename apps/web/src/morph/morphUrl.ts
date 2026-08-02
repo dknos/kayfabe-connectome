@@ -1,10 +1,11 @@
+import type { MorphView } from "@kayfabe/morph-renderer";
 import { registerMorphUrl, useStore, writeUrl } from "../state/store";
 import { DEFAULT_MORPH_CONTROLS, type LoomSort, type BankGroup } from "./layouts/layoutTypes";
 import { morphModeFor, useMorph, type MorphModeOverride } from "./morphStore";
 
 /**
  * Morph Lab URL state. Key namespace "mo*" — the shared fragment reader
- * ignores unknown keys, and no shared/geo/atlas key starts with "mo".
+ * ignores unknown keys, and no other shared or lens key starts with "mo".
  * Serialization is diff-vs-default: defaults never appear in the fragment.
  * The camera is serialized only after the USER moves it — a programmatic fit
  * in a link would restore the wrong region after any layout change.
@@ -30,7 +31,10 @@ function serializeMorph(): Record<string, string | number | null> {
   if (cameraTouched && s.camera) {
     out.mocx = Math.round(s.camera.cx * 100) / 100;
     out.mocy = Math.round(s.camera.cy * 100) / 100;
-    out.moch = Math.round(s.camera.half * 100) / 100;
+    out.mocz = Math.round(s.camera.cz * 100) / 100;
+    out.mod = Math.round(s.camera.distance * 100) / 100;
+    out.moth = Math.round(s.camera.theta * 10000) / 10000;
+    out.moph = Math.round(s.camera.phi * 10000) / 10000;
   }
   return out;
 }
@@ -38,32 +42,31 @@ function serializeMorph(): Record<string, string | number | null> {
 let pending: Map<string, string> | null = null;
 
 function restore(kv: Map<string, string>): void {
-  for (const k of kv.keys()) {
-    if (k.startsWith("mo") && k.length > 2) {
-      pending = kv;
-      return;
-    }
-  }
+  const lens = kv.get("lens");
+  const morphLink =
+    lens === "morph" ||
+    lens === "atlas" ||
+    [...kv.keys()].some((k) => k.startsWith("mo") && k.length > 2);
+  pending = morphLink ? kv : null;
 }
 
 /** called by MorphLab after boot — the deep-link contract */
-export function applyPendingMorphUrl(): void {
+export async function applyPendingMorphUrl(): Promise<void> {
   if (!pending) return;
   const kv = pending;
   pending = null;
-  const patch: Partial<typeof DEFAULT_MORPH_CONTROLS> = {};
+  const controls = { ...DEFAULT_MORPH_CONTROLS };
   const sort = kv.get("mos");
-  if (sort && (SORTS as string[]).includes(sort)) patch.sort = sort as LoomSort;
+  if (sort && (SORTS as string[]).includes(sort)) controls.sort = sort as LoomSort;
   const group = kv.get("mog");
-  if (group && (GROUPS as string[]).includes(group)) patch.group = group as BankGroup;
-  if (kv.get("mox") === "1") patch.timeAxis = true;
+  if (group && (GROUPS as string[]).includes(group)) controls.group = group as BankGroup;
+  controls.timeAxis = kv.get("mox") === "1";
 
   const mode = kv.get("mom");
-  const st = useMorph.getState();
-  if (mode && (MODES as string[]).includes(mode)) {
-    useMorph.setState({ modeOverride: mode as MorphModeOverride });
-  }
-  if (kv.get("mot") === "1") useMorph.setState({ tissue: true });
+  const modeOverride = mode && (MODES as string[]).includes(mode)
+    ? mode as MorphModeOverride
+    : "auto";
+  const tissue = kv.get("mot") === "1";
 
   const num = (k: string): number | null => {
     const v = kv.get(k);
@@ -73,14 +76,36 @@ export function applyPendingMorphUrl(): void {
   };
   const cx = num("mocx");
   const cy = num("mocy");
-  const half = num("moch");
-  if (cx !== null && cy !== null && half !== null && half > 0) {
-    useMorph.setState({ pendingCamera: { cx, cy, half } });
+  const cz = num("mocz");
+  const distance = num("mod");
+  const theta = num("moth");
+  const phi = num("moph");
+  let pendingCamera: MorphView | null = null;
+  if (cx !== null && cy !== null && distance !== null && distance > 0 && theta !== null && phi !== null) {
+    pendingCamera = { cx, cy, cz: cz ?? 0, distance, theta, phi };
     cameraTouched = true;
+  } else {
+    // Safe migration for old orthographic Morph links. Preserve their target
+    // and approximate their visible vertical span under the new 50deg lens.
+    const half = num("moch");
+    if (cx !== null && cy !== null && half !== null && half > 0) {
+      pendingCamera = {
+        cx,
+        cy,
+        cz: 0,
+        distance: half / Math.tan((50 * Math.PI) / 360),
+        theta: (29 * Math.PI) / 180,
+        phi: (68 * Math.PI) / 180,
+      };
+      cameraTouched = true;
+    } else {
+      cameraTouched = false;
+    }
   }
 
-  if (Object.keys(patch).length > 0) st.setControls(patch);
-  else void st.rebuild();
+  useMorph.setState({ controls, modeOverride, tissue, pendingCamera });
+  await useMorph.getState().rebuild();
+  if (!pendingCamera) useMorph.getState().requestFit();
 }
 
 /** current auto/explicit mode, for UI display */

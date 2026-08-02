@@ -3,12 +3,12 @@ import * as THREE from "three";
 /**
  * Morph Lab palette.
  *
- * The semantic colours are IDENTICAL to the connectome's and the atlas's:
- * a wrestler's opposition is the same ember in every lens, and the board
+ * The semantic colours are identical to the connectome's: a wrestler's
+ * opposition is the same ember in every spatial reading, and the structure
  * structure stays desaturated so the relationship colours are always the
  * loudest thing on screen. Deliberately duplicated, not imported — one lens
  * importing another's palette is how a shared utility becomes a shared bug
- * (the same rule atlas-renderer follows against the connectome).
+ * (the same rule every renderer follows against the connectome).
  */
 export const M = {
   bg: new THREE.Color("#04060b"),

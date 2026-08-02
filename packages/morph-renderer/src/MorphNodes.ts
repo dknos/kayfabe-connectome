@@ -40,6 +40,7 @@ export class MorphNodes {
   color: Float32Array;
   shape: Float32Array; // 0 person disc, 1 promotion ring, 2 title diamond
   emph: Float32Array;
+  semantic: Float32Array;
   glow: Float32Array;
 
   private geo: THREE.BufferGeometry;
@@ -58,6 +59,7 @@ export class MorphNodes {
     this.color = new Float32Array(n * 3);
     this.shape = new Float32Array(n);
     this.emph = new Float32Array(n).fill(1);
+    this.semantic = new Float32Array(n);
     this.glow = new Float32Array(n);
 
     this.geo = new THREE.BufferGeometry();
@@ -77,16 +79,17 @@ export class MorphNodes {
     this.geo.setAttribute("aColor", dyn(this.color, 3));
     this.geo.setAttribute("aShape", dyn(this.shape, 1));
     this.geo.setAttribute("aEmph", dyn(this.emph, 1));
+    this.geo.setAttribute("aSemantic", dyn(this.semantic, 1));
     this.geo.setAttribute("aGlow", dyn(this.glow, 1));
 
     this.mat = new THREE.ShaderMaterial({
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       uniforms: {
         uMorph: { value: 1 },
-        uPxPerWorld: { value: 1 },
+        uViewportHeight: { value: 1 },
         uPixelRatio: { value: 1 },
         uMaxPx: { value: 30 },
       },
@@ -94,10 +97,10 @@ export class MorphNodes {
         attribute vec3 aTo;
         attribute float aScaleFrom, aScaleTo, aAlphaFrom, aAlphaTo, aDelay;
         attribute vec3 aColor;
-        attribute float aShape, aEmph, aGlow;
-        uniform float uMorph, uPxPerWorld, uPixelRatio, uMaxPx;
+        attribute float aShape, aEmph, aSemantic, aGlow;
+        uniform float uMorph, uViewportHeight, uPixelRatio, uMaxPx;
         varying vec3 vColor;
-        varying float vAlpha, vShape, vGlow;
+        varying float vAlpha, vShape, vGlow, vSemantic;
         ${GLSL_PROGRESS}
         void main() {
           float p = elementP(uMorph, aDelay);
@@ -110,17 +113,29 @@ export class MorphNodes {
           vColor = aColor;
           vShape = aShape;
           vGlow = aGlow;
-          vAlpha = alpha * min(em, 1.35);
-          float boost = 1.0 + max(0.0, em - 1.0) * 0.55 + aGlow * 0.8;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-          float px = scale * uPxPerWorld * boost * uPixelRatio;
-          gl_PointSize = clamp(px, 1.6 * uPixelRatio, uMaxPx * uPixelRatio);
+          vSemantic = aSemantic;
+          vAlpha = alpha * min(em, 1.25);
+          float semanticBoost =
+            aSemantic >= 6.0 ? 0.42 :
+            aSemantic >= 5.0 ? 0.34 :
+            aSemantic >= 4.0 ? 0.24 :
+            aSemantic >= 3.0 ? 0.18 :
+            aSemantic >= 2.0 ? 0.08 :
+            aSemantic >= 1.0 ? 0.05 : 0.0;
+          float boost = 1.0 + max(0.0, em - 1.0) * 0.40 + semanticBoost + aGlow * 0.8;
+          vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+          gl_Position = projectionMatrix * mv;
+          // projectionMatrix[1][1] is cot(fov/2): this is true perspective
+          // screen-size attenuation, not an orthographic world-to-pixel ratio.
+          float px = scale * projectionMatrix[1][1] * uViewportHeight * 0.5 /
+            max(0.25, -mv.z) * boost * uPixelRatio;
+          gl_PointSize = clamp(px, 1.15 * uPixelRatio, uMaxPx * uPixelRatio);
         }
       `,
       fragmentShader: /* glsl */ `
         precision highp float;
         varying vec3 vColor;
-        varying float vAlpha, vShape, vGlow;
+        varying float vAlpha, vShape, vGlow, vSemantic;
         void main() {
           vec2 q = gl_PointCoord - 0.5;
           float d = length(q);
@@ -136,10 +151,24 @@ export class MorphNodes {
           } else {
             cov = 1.0 - smoothstep(0.12, 0.5, d);
           }
-          if (cov * vAlpha < 0.003) discard;
+          // A contained, screen-crisp membrane distinguishes semantic members
+          // without turning the whole scene into bloom. Hover and selection
+          // whiten the same ring rather than introducing another decoration.
+          float semanticOn = step(2.5, vSemantic);
+          float hot = smoothstep(4.0, 6.0, vSemantic);
+          float ring = semanticOn *
+            (1.0 - smoothstep(0.46, 0.5, d)) *
+            smoothstep(0.36, 0.405, d);
+          float bodyAlpha = cov * vAlpha;
+          float ringAlpha = ring * mix(0.48, 0.92, hot) * min(1.0, vAlpha + 0.25);
+          float alpha = max(bodyAlpha, ringAlpha);
+          if (alpha < 0.003) discard;
           float core = smoothstep(0.30, 0.0, d) * (0.35 + vGlow * 0.9);
           vec3 col = vColor + vec3(1.0) * core * 0.6;
-          gl_FragColor = vec4(col, cov * vAlpha);
+          col = mix(col, vec3(1.0), step(5.5, vSemantic) * 0.82);
+          vec3 ringColor = mix(min(vec3(1.0), vColor * 1.18 + vec3(0.1)), vec3(1.0), hot);
+          col = mix(col, ringColor, ring * 0.86);
+          gl_FragColor = vec4(col, alpha);
         }
       `,
     });
@@ -153,8 +182,8 @@ export class MorphNodes {
   setMorph(raw: number): void {
     this.mat.uniforms.uMorph!.value = raw;
   }
-  setScale(pxPerWorld: number, pixelRatio: number): void {
-    this.mat.uniforms.uPxPerWorld!.value = pxPerWorld;
+  setScale(viewportHeight: number, pixelRatio: number): void {
+    this.mat.uniforms.uViewportHeight!.value = viewportHeight;
     this.mat.uniforms.uPixelRatio!.value = pixelRatio;
   }
 
@@ -200,6 +229,7 @@ export class MorphNodes {
   }
   commitEmphasis(): void {
     (this.geo.getAttribute("aEmph") as THREE.BufferAttribute).needsUpdate = true;
+    (this.geo.getAttribute("aSemantic") as THREE.BufferAttribute).needsUpdate = true;
   }
   commitGlow(): void {
     (this.geo.getAttribute("aGlow") as THREE.BufferAttribute).needsUpdate = true;

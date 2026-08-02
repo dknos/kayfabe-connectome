@@ -1,4 +1,4 @@
-"""Unit tests for the ATLAS projection.
+"""Unit tests for the neutral chronology projection.
 
 Offline and corpus-free: every rule that decides what the projection claims is
 a pure function over plain dicts, and the validator is exercised against a tiny

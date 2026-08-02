@@ -4,6 +4,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { MorphCamera } from "./MorphCamera";
+import { writeMorphEmphasis } from "./emphasis";
 import { MorphLabels, type MorphLabelReport } from "./MorphLabels";
 import { MorphNodes } from "./MorphNodes";
 import { pickAt } from "./MorphPicking";
@@ -15,8 +16,11 @@ import { M, rgb, type RGB } from "./palette";
 import {
   MORPH_TIERS,
   TRACE_SAMPLES,
+  easeQuintic,
+  elementProgress,
   type MorphEmphasis,
   type MorphGraphInput,
+  type MorphLabel,
   type MorphLayoutResult,
   type MorphMode,
   type MorphPickResult,
@@ -44,6 +48,7 @@ export class MorphRenderer {
   onLabelReport: ((r: MorphLabelReport) => void) | null = null;
   onTierChange: ((t: MorphTier) => void) | null = null;
   onCameraChange: (() => void) | null = null;
+  onContextState: ((state: "ready" | "lost" | "restored") => void) | null = null;
 
   /** QA seams */
   mode: MorphMode = "organic";
@@ -60,7 +65,12 @@ export class MorphRenderer {
 
   private corpusCount = 0;
   private idOfSlot: (slot: number) => string | null = () => null;
+  private slotById = new Map<string, number>();
   private layout: MorphLayoutResult | null = null;
+  private labelWork: MorphLabel[] = [];
+  private labelSlots = new Int32Array(0);
+  private labelByPick = new Map<string, number>();
+  private hoveredLabelIndex = -1;
   private labelReport: MorphLabelReport = { shown: 0, wanted: 0 };
 
   private clock = new THREE.Clock();
@@ -84,6 +94,14 @@ export class MorphRenderer {
     hoveredId: null,
     pinned: [],
     pathNodes: [],
+    members: [],
+    anchors: [],
+    virtualMembers: [],
+    virtualAnchors: [],
+    memberGroup: "all",
+    basis: "",
+    caveat: null,
+    coverageWarnings: [],
     dimBackground: false,
   };
 
@@ -122,6 +140,9 @@ export class MorphRenderer {
     this.composer = new EffectComposer(this.gl);
     this.composer.addPass(new RenderPass(this.scene, this.cam.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.28, 0.5, 1.0);
+    // Semantic membranes and crisp node halos carry emphasis. Whole-scene
+    // bloom destroys dense-network contrast, so the pass stays disabled.
+    this.bloom.enabled = false;
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -134,6 +155,11 @@ export class MorphRenderer {
   /** Bake the corpus once. `organic` is copied, never retained. */
   setGraph(input: MorphGraphInput, idOfSlot: (slot: number) => string | null): void {
     this.corpusCount = input.count;
+    this.slotById.clear();
+    for (let i = 0; i < input.count; i++) {
+      const id = idOfSlot(i);
+      if (id) this.slotById.set(id, i);
+    }
     this.idOfSlot = (slot) => {
       if (slot < this.corpusCount) return idOfSlot(slot);
       for (const [id, s] of this.transition.virtualIds()) {
@@ -165,10 +191,21 @@ export class MorphRenderer {
 
   setLayout(layout: MorphLayoutResult, immediate = false): void {
     if (!this.nodes) return;
+    assertFiniteLayout(layout, this.corpusCount);
     this.mode = layout.mode;
     this.layout = layout;
     this.transition.reducedMotion = this.reducedMotion;
     this.transition.apply(layout, this.nodes, this.traces, this.regions, performance.now(), immediate);
+    this.labelWork = layout.labels.map((label) => ({ ...label }));
+    this.labelSlots = new Int32Array(layout.labels.length).fill(-1);
+    this.labelByPick.clear();
+    this.hoveredLabelIndex = -1;
+    for (let i = 0; i < layout.labels.length; i++) {
+      const label = layout.labels[i]!;
+      if (label.pick && !this.labelByPick.has(label.pick)) this.labelByPick.set(label.pick, i);
+      if (!label.pick || (label.key !== `n:${label.pick}` && !label.force)) continue;
+      this.labelSlots[i] = this.slotOfId(label.pick) ?? -1;
+    }
     const span = Math.max(
       layout.bounds.maxX - layout.bounds.minX,
       layout.bounds.maxY - layout.bounds.minY,
@@ -195,40 +232,130 @@ export class MorphRenderer {
   get lastLabelReport(): MorphLabelReport {
     return this.labelReport;
   }
+  get corpusSlotCount(): number {
+    return this.corpusCount;
+  }
+  idAtSlot(slot: number): string | null {
+    return this.idOfSlot(slot);
+  }
 
   /** live interpolated world position of a corpus slot (QA + selected card) */
   currentPositionOf(slot: number): [number, number, number] | null {
     if (!this.nodes || slot < 0 || slot >= this.nodes.total) return null;
     return this.nodes.currentPosition(slot, this.transition.progress);
   }
-  projectSlot(slot: number): { x: number; y: number; front: boolean } | null {
+  projectSlot(slot: number): { x: number; y: number; front: boolean; depth: number } | null {
     const p = this.currentPositionOf(slot);
     return p ? this.cam.worldToScreen(p[0], p[1], p[2]) : null;
+  }
+  projectedNodeMetrics(slot: number): { x: number; y: number; depth: number; pointSizePx: number } | null {
+    if (!this.nodes || slot < 0 || slot >= this.nodes.total) return null;
+    const projected = this.projectSlot(slot);
+    if (!projected?.front || projected.depth <= 0) return null;
+    const p = elementProgress(this.transition.progress, this.nodes.delay[slot]!);
+    const e = easeQuintic(p);
+    const scale = THREE.MathUtils.lerp(this.nodes.scaleFrom[slot]!, this.nodes.scaleTo[slot]!, e);
+    const semantic = this.nodes.semantic[slot]!;
+    const semanticBoost = semantic >= 6 ? 0.42 : semantic >= 5 ? 0.34 : semantic >= 4 ? 0.24 : semantic >= 3 ? 0.18 : semantic >= 2 ? 0.08 : semantic >= 1 ? 0.05 : 0;
+    const boost = 1 + Math.max(0, this.nodes.emph[slot]! - 1) * 0.4 + semanticBoost + this.nodes.glow[slot]! * 0.8;
+    const pr = Math.min(window.devicePixelRatio || 1, MORPH_TIERS[this.tier].pixelRatioCap);
+    const raw = scale * this.cam.camera.projectionMatrix.elements[5]! * (this.canvas.clientHeight || 2) * 0.5 / projected.depth * boost * pr;
+    return {
+      x: projected.x,
+      y: projected.y,
+      depth: projected.depth,
+      pointSizePx: THREE.MathUtils.clamp(raw, 1.15 * pr, 30 * pr),
+    };
   }
   virtualSlotOf(id: string): number | null {
     const s = this.transition?.virtualSlotOf(id);
     return s === undefined ? null : this.corpusCount + s;
   }
 
+  slotOfId(id: string): number | null {
+    const corpus = this.slotById.get(id);
+    return corpus === undefined ? this.virtualSlotOf(id) : corpus;
+  }
+
+  /** Camera focus stays entirely inside Morph; it never mutates Connectome. */
+  focusId(id: string, durationS = 0.55): boolean {
+    const slot = this.slotOfId(id);
+    if (slot === null) return false;
+    const p = this.currentPositionOf(slot);
+    if (!p) return false;
+    const base = Math.max(this.nodes.scaleFrom[slot]!, this.nodes.scaleTo[slot]!, 5);
+    this.cam.focus(p[0], p[1], p[2], base, this.reducedMotion ? 0 : durationS);
+    return true;
+  }
+
+  focusSelection(durationS = 0.55): boolean {
+    const id = this.emphasis.selectedId ?? this.idOfSlot(this.emphasis.selected);
+    return id ? this.focusId(id, durationS) : false;
+  }
+
+  /** Read-only QA snapshot for semantic population assertions. */
+  emphasisSnapshot(): { members: number; anchors: number; selected: number; hovered: number } {
+    return {
+      members: this.emphasis.members.length + this.emphasis.virtualMembers.length,
+      anchors: this.emphasis.anchors.length + this.emphasis.virtualAnchors.length,
+      selected: this.emphasis.selected,
+      hovered: this.emphasis.hovered,
+    };
+  }
+
   applyEmphasis(em: MorphEmphasis): void {
     this.emphasis = em;
     if (!this.nodes || !this.layout) return;
-    const nd = this.nodes;
-    const roles = this.layout.nodeRole;
-    const anyFocus = (em.selected >= 0 || em.selectedId !== null || em.pathNodes.length > 0) && em.dimBackground;
-    for (let i = 0; i < this.corpusCount; i++) {
-      nd.emph[i] = roles[i] === 0 && anyFocus ? 0.3 : 1;
+    writeMorphEmphasis(
+      this.nodes,
+      em,
+      this.layout.nodeRole,
+      this.corpusCount,
+      (id) => this.virtualSlotOf(id),
+    );
+    this.nodes.commitEmphasis();
+    this.applyTraceEmphasis(em);
+    this.applyHoveredLabel(em.hoveredId ?? this.idOfSlot(em.hovered));
+  }
+
+  private applyHoveredLabel(id: string | null): void {
+    if (!this.layout) return;
+    if (this.hoveredLabelIndex >= 0) {
+      const original = this.layout.labels[this.hoveredLabelIndex];
+      const work = this.labelWork[this.hoveredLabelIndex];
+      if (original && work) {
+        work.force = original.force;
+        work.priority = original.priority;
+      }
+      this.hoveredLabelIndex = -1;
     }
-    for (let i = this.corpusCount; i < nd.total; i++) nd.emph[i] = 1;
-    for (const i of em.pathNodes) if (i >= 0) nd.emph[i] = 1.45;
-    for (const i of em.pinned) if (i >= 0) nd.emph[i] = Math.max(nd.emph[i]!, 1.15);
-    if (em.hovered >= 0) nd.emph[em.hovered] = Math.max(nd.emph[em.hovered]!, 1.3);
-    if (em.selected >= 0) nd.emph[em.selected] = 1.6;
-    const vSel = em.selectedId ? this.virtualSlotOf(em.selectedId) : null;
-    if (vSel !== null) nd.emph[vSel] = 1.6;
-    const vHov = em.hoveredId ? this.virtualSlotOf(em.hoveredId) : null;
-    if (vHov !== null) nd.emph[vHov] = Math.max(nd.emph[vHov]!, 1.3);
-    nd.commitEmphasis();
+    if (!id) return;
+    const next = this.labelByPick.get(id);
+    if (next === undefined) return;
+    const work = this.labelWork[next];
+    if (!work) return;
+    work.force = true;
+    work.priority = 1_000_000;
+    this.hoveredLabelIndex = next;
+  }
+
+  private applyTraceEmphasis(em: MorphEmphasis): void {
+    if (!this.layout || !this.transition) return;
+    const hovered = em.hovered;
+    const selected = em.selected;
+    const path = new Set(em.pathNodes);
+    for (const route of this.layout.routes) {
+      const slot = this.transition.traceSlotOf(route.key);
+      if (slot === undefined) continue;
+      const incidentHover = hovered >= 0 && (route.a === hovered || route.b === hovered);
+      const incidentSelected = selected >= 0 && (route.a === selected || route.b === selected);
+      const onPath = path.has(route.a) && path.has(route.b);
+      const optical = hovered >= 0
+        ? incidentHover ? 1.9 : 0.28
+        : onPath ? 1.45 : incidentSelected ? 1.24 : 1;
+      this.traces.setSlotEmphasis(slot, optical);
+    }
+    this.traces.commitEmphasis();
   }
 
   igniteSlot(slot: number): void {
@@ -257,21 +384,6 @@ export class MorphRenderer {
     at(1, 9);
     this.pulses.spawnCurve(ctrl, color, this.clock.elapsedTime);
     return true;
-  }
-
-  pulseBetween(slotA: number, slotB: number, color: RGB): void {
-    if (!this.nodes) return;
-    const a = this.currentPositionOf(slotA);
-    const b = this.currentPositionOf(slotB);
-    if (!a || !b) return;
-    const lift = Math.hypot(b[0] - a[0], b[1] - a[1]) * 0.12;
-    const ctrl = new Float32Array([
-      a[0], a[1], a[2],
-      a[0] + (b[0] - a[0]) * 0.33, a[1] + (b[1] - a[1]) * 0.33 + lift, a[2],
-      a[0] + (b[0] - a[0]) * 0.66, a[1] + (b[1] - a[1]) * 0.66 + lift, b[2],
-      b[0], b[1], b[2],
-    ]);
-    this.pulses.spawnCurve(ctrl, color, this.clock.elapsedTime);
   }
 
   pulseGoldAt(slot: number): void {
@@ -303,12 +415,30 @@ export class MorphRenderer {
 
   pick(px: number, py: number, slopPx = 8): MorphPickResult | null {
     if (!this.nodes || !this.layout) return null;
-    return pickAt(this.cam, this.nodes, this.corpusCount, this.idOfSlot, this.layout.regions, px, py, slopPx);
+    return pickAt(
+      this.cam,
+      this.nodes,
+      this.corpusCount,
+      this.idOfSlot,
+      this.layout.regions,
+      this.transition.progress,
+      px,
+      py,
+      slopPx,
+    );
   }
 
-  fitLayout(durationS = 0.8): void {
+  fitLayout(durationS = 0.8, settleOrientation = false): void {
     if (!this.layout) return;
-    this.cam.fit(this.layout.fitBounds ?? this.layout.bounds, 0.07, this.reducedMotion ? 0 : durationS);
+    const bounds = spatialFitBounds(this.layout);
+    const points = this.layout.mode === "organic" ? undefined : spatialFitPoints(this.layout);
+    this.cam.fit(
+      bounds,
+      0.1,
+      this.reducedMotion ? 0 : durationS,
+      settleOrientation ? orientationFor(this.layout.mode) : undefined,
+      points,
+    );
   }
 
   setReducedMotion(v: boolean): void {
@@ -388,9 +518,9 @@ export class MorphRenderer {
 
     const pxPerWorld = (this.canvas.clientHeight || 2) / (this.cam.halfHeight * 2);
     const pr = Math.min(window.devicePixelRatio || 1, MORPH_TIERS[this.tier].pixelRatioCap);
-    this.nodes?.setScale(pxPerWorld, pr);
+    this.nodes?.setScale(this.canvas.clientHeight || 2, pr);
     this.regions.setPixelsPerWorld(pxPerWorld);
-    this.traces.setWorldPerPixel(this.cam.worldPerPixel);
+    this.traces.setResolution(this.canvas.clientWidth || 2, this.canvas.clientHeight || 2);
     this.pulses.tick(this.clock.elapsedTime, pxPerWorld, pr);
 
     // glow decay — bounded hot set
@@ -412,8 +542,23 @@ export class MorphRenderer {
       const raw = this.transition.progress;
       const opacity = this.reducedMotion || raw >= 1 ? 1 : Math.max(0, Math.min(1, (raw - 0.5) / 0.4));
       const cap = MORPH_TIERS[this.tier].labelCap;
+      for (let i = 0; i < this.labelSlots.length; i++) {
+        let slot = this.labelSlots[i]!;
+        if (slot < 0) {
+          const id = this.layout.labels[i]!.pick;
+          if (id) slot = this.slotOfId(id) ?? -1;
+          this.labelSlots[i] = slot;
+        }
+        if (slot < 0) continue;
+        const pos = this.currentPositionOf(slot);
+        if (!pos) continue;
+        const label = this.labelWork[i]!;
+        label.x = pos[0];
+        label.y = pos[1];
+        label.z = pos[2];
+      }
       const report = this.labels.render(
-        this.layout.labels,
+        this.labelWork,
         this.cam,
         cap,
         this.canvas.clientWidth || 2,
@@ -452,7 +597,7 @@ export class MorphRenderer {
     const i = order.indexOf(this.tier) + dir;
     if (i < 0 || i >= order.length) return;
     this.tier = order[i]!;
-    this.bloom.enabled = MORPH_TIERS[this.tier].bloom;
+    this.bloom.enabled = false;
     this.resize();
     this.onTierChange?.(this.tier);
   }
@@ -460,13 +605,105 @@ export class MorphRenderer {
   private onContextLost = (e: Event): void => {
     e.preventDefault();
     this.contextLost = true;
+    this.onContextState?.("lost");
   };
   private onContextRestored = (): void => {
     this.contextLost = false;
     if (this.layout) this.setLayout(this.layout, true);
+    this.onContextState?.("restored");
   };
   private onVisibility = (): void => {
     if (document.hidden) this.stop();
     else this.start();
   };
+}
+
+function orientationFor(mode: MorphMode): { theta: number; phi: number } {
+  switch (mode) {
+    case "lineage": return { theta: THREE.MathUtils.degToRad(24), phi: THREE.MathUtils.degToRad(73) };
+    case "career": return { theta: THREE.MathUtils.degToRad(31), phi: THREE.MathUtils.degToRad(70) };
+    case "h2h": return { theta: THREE.MathUtils.degToRad(28), phi: THREE.MathUtils.degToRad(68) };
+    case "motherboard": return { theta: THREE.MathUtils.degToRad(34), phi: THREE.MathUtils.degToRad(66) };
+    case "loom": return { theta: THREE.MathUtils.degToRad(32), phi: THREE.MathUtils.degToRad(66) };
+    default: return { theta: THREE.MathUtils.degToRad(29), phi: THREE.MathUtils.degToRad(68) };
+  }
+}
+
+function spatialFitBounds(layout: MorphLayoutResult): {
+  minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number;
+} {
+  const xy = layout.fitBounds ?? layout.bounds;
+  let minZ = Number.isFinite(xy.minZ) ? xy.minZ! : Infinity;
+  let maxZ = Number.isFinite(xy.maxZ) ? xy.maxZ! : -Infinity;
+  for (let i = 0; i < layout.nodeOpacity.length; i++) {
+    if (layout.nodeOpacity[i]! < 0.02 || (layout.mode !== "organic" && layout.nodeRole[i] === 0)) continue;
+    const i3 = i * 3;
+    const x = layout.nodeTargets[i3]!;
+    const y = layout.nodeTargets[i3 + 1]!;
+    if (x < xy.minX || x > xy.maxX || y < xy.minY || y > xy.maxY) continue;
+    const z = layout.nodeTargets[i3 + 2]!;
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  for (const v of layout.virtuals) {
+    if (v.opacity < 0.02 || v.x < xy.minX || v.x > xy.maxX || v.y < xy.minY || v.y > xy.maxY) continue;
+    minZ = Math.min(minZ, v.z);
+    maxZ = Math.max(maxZ, v.z);
+  }
+  if (!Number.isFinite(minZ) || !Number.isFinite(maxZ)) minZ = maxZ = 0;
+  return { ...xy, minZ, maxZ };
+}
+
+/** Exact occupied samples for perspective fitting. This runs only on Fit or a
+ * semantic topology change, never per frame. Ambient corpus-shell nodes are
+ * intentionally excluded so context cannot make the active sculpture tiny. */
+function spatialFitPoints(layout: MorphLayoutResult): Float32Array {
+  let activeNodes = 0;
+  for (let i = 0; i < layout.nodeOpacity.length; i++) {
+    if (layout.nodeOpacity[i]! >= 0.02 && layout.nodeRole[i] !== 0) activeNodes++;
+  }
+  const pointCap =
+    activeNodes +
+    layout.virtuals.length +
+    layout.routes.length * TRACE_SAMPLES +
+    layout.regions.length * 4 +
+    layout.labels.length;
+  const points = new Float32Array(Math.max(1, pointCap) * 3);
+  let o = 0;
+  const add = (x: number, y: number, z: number) => {
+    points[o++] = x;
+    points[o++] = y;
+    points[o++] = z;
+  };
+  for (let i = 0; i < layout.nodeOpacity.length; i++) {
+    if (layout.nodeOpacity[i]! < 0.02 || layout.nodeRole[i] === 0) continue;
+    add(layout.nodeTargets[i * 3]!, layout.nodeTargets[i * 3 + 1]!, layout.nodeTargets[i * 3 + 2]!);
+  }
+  for (const virtual of layout.virtuals) if (virtual.opacity >= 0.02) add(virtual.x, virtual.y, virtual.z);
+  for (const route of layout.routes) {
+    for (let i = 0; i < route.points.length; i += 3) add(route.points[i]!, route.points[i + 1]!, route.points[i + 2]!);
+  }
+  for (const region of layout.regions) {
+    const hw = region.w * 0.5;
+    const hh = region.h * 0.5;
+    add(region.x - hw, region.y - hh, region.z);
+    add(region.x + hw, region.y - hh, region.z);
+    add(region.x - hw, region.y + hh, region.z);
+    add(region.x + hw, region.y + hh, region.z);
+  }
+  for (const label of layout.labels) add(label.x, label.y, label.z);
+  return points.subarray(0, o);
+}
+
+function assertFiniteLayout(layout: MorphLayoutResult, count: number): void {
+  if (layout.nodeTargets.length !== count * 3) throw new Error(`Morph ${layout.mode}: expected ${count} node slots`);
+  for (let i = 0; i < layout.nodeTargets.length; i++) {
+    if (!Number.isFinite(layout.nodeTargets[i])) throw new Error(`Morph ${layout.mode}: non-finite node target at ${i}`);
+  }
+  for (const [name, value] of Object.entries(layout.bounds)) {
+    if (!Number.isFinite(value)) throw new Error(`Morph ${layout.mode}: non-finite bound ${name}`);
+  }
+  if (!(layout.bounds.maxX > layout.bounds.minX) || !(layout.bounds.maxY > layout.bounds.minY)) {
+    throw new Error(`Morph ${layout.mode}: zero-sized layout bounds`);
+  }
 }

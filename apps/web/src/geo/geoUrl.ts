@@ -20,6 +20,9 @@ import type { ClockKind, GeoScope, GeoScopeKind, HeatMetric } from "./geoTypes";
 const KINDS: GeoScopeKind[] = [
   "promotion", "person", "pair", "championship", "event", "place", "corpus",
 ];
+const CAMERAS: CameraMode[] = ["world", "follow", "tour", "region", "free", "smart"];
+const AFTERGLOWS: AfterglowMode[] = ["none", "short", "long", "accumulate", "window"];
+const HEAT_METRICS: HeatMetric[] = ["cards", "matches", "people", "titleMatches", "titleChanges"];
 
 function serialize(): Record<string, string | number | null> {
   const g = useGeo.getState();
@@ -51,16 +54,23 @@ function serialize(): Record<string, string | number | null> {
 let pending: Map<string, string> | null = null;
 
 function restore(kv: Map<string, string>): void {
-  if (![...kv.keys()].some((k) => k.startsWith("g") && k !== "graph")) return;
-  pending = kv;
+  const lens = kv.get("lens");
+  const geoLink =
+    lens === "geo" ||
+    lens === "geoTable" ||
+    [...kv.keys()].some((k) => k.startsWith("g") && k !== "graph");
+  pending = geoLink ? kv : null;
 }
 
 export async function applyPendingGeoUrl(): Promise<void> {
   const kv = pending;
   if (!kv) return;
-  pending = null;
   const g = useGeo.getState();
+  // Keep the fragment staged while the lazy projection is still loading.
+  // Geo's activation effect calls this again after boot; clearing it here
+  // would lose links pasted while switching into the lens.
   if (!g.data) return;
+  pending = null;
 
   const num = (k: string): number | null => {
     const v = kv.get(k);
@@ -69,51 +79,48 @@ export async function applyPendingGeoUrl(): Promise<void> {
     return Number.isFinite(n) ? n : null;
   };
 
-  const clock = kv.get("gck");
-  if (clock === "calendar" || clock === "record") {
-    g.setClock(clock as ClockKind, num("gsp") ?? undefined);
-  } else if (num("gsp") !== null) {
-    g.setSpeed(num("gsp")!);
-  }
+  g.setPlaying(false);
+  const clock = kv.get("gck") === "calendar" ? "calendar" : "record";
+  g.setClock(clock as ClockKind, num("gsp") ?? 3);
   const cam = kv.get("gcam");
-  if (cam) g.setCamera(cam as CameraMode);
+  g.setCamera(cam && (CAMERAS as string[]).includes(cam) ? cam as CameraMode : "world");
   const ag = kv.get("gag");
-  if (ag) g.setAfterglow(ag as AfterglowMode);
+  g.setAfterglow(ag && (AFTERGLOWS as string[]).includes(ag) ? ag as AfterglowMode : "accumulate");
   const wy = num("gwy");
-  if (wy !== null) g.setWindowYears(wy);
+  g.setWindowYears(wy ?? 5);
   const hm = kv.get("ghm");
-  if (hm) g.setHeatMetric(hm as HeatMetric);
-  if (kv.get("gar") === "1") g.setShowArcs(true);
+  g.setHeatMetric(hm && (HEAT_METRICS as string[]).includes(hm) ? hm as HeatMetric : "cards");
+  g.setShowArcs(kv.get("gar") === "1");
 
   const dn = num("gdn");
   const dx = num("gdx");
   const range = g.data.manifest.day_range;
-  if (dn !== null || dx !== null) {
-    await useGeo.getState().setRange(dn ?? range[0], dx ?? range[1]);
-  }
+  await useGeo.getState().setRange(dn ?? range[0], dx ?? range[1]);
 
   const kind = kv.get("gs") as GeoScopeKind | undefined;
   const ids = (kv.get("gi") ?? "").split(",").filter(Boolean);
   const firstId = ids[0];
-  if (kind && KINDS.includes(kind) && (firstId !== undefined || kind === "corpus")) {
-    const scope: GeoScope = { kind, ids, label: labelFor(kind, ids) };
-    // A pair scope has no index — its cards live in the evidence store, so a
-    // restored link has to rebuild the same list the dossier handoff built.
-    await useGeo.getState().setScope(
-      scope, kind === "pair" ? await pairCardIds(ids) : undefined,
-    );
-  }
+  const validKind = kind && KINDS.includes(kind) && (firstId !== undefined || kind === "corpus")
+    ? kind
+    : "corpus";
+  const scopeIds = validKind === "corpus" ? [] : ids;
+  const scope: GeoScope = { kind: validKind, ids: scopeIds, label: labelFor(validKind, scopeIds) };
+  // A pair scope has no index — its cards live in the evidence store, so a
+  // restored link has to rebuild the same list the dossier handoff built.
+  await useGeo.getState().setScope(
+    scope, validKind === "pair" ? await pairCardIds(scopeIds) : undefined,
+  );
 
   const pos = num("gp");
-  if (pos !== null && scheduler) {
-    scheduler.seek(pos);
+  if (scheduler) {
+    scheduler.seek(pos ?? 0);
     useGeo.getState().syncFromScheduler();
   }
   const placeId = kv.get("gpl");
   if (placeId) {
     const idx = useGeo.getState().data?.placeIndexOf.get(placeId);
-    if (idx !== undefined) useGeo.getState().selectPlace(idx);
-  }
+    useGeo.getState().selectPlace(idx ?? -1);
+  } else useGeo.getState().selectPlace(-1);
 }
 
 function labelFor(kind: GeoScopeKind, ids: string[]): string {

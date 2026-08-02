@@ -20,27 +20,18 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
     <header className="topbar">
       <div className="brand">
         <b>KAYFABE CONNECTOME</b>
-        <span className="micro">history atlas</span>
+        <span className="micro">documented wrestling network</span>
       </div>
       <SearchBox />
       <div role="group" aria-label="Lens">
         <button className={lens === "connectome" ? "active" : ""} onClick={() => setLens("connectome")}>
           Connectome
         </button>{" "}
-        <button className={lens === "atlas" ? "active" : ""} onClick={() => setLens("atlas")}>
-          Atlas
-        </button>{" "}
         <button className={lens === "morph" ? "active" : ""} onClick={() => setLens("morph")}>
-          Morph Lab β
+          Morph Lab
         </button>{" "}
         <button className={lens === "geo" ? "active" : ""} onClick={() => setLens("geo")}>
-          Geo Replay
-        </button>{" "}
-        <button
-          className={lens === "table" || lens === "geoTable" ? "active" : ""}
-          onClick={() => setLens(lens === "geo" || lens === "geoTable" ? "geoTable" : "table")}
-        >
-          Table
+          Geo Replay β
         </button>
       </div>
       <div className="spacer" />
