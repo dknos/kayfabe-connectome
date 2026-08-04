@@ -621,6 +621,33 @@ export class SpacetimeRenderer {
     return out.toDataURL("image/png");
   }
 
+  /** QA surface: where an event bead sits in CSS pixels right now (exterior
+   *  reasoning — bridge tests read state, not pixels). Null when off-screen. */
+  projectEvent(index: number): { x: number; y: number } | null {
+    const e = this.scopeData?.events[index];
+    if (!e) return null;
+    return this.projectPoint(timeAxisX(e.day, this.axisState), 0, 0);
+  }
+
+  /** QA surface: a clickable point on a drawn relationship's resting lane. */
+  projectRelationship(relIndex: number): { x: number; y: number } | null {
+    const rel = this.scopeData?.relationships[relIndex];
+    const line = this.layout?.lines.find((l) => l.relIndex === relIndex);
+    if (!rel || !line) return null;
+    const day = Math.min(Math.max(this.axisState.playheadDay, rel.firstDay), rel.lastDay);
+    return this.projectPoint(timeAxisX(day, this.axisState), line.laneY, line.laneZ);
+  }
+
+  private readonly projScratch = new Vector3();
+  private projectPoint(x: number, y: number, z: number): { x: number; y: number } | null {
+    this.projScratch.set(x, y, z).project(this.camera);
+    if (this.projScratch.z > 1 || this.projScratch.z < -1) return null;
+    return {
+      x: (this.projScratch.x * 0.5 + 0.5) * this.canvas.clientWidth,
+      y: (-this.projScratch.y * 0.5 + 0.5) * this.canvas.clientHeight,
+    };
+  }
+
   resourceInfo(): { geometries: number; textures: number; programs: number } {
     return {
       geometries: this.renderer.info.memory.geometries,

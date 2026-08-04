@@ -1,10 +1,27 @@
-// Quick spacetime lens probe: boot, open lens, read the seam, screenshot.
-// Headless here is SwiftShader — layout/state assertions only, never fps.
+/**
+ * Spacetime lens QA probe: boot, open the lens, read the seam, screenshot.
+ *
+ * Headless WebGL here is SwiftShader, so nothing below judges appearance or
+ * frame time — assertions read state through __kayfabeSpacetime, and a
+ * screenshot that contradicts its own probe state fails rather than ships.
+ *
+ *   node tests/spacetime-qa.mjs [outdir]
+ *   PROBE_MODE=bridge PROBE_PLAY=1 PROBE_SPEED=365 PROBE_UNWARP=1
+ *   KAYFABE_BASE_URL=http://127.0.0.1:9461 (second-vite sessions)
+ */
+import { mkdirSync } from "node:fs";
 import { chromium } from "@playwright/test";
 
-const BASE = process.env.KAYFABE_BASE_URL ?? "http://127.0.0.1:9462";
-const OUT = process.argv[2] ?? "/tmp/claude-1000/-home-nemoclaw/d65e16f0-c2ed-43c1-9fbc-89c52139c3d1/scratchpad/shots";
+const BASE = process.env.KAYFABE_BASE_URL ?? "http://127.0.0.1:9460";
+const OUT = process.argv[2] ?? "/tmp/kayfabe-spacetime-qa";
 const MODE = process.env.PROBE_MODE ?? "exterior";
+mkdirSync(OUT, { recursive: true });
+
+const failures = [];
+const assert = (ok, what) => {
+  if (!ok) failures.push(what);
+  console.log(`  [${ok ? "PASS" : "FAIL"}] ${what}`);
+};
 
 const browser = await chromium.launch({
   args: ["--use-gl=angle", "--enable-webgl", "--ignore-gpu-blocklist"],
@@ -56,7 +73,6 @@ const state = await page.evaluate(() => {
     warpV: r.warpSpeed,
     warpMix: r.warpMixNow,
     tier: r.tier,
-    drawCalls: r.drawCalls,
     frameWallMs: r.frameWallMs,
     labels: r.labels.report,
     beadCount: r.events.count,
@@ -65,7 +81,29 @@ const state = await page.evaluate(() => {
   };
 });
 console.log(JSON.stringify(state, null, 2));
-console.log("console errors:", errors.length, errors.slice(0, 5));
 
-await page.screenshot({ path: `${OUT}/${MODE}${process.env.PROBE_PLAY === "1" ? "-play" : ""}${process.env.PROBE_UNWARP === "1" ? "-unwarp" : ""}.png` });
+assert(state.subject === "p:116704", "canonical subject is Matt Sydal");
+assert(state.personas === 2, "Sydal + Bourne merged as one worldline");
+assert(state.events === 922, "922 documented events (695 + 227)");
+assert(state.drawn + state.hidden === state.relationships,
+  "hidden worldlines reported, never lost");
+assert(state.beadCount === state.events, "every event has a bead");
+assert(!state.contextLost, "GL context live");
+assert(state.mode === MODE, `probe reached ${MODE} mode`);
+if (MODE === "bridge" && process.env.PROBE_UNWARP !== "1") {
+  assert(state.warpMix > 0.85, "bridge warp mix engaged");
+}
+if (process.env.PROBE_UNWARP === "1") {
+  assert(state.warpMix < 0.2, "held U unwarps the sky");
+}
+assert(errors.length === 0, `no console errors (${errors.length})${errors[0] ? ` — ${errors[0]}` : ""}`);
+
+const shot = `${OUT}/${MODE}${process.env.PROBE_PLAY === "1" ? "-play" : ""}${process.env.PROBE_UNWARP === "1" ? "-unwarp" : ""}.png`;
+await page.screenshot({ path: shot });
+console.log(`screenshot: ${shot}`);
 await browser.close();
+if (failures.length > 0) {
+  console.error(`spacetime-qa FAILED: ${failures.join("; ")}`);
+  process.exit(2);
+}
+console.log("spacetime-qa OK");
