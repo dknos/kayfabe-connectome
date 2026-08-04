@@ -1343,7 +1343,7 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
   font-size: 12px; cursor: pointer;
 }
 .arena-inspector {
-  position: absolute; right: 12px; top: 12px; z-index: 4; width: 260px;
+  position: absolute; right: 12px; top: 12px; z-index: 4; width: 330px;
   background: rgba(4, 6, 11, 0.9); border: 1px solid #24313f; border-radius: 8px;
   padding: 12px 14px; color: #dbe6f2; font-size: 12px;
 }
@@ -1367,6 +1367,28 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
   color: #04060b; background: #48d9ff; border-color: #48d9ff; font-weight: 600;
 }
 .arena-inspector .arena-here { color: #7f93a8; }
+.arena-inspector .link {
+  background: transparent; border: 0; padding: 0; color: #48d9ff;
+  font-size: 12px; cursor: pointer; text-align: left;
+}
+.arena-inspector .link:hover { text-decoration: underline; }
+.arena-inspector .micro { color: #7f93a8; font-size: 11px; margin: 4px 0 0; }
+/* The head-to-head record can be long; it scrolls inside the panel rather than
+   pushing the actions the reader came for off the bottom of it. */
+.arena-meetings {
+  list-style: none; margin: 4px 0 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+  display: grid; gap: 4px;
+}
+.arena-meetings li {
+  display: grid; grid-template-columns: max-content max-content 1fr; gap: 6px; align-items: baseline;
+  font-size: 11px; line-height: 1.45;
+}
+/* A date that wraps stops being a date. */
+.arena-meetings .d { color: #9fb4c8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arena-meetings .rel-tag { white-space: nowrap; }
+.arena-meetings .ev-what { color: #b9c8d8; }
+.arena-meetings .link { font-size: 11px; }
 .arena-inspector dl { margin: 0; display: grid; gap: 4px; }
 .arena-inspector dl div { display: flex; justify-content: space-between; gap: 10px; }
 .arena-inspector dt { color: #9fb4c8; }
