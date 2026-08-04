@@ -151,9 +151,14 @@ export const ARENA_TIERS: Record<"low" | "medium" | "high", ArenaTierBudget> = {
   // Label budgets are a CEILING, not a target. Collision suppression decides
   // what actually fits, so a low ceiling silently caps the reading even when
   // there is room — which is what made a zoomed-in arena still show 48 names.
-  low: { cards: 160, labels: 40, routes: 12, pulses: 0, bloom: false, pixelRatioCap: 1 },
-  medium: { cards: 360, labels: 90, routes: 40, pulses: 6, bloom: true, pixelRatioCap: 1.5 },
-  high: { cards: 600, labels: 150, routes: 100, pulses: 10, bloom: true, pixelRatioCap: 2 },
+  // Labels barely move the frame — the pass measures 0.0-0.2 ms — so the tier
+  // ladder cuts what is actually expensive (bloom, routes, fill, card count)
+  // and leaves the names largely alone. Demoting the tier used to take names
+  // away, which meant zooming in to read more of them produced fewer, and the
+  // reader was punished for the thing they came to do.
+  low: { cards: 160, labels: 80, routes: 12, pulses: 0, bloom: false, pixelRatioCap: 1 },
+  medium: { cards: 360, labels: 120, routes: 40, pulses: 6, bloom: true, pixelRatioCap: 1.5 },
+  high: { cards: 600, labels: 160, routes: 100, pulses: 10, bloom: true, pixelRatioCap: 2 },
 };
 
 export type ArenaQualityTier = keyof typeof ARENA_TIERS;
