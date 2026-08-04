@@ -74,6 +74,13 @@ export class ArenaRenderer {
   private lastLabelMs = 0;
   private labelCadenceHz = 30;
   private frameCpuEmaMs = 0;
+  private frameWallEmaMs = 0;
+  private lastFrameMs = 0;
+
+  /** Set false to pin the tier and stop the governor stepping it down. */
+  autoQuality = true;
+  private slowFrames = 0;
+  private governedDownTo: ArenaQualityTier | null = null;
 
   selectedId: string | null = null;
   hoverId: string | null = null;
@@ -120,6 +127,10 @@ export class ArenaRenderer {
   }
   get frameTimeMs(): number {
     return this.frameCpuEmaMs;
+  }
+  /** Wall-clock frame time — what the reader actually experiences. */
+  get frameWallMs(): number {
+    return this.frameWallEmaMs;
   }
   get drawCalls(): number {
     return this.renderer.info.render.calls;
@@ -294,6 +305,14 @@ export class ArenaRenderer {
       this.bloom.render();
       const cpu = performance.now() - t0;
       this.frameCpuEmaMs = this.frameCpuEmaMs === 0 ? cpu : this.frameCpuEmaMs * 0.9 + cpu * 0.1;
+      // The governor judges WALL-CLOCK frames, not CPU submission. Submission
+      // reads 1.1 ms while the same frame takes 89 ms on a fill-bound
+      // rasteriser, so governing on CPU time would never fire on exactly the
+      // devices that need it.
+      const wall = this.lastFrameMs > 0 ? now - this.lastFrameMs : 0;
+      this.lastFrameMs = now;
+      this.frameWallEmaMs = this.frameWallEmaMs === 0 ? wall : this.frameWallEmaMs * 0.9 + wall * 0.1;
+      if (wall > 0) this.governQuality(wall);
     };
     this.raf = requestAnimationFrame(tick);
   }
@@ -314,6 +333,41 @@ export class ArenaRenderer {
       this.transition.posCur[i3 + 2]! + 0.02,
       Math.max(this.transition.scaleCur[i3]!, this.transition.scaleCur[i3 + 1]!) * 1.25,
     );
+  }
+
+  /**
+   * Step the tier down when the renderer cannot hold the frame.
+   *
+   * Postprocessing is not affordable everywhere: measured on a software
+   * rasteriser, the bloom chain costs ~77 ms a frame at 1920x1080 against
+   * ~18 ms without it, because every full-screen pass is fill-bound. A tier
+   * ladder that only a human can operate is not a budget, so the renderer
+   * measures its own frame and drops a rung after sustained misses. It never
+   * climbs back on its own — oscillating between tiers would be worse than
+   * either of them.
+   */
+  private governQuality(frameMs: number): void {
+    if (!this.autoQuality || this.tier === "low") return;
+    // Only judge settled frames: a transition legitimately costs more.
+    if (this.transition.animating) return;
+    // Graduated: a device merely missing 30 fps gets the benefit of the doubt
+    // for a while, but one rendering at 8 fps should not be made to endure six
+    // seconds of it before anything happens.
+    if (frameMs > 100) this.slowFrames += 5;
+    else if (frameMs > 34) this.slowFrames++;
+    else this.slowFrames = Math.max(0, this.slowFrames - 1);
+    if (this.slowFrames < 45) return;
+    this.slowFrames = 0;
+    this.lastFrameMs = 0;
+    this.frameWallEmaMs = 0;
+    const next: ArenaQualityTier = this.tier === "high" ? "medium" : "low";
+    this.governedDownTo = next;
+    this.applyTier(next);
+  }
+
+  /** The tier the governor selected, if it has intervened. */
+  get governedTier(): ArenaQualityTier | null {
+    return this.governedDownTo;
   }
 
   private labelInput(id: string): ArenaLabelInput | undefined {

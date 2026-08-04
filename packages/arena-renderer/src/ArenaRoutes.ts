@@ -38,7 +38,14 @@ interface RouteSlot {
   geo: LineGeometry;
   points: Float32Array;
   key: string;
+  /** Resolved once at build time. Re-deriving it from `key` every frame cost a
+   *  string allocation per route per frame — 100 a frame at the high tier,
+   *  which is exactly the per-frame allocation this renderer forbids. */
+  otherSlot: number;
   active: boolean;
+  /** The interleaved buffer behind instanceStart/instanceEnd, cached so
+   *  per-frame updates write into it instead of rebuilding it. */
+  interleaved: { array: Float32Array; needsUpdate: boolean } | null;
 }
 
 export class ArenaRoutes {
@@ -61,13 +68,24 @@ export class ArenaRoutes {
     for (let i = 0; i < capacity; i++) {
       const geo = new LineGeometry();
       const points = new Float32Array(SAMPLES * 3);
+      // Seed with a degenerate but non-zero polyline so the addon builds its
+      // interleaved buffer once here. Every later update writes into that
+      // buffer; setPositions is never called again, because it allocates a new
+      // Float32Array AND a new InstancedInterleavedBuffer on every call and
+      // doing that per route per formation change stalled a frame long enough
+      // to swallow most of a transition.
+      for (let s = 0; s < SAMPLES; s++) points[s * 3] = s * 0.001;
       geo.setPositions(points);
       const line = new Line2(geo, this.materials.opposed);
       line.computeLineDistances();
       line.frustumCulled = false;
       line.visible = false;
       scene.add(line);
-      this.slots.push({ line, geo, points, key: "", active: false });
+      const attr = geo.getAttribute("instanceStart") as { data?: { array: Float32Array; needsUpdate: boolean } };
+      this.slots.push({
+        line, geo, points, key: "", otherSlot: -1, active: false,
+        interleaved: attr?.data ?? null,
+      });
     }
   }
 
@@ -127,11 +145,13 @@ export class ArenaRoutes {
         route,
         transition.posCur[a3]!, transition.posCur[a3 + 1]!, transition.posCur[a3 + 2]!,
         transition.posCur[b3]!, transition.posCur[b3 + 1]!, transition.posCur[b3 + 2]!,
+        true,
       );
       route.line.material = card.bank === AB.SAME ? this.materials.same
         : card.bank === AB.MIXED ? this.materials.mixed
         : this.materials.opposed;
       route.key = `${anchorId}~${card.id}`;
+      route.otherSlot = slot;
       route.active = true;
       route.line.visible = true;
       this.liveCount++;
@@ -142,14 +162,14 @@ export class ArenaRoutes {
   /** Refresh geometry against current card positions, so routes stay attached
    *  while the formation is still travelling. */
   follow(transition: ArenaTransition, pool: SlotPool, anchorId: string): void {
+    if (this.liveCount === 0) return;
     const anchorSlot = pool.slotOf(anchorId);
     if (anchorSlot === undefined) return;
     const a3 = anchorSlot * 3;
     for (let i = 0; i < this.liveCount; i++) {
       const route = this.slots[i]!;
-      const otherId = route.key.slice(route.key.indexOf("~") + 1);
-      const slot = pool.slotOf(otherId);
-      if (slot === undefined) continue;
+      const slot = route.otherSlot;
+      if (slot < 0) continue;
       const b3 = slot * 3;
       this.fill(
         route,
@@ -159,27 +179,51 @@ export class ArenaRoutes {
     }
   }
 
-  /** A route bows BENEATH the seating rather than cutting across the cards,
-   *  which is the brief's "curve beneath or behind cards" as geometry rather
-   *  than as a hope. */
+  /**
+   * A route bows BENEATH the seating rather than cutting across the cards,
+   * which is the brief's "curve beneath or behind cards" as geometry rather
+   * than as a hope.
+   *
+   * `initial` runs the addon's own setPositions once, to build the interleaved
+   * buffer. Every later update writes THAT buffer in place.
+   * LineGeometry.setPositions allocates a fresh Float32Array and a fresh
+   * InstancedInterleavedBuffer on every call, so calling it per route per frame
+   * stalled a single frame long enough to swallow half a formation change —
+   * measured on hardware, not just on the software path.
+   */
   private fill(
     route: RouteSlot,
     ax: number, ay: number, az: number,
     bx: number, by: number, bz: number,
+    initial = false,
   ): void {
     this.from.set(ax, ay, az);
     this.to.set(bx, by, bz);
     this.ctrl.addVectors(this.from, this.to).multiplyScalar(0.5);
     this.ctrl.y -= 2.2 + this.from.distanceTo(this.to) * 0.16;
+    const pts = route.points;
     for (let s = 0; s < SAMPLES; s++) {
       const t = s / (SAMPLES - 1);
       const u = 1 - t;
-      route.points[s * 3] = u * u * ax + 2 * u * t * this.ctrl.x + t * t * bx;
-      route.points[s * 3 + 1] = u * u * ay + 2 * u * t * this.ctrl.y + t * t * by;
-      route.points[s * 3 + 2] = u * u * az + 2 * u * t * this.ctrl.z + t * t * bz;
+      pts[s * 3] = u * u * ax + 2 * u * t * this.ctrl.x + t * t * bx;
+      pts[s * 3 + 1] = u * u * ay + 2 * u * t * this.ctrl.y + t * t * by;
+      pts[s * 3 + 2] = u * u * az + 2 * u * t * this.ctrl.z + t * t * bz;
     }
-    route.geo.setPositions(route.points);
-    route.line.computeLineDistances();
+    void initial;
+    if (!route.interleaved) return;
+    // Segment s occupies [startXYZ, endXYZ] at stride 6.
+    const buf = route.interleaved.array;
+    for (let s = 0; s < SAMPLES - 1; s++) {
+      const o = s * 6;
+      const a = s * 3;
+      buf[o] = pts[a]!;
+      buf[o + 1] = pts[a + 1]!;
+      buf[o + 2] = pts[a + 2]!;
+      buf[o + 3] = pts[a + 3]!;
+      buf[o + 4] = pts[a + 4]!;
+      buf[o + 5] = pts[a + 5]!;
+    }
+    route.interleaved.needsUpdate = true;
   }
 
   dispose(): void {

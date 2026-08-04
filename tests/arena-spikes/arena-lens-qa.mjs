@@ -69,6 +69,16 @@ try {
     if (row.insidePct < 100) notes.push(`FAIL: ${row.viewport} leaves ${100 - row.insidePct}% of cards off-screen`);
     if (errors.length) notes.push(`FAIL: ${row.viewport} runtime errors: ${errors.slice(0, 3).join(" | ")}`);
 
+    // Let the quality governor settle before measuring motion. A reader sees
+    // the lens find its tier within a second or two; measuring during that
+    // descent times a transition the device was never going to hold.
+    await page.waitForFunction(
+      () => window.__kayfabeArena && window.__kayfabeArena.frameWallMs > 0 && window.__kayfabeArena.frameWallMs < 34,
+      null,
+      { timeout: 30000 },
+    ).catch(() => notes.push(`NOTE: ${vp.w}x${vp.h} never reached a 30fps tier`));
+    await page.waitForTimeout(600);
+
     // A retained card must travel, not teleport, from Arena into Index.
     const travel = await page.evaluate(async () => {
       const r = window.__kayfabeArena;
@@ -94,9 +104,28 @@ try {
       const net = Math.hypot(path[path.length - 1].x - path[0].x, path[path.length - 1].y - path[0].y);
       return { id, sameSlotAfter: r.pool.slotOf(id) === slot, samples: path.length, maxStep, net };
     });
+    // Two different questions, deliberately not merged into one number.
+    //
+    // CORRECTNESS: did the card teleport? A teleport puts essentially the whole
+    // journey into one frame, so the gate is generous — anything under a third
+    // is travel, not a cut.
+    //
+    // SMOOTHNESS: how even was that travel? Reported, never gated, because a
+    // slow device legitimately produces coarse sampling and a card that only
+    // moves during its own delay band legitimately moves faster than the naive
+    // journey/frames average would suggest. Gating on it conflates a
+    // fill-bound renderer with a broken transition, which is exactly the
+    // mistake that sent this check chasing route allocations for an hour.
+    const evenStep = travel.net / Math.max(1, travel.samples - 1);
     const trow = {
       check: "retained card travels Arena -> Index", viewport: `${vp.w}x${vp.h}`,
-      ...travel, moved: travel.net > 0.05, noTeleport: travel.maxStep < travel.net * 0.4,
+      ...travel,
+      tier: await page.evaluate(() => window.__kayfabeArena.tier),
+      wallMs: Number((await page.evaluate(() => window.__kayfabeArena.frameWallMs)).toFixed(1)),
+      smoothnessRatio: Number((travel.maxStep / Math.max(1e-6, evenStep)).toFixed(1)),
+      journeyFractionInOneFrame: Number((travel.maxStep / Math.max(1e-6, travel.net)).toFixed(3)),
+      moved: travel.net > 0.05,
+      noTeleport: travel.maxStep <= travel.net * 0.33,
     };
     results.push(trow);
     console.log(JSON.stringify(trow));

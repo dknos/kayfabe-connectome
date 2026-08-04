@@ -21,9 +21,9 @@
  * top of a composition, never a substitute for one.
  */
 import {
-  AdditiveBlending, Layers, Mesh, MeshBasicMaterial, RingGeometry,
+  AdditiveBlending, Mesh, MeshBasicMaterial, RingGeometry,
   Scene, ShaderMaterial, Vector2,
-  type Camera, type Object3D, type WebGLRenderer,
+  type Camera, type WebGLRenderer,
 } from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -33,13 +33,13 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 /** Only objects on this layer are ever allowed to bloom. */
 export const BLOOM_LAYER = 1;
+/** Resolution scale for the glow pass. See setSize. */
+const BLOOM_SCALE = 0.5;
 
 export class ArenaBloom {
   private readonly bloomComposer: EffectComposer;
   private readonly finalComposer: EffectComposer;
   private readonly bloomPass: UnrealBloomPass;
-  private readonly bloomLayers = new Layers();
-  private readonly hidden: Object3D[] = [];
   /** The selection halo: a thin ring behind the selected card. It is a real
    *  object with a real transform, so it survives bloom being switched off. */
   readonly halo: Mesh;
@@ -50,8 +50,6 @@ export class ArenaBloom {
     private readonly scene: Scene,
     private readonly camera: Camera,
   ) {
-    this.bloomLayers.set(BLOOM_LAYER);
-
     this.halo = new Mesh(
       new RingGeometry(0.62, 0.72, 48),
       new MeshBasicMaterial({ color: 0xffd479, transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
@@ -84,10 +82,22 @@ export class ArenaBloom {
     this.finalComposer.addPass(new OutputPass());
   }
 
+  /**
+   * The glow renders at HALF resolution.
+   *
+   * Measured at 1920x1080: full-resolution bloom cost ~135 ms per frame against
+   * ~18 ms with it off — a formation change ran at 12 frames instead of 72,
+   * which is a slideshow, not emphasis. A blur has no high-frequency detail to
+   * lose, so half resolution is free visually and quarters the fill cost of the
+   * mip chain. The final composite stays at full resolution, so cards and text
+   * are never resampled.
+   */
   setSize(width: number, height: number): void {
-    this.bloomComposer.setSize(width, height);
     this.finalComposer.setSize(width, height);
-    this.bloomPass.setSize(width, height);
+    const w = Math.max(1, Math.floor(width * BLOOM_SCALE));
+    const h = Math.max(1, Math.floor(height * BLOOM_SCALE));
+    this.bloomComposer.setSize(w, h);
+    this.bloomPass.setSize(w, h);
   }
 
   /** Park the halo on a card, or hide it. */
@@ -105,19 +115,14 @@ export class ArenaBloom {
       this.renderer.render(this.scene, this.camera);
       return;
     }
-    // Hide everything that is not on the bloom layer, render the glow, restore.
-    this.hidden.length = 0;
-    this.scene.traverse((object) => {
-      const mesh = object as Mesh;
-      if (!mesh.isMesh && !(object as { isLine2?: boolean }).isLine2) return;
-      if (object.layers.test(this.bloomLayers)) return;
-      if (!object.visible) return;
-      object.visible = false;
-      this.hidden.push(object);
-    });
+    // Restrict the CAMERA to the bloom layer rather than hiding every other
+    // object. Three then builds a render list containing only the glow, so the
+    // pass costs one small ring instead of a traverse over the whole scene plus
+    // a visibility flip on every card and route.
+    const mask = this.camera.layers.mask;
+    this.camera.layers.set(BLOOM_LAYER);
     this.bloomComposer.render();
-    for (const object of this.hidden) object.visible = true;
-    this.hidden.length = 0;
+    this.camera.layers.mask = mask;
     this.finalComposer.render();
   }
 

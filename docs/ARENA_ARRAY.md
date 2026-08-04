@@ -143,9 +143,24 @@ that either enables everything or breaks the scene.
 | medium | 360 | 32 | 40 | on | 1.5 |
 | low | 160 | 18 | 12 | **off** | 1 |
 
-Measured in the lens: high 4.0 ms CPU, low 0.53 ms. The low tier is a coherent
-scene, not a broken one — the selection rail is a real material edge, so
-selection stays unambiguous with bloom switched off entirely.
+**The renderer governs its own tier.** Postprocessing is not affordable
+everywhere: measured at 1920×1080 on a software rasteriser, the bloom chain
+costs ~89 ms a frame against ~18 ms without it, because every full-screen pass
+is fill-bound. Half-resolution glow helps (135 ms → 89 ms) but does not close
+that gap, and restricting the pass to the bloom layer does not either — the cost
+is fill, not object count.
+
+So the renderer measures its own **wall-clock** frame and steps down after
+sustained misses, faster the worse the miss. Observed descent on the software
+path: high 129 ms → medium 85 ms → low, bloom off, **17 ms (58 fps)**. It never
+climbs back on its own, because oscillating between tiers is worse than either.
+
+Governing on CPU submission time would have been useless here: the same frame
+reads 1.1 ms of JS and 89 ms of wall clock, so the signal has to be the one the
+reader actually experiences.
+
+The low tier is a coherent scene, not a broken one — the selection rail is a
+real material edge, so selection stays unambiguous with bloom off entirely.
 
 **Evidence routes** run from the subject to its documented relationships and
 nowhere else: no all-to-all spaghetti, and aggregate cards get no route because
