@@ -142,6 +142,43 @@ try {
   if (errors.length) notes.push(`FAIL: lens-switch runtime errors: ${errors.slice(0, 3).join(" | ")}`);
   await context.close();
 
+  // Quality tiers rebuild the pool: setScope releases every slot and re-slices
+  // to the new card budget. That path is only exercised by the tier selector,
+  // so it gets its own cycle rather than being assumed safe.
+  const tierContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const tierPage = await tierContext.newPage();
+  const tierErrors = [];
+  tierPage.on("pageerror", (e) => tierErrors.push(e.message));
+  tierPage.on("console", (m) => m.type() === "error" && tierErrors.push(m.text().slice(0, 160)));
+  await openArena(tierPage, "Psycho Clown");
+  const tiers = await tierPage.evaluate(async () => {
+    const r = window.__kayfabeArena;
+    const snap = () => ({ ...r.resourceInfo(), live: r.pool.liveCount, seated: r.layout.seated, selected: r.selectedId });
+    const baseline = snap();
+    const steps = [];
+    for (const tier of ["low", "high", "medium", "high"]) {
+      r.applyTier(tier);
+      await new Promise((res) => setTimeout(res, 700));
+      steps.push({ tier, ...snap() });
+    }
+    return { baseline, steps, final: snap() };
+  });
+  const trow2 = {
+    check: "quality tier cycling rebuilds the pool cleanly",
+    baseline: tiers.baseline, steps: tiers.steps,
+    backToBaseline: tiers.final.live === tiers.baseline.live
+      && tiers.final.seated === tiers.baseline.seated
+      && tiers.final.geometries === tiers.baseline.geometries,
+    selectionKept: tiers.final.selected === tiers.baseline.selected,
+    errors: tierErrors.length,
+  };
+  results.push(trow2);
+  console.log(JSON.stringify(trow2));
+  if (!trow2.backToBaseline) notes.push(`FAIL: tier cycling did not return to baseline: ${JSON.stringify(tiers)}`);
+  if (!trow2.selectionKept) notes.push("FAIL: tier cycling lost the selection");
+  if (tierErrors.length) notes.push(`FAIL: tier cycling errors: ${tierErrors.slice(0, 3).join(" | ")}`);
+  await tierContext.close();
+
   console.log(JSON.stringify({ status: notes.length ? "issues" : "ok", notes }));
 } finally {
   writeFileSync(OUT, `${JSON.stringify({ base: BASE, generatedAt: new Date().toISOString(), results, notes }, null, 2)}\n`);
