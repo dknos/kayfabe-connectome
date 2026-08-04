@@ -160,6 +160,9 @@ export function App() {
       metadata = `MORPH LAB · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · ${st.selection?.kind === "node" ? st.selection.id : "global tissue"}`;
     } else if (st.lens === "geo") {
       capture = (window as typeof window & { __kayfabeGeo?: { screenshot(): string } }).__kayfabeGeo?.screenshot() ?? null;
+    } else if (st.lens === "arena") {
+      capture = (window as typeof window & { __kayfabeArena?: { screenshot(): string | null } })
+        .__kayfabeArena?.screenshot() ?? null;
       filename = "kayfabe-geo-replay.png";
       metadata = `GEO REPLAY · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · local corpus geography`;
     } else {

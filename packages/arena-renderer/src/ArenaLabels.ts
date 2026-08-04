@@ -175,6 +175,28 @@ export class ArenaLabels {
     this.report = { wanted: count, shown, suppressed, updateMs: performance.now() - t0 };
   }
 
+  /** Everything currently on screen, for screenshot compositing. The DOM layer
+   *  is a sibling of the canvas, so `canvas.toDataURL()` cannot see it. */
+  visibleLabels(): { text: string; x: number; y: number; opacity: number }[] {
+    const out: { text: string; x: number; y: number; opacity: number }[] = [];
+    for (const slot of this.slots) {
+      if (!slot.shown) continue;
+      const m = /translate\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px\)/.exec(slot.el.style.transform);
+      if (!m) continue;
+      out.push({
+        text: slot.text,
+        x: Number(m[1]),
+        y: Number(m[2]),
+        opacity: Number(slot.el.style.opacity || "1"),
+      });
+    }
+    return out;
+  }
+
+  get fontSpec(): string {
+    return this.font;
+  }
+
   shownIds(): (string | null)[] {
     return this.slots.filter((s) => s.shown).map((s) => s.boundId);
   }

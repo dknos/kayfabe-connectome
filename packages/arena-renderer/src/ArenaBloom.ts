@@ -50,9 +50,13 @@ export class ArenaBloom {
     private readonly scene: Scene,
     private readonly camera: Camera,
   ) {
+    // A thin, dim ring. The brief forbids selection turning into a giant glow,
+    // and an additive ring at 0.9 opacity behind a bloom pass does exactly
+    // that — the first screenshot that actually captured the halo showed it
+    // blowing out into an amber wash across the whole arena.
     this.halo = new Mesh(
-      new RingGeometry(0.62, 0.72, 48),
-      new MeshBasicMaterial({ color: 0xffd479, transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
+      new RingGeometry(0.66, 0.70, 64),
+      new MeshBasicMaterial({ color: 0xffd479, transparent: true, opacity: 0.5, blending: AdditiveBlending, depthWrite: false }),
     );
     this.halo.visible = false;
     this.halo.frustumCulled = false;
@@ -62,7 +66,10 @@ export class ArenaBloom {
     this.bloomComposer = new EffectComposer(renderer);
     this.bloomComposer.renderToScreen = false;
     this.bloomComposer.addPass(new RenderPass(scene, camera));
-    this.bloomPass = new UnrealBloomPass(new Vector2(1, 1), 0.55, 0.6, 0.15);
+    // strength, radius, threshold. A 0.15 threshold blooms anything faintly
+    // bright and a 0.6 radius smears it across the frame; emphasis wants a
+    // tight halo that says "this one", not a light source.
+    this.bloomPass = new UnrealBloomPass(new Vector2(1, 1), 0.32, 0.22, 0.55);
     this.bloomComposer.addPass(this.bloomPass);
 
     this.finalComposer = new EffectComposer(renderer);

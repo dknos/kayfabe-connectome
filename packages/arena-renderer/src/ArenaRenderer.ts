@@ -412,6 +412,65 @@ export class ArenaRenderer {
     this.renderer.dispose();
   }
 
+  /**
+   * A screenshot that contains what the reader actually sees.
+   *
+   * `canvas.toDataURL()` captures the WebGL surface only, and the label layer
+   * is a sibling DOM node, so a naive capture silently drops every name — the
+   * one thing that makes the picture legible. Labels are composited here at
+   * their live positions, and a metadata strip records what the picture is OF,
+   * because an unlabelled arena screenshot is not evidence of anything.
+   */
+  screenshot(): string | null {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    if (w === 0 || h === 0) return null;
+    const out = document.createElement("canvas");
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext("2d");
+    if (!ctx) return null;
+    const dpr = w / Math.max(1, this.canvas.clientWidth);
+
+    // Render immediately before reading. The context is not created with
+    // preserveDrawingBuffer, so the buffer is undefined after a swap and a
+    // later drawImage yields a blank frame — which is how a capture can come
+    // back with perfect labels sitting on nothing at all. Rendering here keeps
+    // the read inside the same task instead of paying preserveDrawingBuffer on
+    // every frame forever.
+    this.syncHalo();
+    this.bloom.render();
+    ctx.drawImage(this.canvas, 0, 0);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.font = this.labels.fontSpec;
+    ctx.textBaseline = "top";
+    for (const label of this.labels.visibleLabels()) {
+      ctx.globalAlpha = label.opacity;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(4,6,11,0.9)";
+      ctx.strokeText(label.text, label.x, label.y);
+      ctx.fillStyle = "#dbe6f2";
+      ctx.fillText(label.text, label.x, label.y);
+    }
+    ctx.globalAlpha = 1;
+
+    const seated = this.lastLayout?.seated ?? 0;
+    const sections = (this.lastLayout?.sections ?? []).map((s) => `${s.label} ${s.count}`).join(" · ");
+    const meta = [
+      this.scope ? `${this.scope.anchorName} — Arena Array (${this.formationName})` : "Arena Array",
+      `${seated} cards · ${this.labels.report.shown}/${this.labels.report.wanted} labels · ${this.routes.count} routes · ${this.tier} tier`,
+      sections,
+    ].filter(Boolean);
+    const cssH = this.canvas.clientHeight;
+    ctx.fillStyle = "rgba(4,6,11,0.82)";
+    ctx.fillRect(0, cssH - 14 - meta.length * 15, this.canvas.clientWidth, 14 + meta.length * 15);
+    ctx.fillStyle = "#9fb4c8";
+    meta.forEach((line, i) => ctx.fillText(line, 10, cssH - 8 - (meta.length - i) * 15 + 8));
+    ctx.restore();
+    return out.toDataURL("image/png");
+  }
+
   /** Renderer resource counters, for the "lens switching releases resources"
    *  acceptance test. */
   resourceInfo(): { geometries: number; textures: number; programs: number } {

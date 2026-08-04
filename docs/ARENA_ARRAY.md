@@ -177,6 +177,24 @@ a summary is not an encounter. They reveal only after the cards are 55% settled.
 is the selection halo alone. Cards, labels, section text and background are
 excluded by construction rather than by tuning a threshold.
 
+## Screenshots
+
+`canvas.toDataURL()` captures the WebGL surface only, and the label layer is a
+sibling DOM node — so a naive capture drops every name, which is the one thing
+that makes the picture legible. The Arena composites labels at their live
+positions plus a metadata strip naming the subject, the counts, the tier and the
+section breakdown, because an unlabelled arena screenshot is not evidence of
+anything.
+
+The capture renders immediately before reading. The context is not created with
+`preserveDrawingBuffer`, so the buffer is undefined after a swap; the first
+working capture came back with perfect labels sitting on a blank frame.
+
+That screenshot also caught a real violation the live view had hidden: the
+selection halo was blowing out into an amber wash across the whole arena — the
+"giant glow" the brief forbids. Bloom is now strength 0.32, radius 0.22,
+threshold 0.55 over a thin 0.5-opacity ring.
+
 ## Not yet built
 
 Stated plainly so nobody has to discover it:
