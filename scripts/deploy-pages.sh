@@ -37,6 +37,9 @@ KAYFABE_BASE="$BASE" pnpm --filter @kayfabe/web build
 echo "staging site + corpus"
 cp -r apps/web/dist/. "$STAGE/"
 cp -r data/materialized "$STAGE/data"
+# Development-only fixtures are regenerable and the production bundle never
+# loads them, so they have no business in a public artifact.
+rm -rf "$STAGE/data/arena-spike"
 touch "$STAGE/.nojekyll"
 du -sh "$STAGE"
 
