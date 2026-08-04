@@ -116,7 +116,13 @@ export async function promotionScope(
     });
   }
 
-  const seated = cards.slice(0, Math.max(0, budget - 1));
+  // Reserve slots for the anchor AND for one summary per era before deciding
+  // how many people fit. Appending summaries after a full budget put them past
+  // the renderer's own slice, so the drill-down affordance existed in the data
+  // and never once reached the screen.
+  const eraCount = new Set(cards.map((c) => c.era)).size;
+  const reserved = 1 + eraCount;
+  const seated = cards.slice(0, Math.max(0, budget - reserved));
   const remainder = cards.slice(seated.length);
   // Aggregation is forced by the corpus, not chosen: AAA alone is 1,087 people
   // against a 600-card budget and 417 of them have a single documented match.
@@ -143,6 +149,17 @@ export async function promotionScope(
     represents: agg.count,
   }));
 
+  // The aggregate has to remember WHO it stands for, or drilling into it can
+  // only ever be a label change. Kept beside the scope rather than on the card,
+  // so the renderer's card type stays a pure transform-and-semantics record.
+  const represented = new Map<string, ArenaCard[]>();
+  for (const card of remainder) {
+    const key = `agg:${promotionId}:${card.era}`;
+    const list = represented.get(key) ?? [];
+    list.push(card);
+    represented.set(key, list);
+  }
+
   const anchorIndex = model.indexOfId.get(promotionId);
   const anchor: ArenaCard = {
     id: promotionId,
@@ -163,7 +180,27 @@ export async function promotionScope(
     anchorId: promotionId,
     anchorName: detail.n,
     cards: [anchor, ...seated, ...aggregates],
+    represented,
   };
+}
+
+/**
+ * Open one aggregate: its members take its place, and every other aggregate
+ * stays put. Returning a NEW scope rather than mutating keeps the renderer's
+ * slot pool honest — retained cards keep their instances and only the opened
+ * group enters.
+ */
+export function expandAggregate(scope: ArenaScope, aggregateId: string): ArenaScope | null {
+  const members = scope.represented?.get(aggregateId);
+  if (!members || members.length === 0) return null;
+  const cards: ArenaCard[] = [];
+  for (const card of scope.cards) {
+    if (card.id === aggregateId) cards.push(...members);
+    else cards.push(card);
+  }
+  const represented = new Map(scope.represented);
+  represented.delete(aggregateId);
+  return { ...scope, cards, represented };
 }
 
 /** How many people the projection itself left out, if any. Never hidden. */

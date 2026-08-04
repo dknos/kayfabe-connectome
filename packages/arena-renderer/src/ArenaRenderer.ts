@@ -43,6 +43,9 @@ export interface ArenaScope {
   anchorId: string;
   anchorName: string;
   cards: ArenaCard[];
+  /** Aggregate card id -> the cards it stands for. Present only when the
+   *  population was capped, which the corpus forces for large promotions. */
+  represented?: Map<string, ArenaCard[]>;
 }
 
 export class ArenaRenderer {
@@ -156,7 +159,15 @@ export class ArenaRenderer {
     this.selectedId ??= scope.anchorId;
     // The card budget is a quality tier, and the corpus forces it to bite:
     // pr:c8 alone is 1,087 people against 600 slots.
-    this.active = scope.cards.slice(0, ARENA_TIERS[this.tier].cards);
+    //
+    // Summary cards are exempt from the cut. They are what keeps the count
+    // honest, and they sort last, so a naive slice removes exactly the cards
+    // that say how much is missing — which is how the drill-down affordance
+    // existed in the data and never once reached the screen.
+    const budget = ARENA_TIERS[this.tier].cards;
+    const summaries = scope.cards.filter((c) => c.represents !== undefined);
+    const people = scope.cards.filter((c) => c.represents === undefined);
+    this.active = people.slice(0, Math.max(0, budget - summaries.length)).concat(summaries);
     this.byId = new Map(this.active.map((c) => [c.id, c]));
     this.setFormation(this.formationName, true);
   }
@@ -363,7 +374,12 @@ export class ArenaRenderer {
     const next: ArenaQualityTier = this.tier === "high" ? "medium" : "low";
     this.governedDownTo = next;
     this.applyTier(next);
+    this.onTierChanged?.(next);
   }
+
+  /** Notified when the governor changes the tier, so a UI showing the tier
+   *  does not keep claiming one the renderer has already abandoned. */
+  onTierChanged: ((tier: ArenaQualityTier) => void) | null = null;
 
   /** The tier the governor selected, if it has intervened. */
   get governedTier(): ArenaQualityTier | null {

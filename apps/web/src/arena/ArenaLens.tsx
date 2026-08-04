@@ -11,7 +11,7 @@ import {
   type ArenaFormation, type ArenaQualityTier, type ArenaScope,
 } from "@kayfabe/arena-renderer";
 import { useStore } from "../state/store";
-import { personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
+import { expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
   { key: "echo", label: "Echo", hint: "where these people sit in the connectome" },
@@ -29,6 +29,10 @@ export function ArenaLens(): JSX.Element {
   const [formation, setFormation] = useState<ArenaFormation>("arena");
   const [tier, setTier] = useState<ArenaQualityTier>("high");
   const [hoverName, setHoverName] = useState<string | null>(null);
+  const [inspected, setInspected] = useState<string | null>(null);
+  /** Aggregates the reader has opened, so a drill-down survives a re-render. */
+  const [opened, setOpened] = useState<string[]>([]);
+  const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
 
   const anchorId = selection?.kind === "node" ? selection.id : null;
   // Promotions and people are different arenas. A person's arena seats by
@@ -55,7 +59,22 @@ export function ArenaLens(): JSX.Element {
     return () => { cancelled = true; };
   }, [model, anchorId, isPromotion, tier]);
 
-  const scope = isPromotion ? promoScope : personScopeMemo;
+  const baseScope = isPromotion ? promoScope : personScopeMemo;
+  // Drill-down is applied on top of the built scope rather than baked into it,
+  // so collapsing is just forgetting an id and the underlying projection is
+  // never re-fetched.
+  const scope = useMemo(() => {
+    let next = baseScope;
+    for (const id of opened) {
+      if (!next) break;
+      next = expandAggregate(next, id) ?? next;
+    }
+    return next;
+  }, [baseScope, opened]);
+
+  useEffect(() => { setOpened([]); setBreadcrumb([]); setInspected(null); }, [baseScope]);
+
+  const inspectedCard = inspected ? scope?.cards.find((c) => c.id === inspected) ?? null : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,6 +85,9 @@ export function ArenaLens(): JSX.Element {
     // Reduced motion is a preference, not a performance tier: it shortens the
     // clock rather than degrading the scene.
     renderer.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // The governor can drop the tier on its own; the control must follow it
+    // rather than keep displaying a setting the renderer has abandoned.
+    renderer.onTierChanged = (next) => setTier(next);
     renderer.start();
     const onResize = (): void => renderer.resize();
     window.addEventListener("resize", onResize);
@@ -119,7 +141,18 @@ export function ArenaLens(): JSX.Element {
           if (!renderer) return;
           const rect = e.currentTarget.getBoundingClientRect();
           const hit = renderer.pick(e.clientX - rect.left, e.clientY - rect.top);
-          if (hit) renderer.setSelected(hit.id);
+          if (!hit) { setInspected(null); return; }
+          const card = scope?.cards.find((c) => c.id === hit.id);
+          // Opening an aggregate is a different act from selecting a person:
+          // one changes the represented population, the other changes emphasis.
+          if (card && card.represents) {
+            setOpened((prev) => (prev.includes(card.id) ? prev : [...prev, card.id]));
+            setBreadcrumb((prev) => [...prev, card.name]);
+            setInspected(null);
+            return;
+          }
+          renderer.setSelected(hit.id);
+          setInspected(hit.id);
         }}
       />
       <div className="arena-labels" ref={labelRef} />
@@ -143,6 +176,37 @@ export function ArenaLens(): JSX.Element {
           </select>
         </label>
       </div>
+      {breadcrumb.length > 0 && (
+        <nav className="arena-crumbs" aria-label="Drill-down">
+          <button onClick={() => { setOpened([]); setBreadcrumb([]); }}>All eras</button>
+          {breadcrumb.map((label, i) => (
+            <span key={`${label}-${i}`}> › {label}</span>
+          ))}
+        </nav>
+      )}
+      {inspectedCard && (
+        <aside className="arena-inspector" aria-label="Card detail">
+          <h2>{inspectedCard.name}</h2>
+          <dl>
+            <div><dt>Documented span</dt><dd>{inspectedCard.firstYear}–{inspectedCard.lastYear}</dd></div>
+            <div>
+              <dt>{scope?.kind === "promotion" ? "Matches here" : "Documented encounters"}</dt>
+              <dd>{inspectedCard.strength}</dd>
+            </div>
+            <div><dt>Era</dt><dd>{inspectedCard.era}</dd></div>
+            {inspectedCard.reigns > 0 && (
+              <div><dt>Championships</dt><dd>{inspectedCard.reigns} documented reign(s)</dd></div>
+            )}
+          </dl>
+          {/* What the number is, so a reader never has to guess its basis. */}
+          <p className="arena-basis">
+            {scope?.kind === "promotion"
+              ? "Documented matches for this person in this promotion."
+              : "Documented encounters with the subject: tag partnership, opposition, and battle-royal co-presence at reduced weight."}
+          </p>
+          <button onClick={() => setInspected(null)}>Close</button>
+        </aside>
+      )}
       {scope && (
         <div className="arena-readout">
           <strong>{scope.anchorName}</strong>
