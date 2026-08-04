@@ -4,6 +4,7 @@ export { ArenaCards } from "./ArenaCards";
 export { ArenaLabels, type ArenaLabelReport, type ArenaLabelInput } from "./ArenaLabels";
 export { ArenaPicking } from "./ArenaPicking";
 export { ArenaRoutes } from "./ArenaRoutes";
+export { ArenaBloom, BLOOM_LAYER } from "./ArenaBloom";
 export {
   layoutArena, layoutEcho, layoutIndex, personSections, eraSections,
 } from "./ArenaLayouts";

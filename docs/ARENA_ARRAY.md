@@ -113,16 +113,53 @@ measurement caveats (headless here is SwiftShader; rAF is vsync-clamped).
   routes, pulses, bloom and pixel-ratio cap are separate levers, so the low
   tier is a coherent scene rather than a broken one.
 
+## Scopes
+
+**Person** — everyone the subject shares a documented match with, seated by
+what kind of relationship the evidence supports.
+
+**Promotion** — its roster seated by era, fanning chronologically across the
+horseshoe. The scope comes from the chronology projection (`data/atlas`), not
+the graph, for the two reasons above. AAA seats 1990s:204, 2000s:129,
+2010s:175, 2020s:91 and reads at 100% in-viewport with zero overlapping labels
+at both 1920×1080 and 1366×768.
+
+Where the roster exceeds the card budget the tail becomes one clearly-labelled
+summary card per era (`+N more · 2010s`), and the projection's own
+`membersTruncated` is surfaced in the readout. A capped roster that reads as
+complete is a false claim.
+
+## Effects, and how they degrade
+
+`ARENA_TIERS` moves each lever on its own — the brief forbids one binary switch
+that either enables everything or breaks the scene.
+
+| Tier | Cards | Labels | Routes | Bloom | DPR cap |
+|---|---|---|---|---|---|
+| high | 600 | 48 | 100 | on | 2 |
+| medium | 360 | 32 | 40 | on | 1.5 |
+| low | 160 | 18 | 12 | **off** | 1 |
+
+Measured in the lens: high 4.0 ms CPU, low 0.53 ms. The low tier is a coherent
+scene, not a broken one — the selection rail is a real material edge, so
+selection stays unambiguous with bloom switched off entirely.
+
+**Evidence routes** run from the subject to its documented relationships and
+nowhere else: no all-to-all spaghetti, and aggregate cards get no route because
+a summary is not an encounter. They reveal only after the cards are 55% settled.
+
+**Bloom is a closed list.** Only objects on `BLOOM_LAYER` can glow, which today
+is the selection halo alone. Cards, labels, section text and background are
+excluded by construction rather than by tuning a threshold.
+
 ## Not yet built
 
 Stated plainly so nobody has to discover it:
 
-- evidence routes, timeline pulses and the championship gold rail are
-  **spiked and measured** (`apps/web/spikes/routes.ts`) but not yet wired into
-  the lens
-- aggregate cards and the drill-down cascade — the churn mechanics are proven
-  in SPIKE 1, the semantic aggregation is not built
-- promotion scope in the shell (the renderer and layouts support it; the
-  adapter currently builds person scopes only)
-- Chronicle formation, selective bloom in the lens, URL restoration,
-  inspector, screenshot compositing of the DOM label layer
+- timeline pulses and the championship gold rail (measured in
+  `apps/web/spikes/routes.ts`, not yet wired into the lens)
+- the drill-down cascade — aggregate cards exist and the churn mechanics are
+  proven in SPIKE 1, but opening an aggregate does not yet expand it
+- Chronicle formation
+- URL restoration, a semantic inspector, and screenshot compositing of the DOM
+  label layer (`renderer.domElement.toDataURL()` will not capture it)

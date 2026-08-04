@@ -16,6 +16,7 @@ import { ArenaCards } from "./ArenaCards";
 import { ArenaLabels, type ArenaLabelInput } from "./ArenaLabels";
 import { ArenaPicking } from "./ArenaPicking";
 import { ArenaRoutes } from "./ArenaRoutes";
+import { ArenaBloom } from "./ArenaBloom";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
 import {
@@ -53,6 +54,7 @@ export class ArenaRenderer {
   readonly labels: ArenaLabels;
   readonly picking = new ArenaPicking();
   readonly routes: ArenaRoutes;
+  readonly bloom: ArenaBloom;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -86,6 +88,7 @@ export class ArenaRenderer {
     // Fat routes cost one draw call each, so the pool is sized to the highest
     // tier's budget rather than to the card capacity.
     this.routes = new ArenaRoutes(this.scene, ARENA_TIERS.high.routes);
+    this.bloom = new ArenaBloom(this.renderer, this.scene, this.camera);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -126,6 +129,9 @@ export class ArenaRenderer {
     this.tier = tier;
     const budget = ARENA_TIERS[tier];
     this.renderer.setPixelRatio(Math.min(budget.pixelRatioCap, window.devicePixelRatio));
+    // Effects degrade individually: bloom is its own lever, and the low tier
+    // switches it off while the scene stays coherent without it.
+    this.bloom.enabled = budget.bloom;
     this.resize();
     if (this.scope) this.setScope(this.scope);
   }
@@ -253,6 +259,7 @@ export class ArenaRenderer {
     this.camera.updateProjectionMatrix();
     // CSS pixels, deliberately not multiplied by devicePixelRatio.
     this.routes.setResolution(w, h);
+    this.bloom.setSize(w, h);
   }
 
   start(): void {
@@ -283,11 +290,30 @@ export class ArenaRenderer {
           (id) => this.labelInput(id),
         );
       }
-      this.renderer.render(this.scene, this.camera);
+      this.syncHalo();
+      this.bloom.render();
       const cpu = performance.now() - t0;
       this.frameCpuEmaMs = this.frameCpuEmaMs === 0 ? cpu : this.frameCpuEmaMs * 0.9 + cpu * 0.1;
     };
     this.raf = requestAnimationFrame(tick);
+  }
+
+  /** The selection halo tracks the selected card's live transform, so it
+   *  travels with it through a formation change instead of snapping at the end. */
+  private syncHalo(): void {
+    const id = this.selectedId;
+    const slot = id ? this.pool.slotOf(id) : undefined;
+    if (slot === undefined || this.transition.state[slot] === CS.ABSENT) {
+      this.bloom.hideHalo();
+      return;
+    }
+    const i3 = slot * 3;
+    this.bloom.showHaloAt(
+      this.transition.posCur[i3]!,
+      this.transition.posCur[i3 + 1]!,
+      this.transition.posCur[i3 + 2]! + 0.02,
+      Math.max(this.transition.scaleCur[i3]!, this.transition.scaleCur[i3 + 1]!) * 1.25,
+    );
   }
 
   private labelInput(id: string): ArenaLabelInput | undefined {
@@ -311,6 +337,7 @@ export class ArenaRenderer {
     this.scene.remove(this.cards.mesh);
     this.cards.dispose();
     this.routes.dispose();
+    this.bloom.dispose();
     this.labels.dispose();
     this.renderer.dispose();
   }
