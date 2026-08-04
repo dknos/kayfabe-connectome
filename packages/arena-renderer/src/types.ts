@@ -148,9 +148,12 @@ export interface ArenaTierBudget {
  * lever and the low tier is a coherent scene, not a broken one.
  */
 export const ARENA_TIERS: Record<"low" | "medium" | "high", ArenaTierBudget> = {
-  low: { cards: 160, labels: 18, routes: 12, pulses: 0, bloom: false, pixelRatioCap: 1 },
-  medium: { cards: 360, labels: 32, routes: 40, pulses: 6, bloom: true, pixelRatioCap: 1.5 },
-  high: { cards: 600, labels: 48, routes: 100, pulses: 10, bloom: true, pixelRatioCap: 2 },
+  // Label budgets are a CEILING, not a target. Collision suppression decides
+  // what actually fits, so a low ceiling silently caps the reading even when
+  // there is room — which is what made a zoomed-in arena still show 48 names.
+  low: { cards: 160, labels: 40, routes: 12, pulses: 0, bloom: false, pixelRatioCap: 1 },
+  medium: { cards: 360, labels: 90, routes: 40, pulses: 6, bloom: true, pixelRatioCap: 1.5 },
+  high: { cards: 600, labels: 150, routes: 100, pulses: 10, bloom: true, pixelRatioCap: 2 },
 };
 
 export type ArenaQualityTier = keyof typeof ARENA_TIERS;

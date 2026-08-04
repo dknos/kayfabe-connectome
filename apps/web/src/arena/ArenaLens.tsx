@@ -34,6 +34,7 @@ export function ArenaLens(): JSX.Element {
   /** Aggregates the reader has opened, so a drill-down survives a re-render. */
   const [opened, setOpened] = useState<string[]>([]);
   const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
+  const pressRef = useRef<{ x: number; y: number } | null>(null);
 
   const select = useStore((s) => s.select);
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
@@ -154,6 +155,7 @@ export function ArenaLens(): JSX.Element {
   return (
     <div className="arena-lens">
       <canvas className="arena-gl" ref={canvasRef}
+        onPointerDown={(e) => { pressRef.current = { x: e.clientX, y: e.clientY }; }}
         onPointerMove={(e) => {
           const renderer = rendererRef.current;
           if (!renderer) return;
@@ -166,6 +168,11 @@ export function ArenaLens(): JSX.Element {
         onClick={(e) => {
           const renderer = rendererRef.current;
           if (!renderer) return;
+          // A drag is a camera move, not a selection. Without this, orbiting
+          // the arena opens an inspector for whatever card the pointer landed
+          // on, which is both wrong and startling.
+          const press = pressRef.current;
+          if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return;
           const rect = e.currentTarget.getBoundingClientRect();
           const hit = renderer.pick(e.clientX - rect.left, e.clientY - rect.top);
           if (!hit) { setInspected(null); return; }

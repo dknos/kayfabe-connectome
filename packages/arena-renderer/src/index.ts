@@ -7,6 +7,7 @@ export { ArenaRoutes } from "./ArenaRoutes";
 export { ArenaBloom, BLOOM_LAYER } from "./ArenaBloom";
 export { ArenaPulses } from "./ArenaPulses";
 export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail";
+export { ArenaControls } from "./ArenaControls";
 export {
   layoutArena, layoutEcho, layoutIndex, personSections, eraSections,
 } from "./ArenaLayouts";

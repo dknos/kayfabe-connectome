@@ -19,6 +19,7 @@ import { ArenaRoutes } from "./ArenaRoutes";
 import { ArenaBloom } from "./ArenaBloom";
 import { ArenaPulses } from "./ArenaPulses";
 import { ArenaRail } from "./ArenaRail";
+import { ArenaControls } from "./ArenaControls";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
 import { railSegmentsFromYears } from "./ArenaRail";
@@ -67,6 +68,7 @@ export class ArenaRenderer {
   readonly bloom: ArenaBloom;
   readonly pulses: ArenaPulses;
   readonly rail: ArenaRail;
+  readonly controls: ArenaControls;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -103,13 +105,14 @@ export class ArenaRenderer {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     this.cards = new ArenaCards(CAPACITY);
     this.scene.add(this.cards.mesh);
-    this.labels = new ArenaLabels(labelLayer, 96, CAPACITY);
+    this.labels = new ArenaLabels(labelLayer, 192, CAPACITY);
     // Fat routes cost one draw call each, so the pool is sized to the highest
     // tier's budget rather than to the card capacity.
     this.routes = new ArenaRoutes(this.scene, ARENA_TIERS.high.routes);
     this.bloom = new ArenaBloom(this.renderer, this.scene, this.camera);
     this.pulses = new ArenaPulses(this.scene, ARENA_TIERS.high.pulses);
     this.rail = new ArenaRail(this.scene, 96);
+    this.controls = new ArenaControls(this.camera, canvas);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -259,8 +262,14 @@ export class ArenaRenderer {
     const e = easeQuintic(this.transition.progressRaw);
     this.camCur.lerpVectors(this.camFrom, this.camTo, e);
     this.lookCur.lerpVectors(this.lookFrom, this.lookTo, e);
-    this.camera.position.copy(this.camCur);
-    this.camera.lookAt(this.lookCur);
+    // The formation proposes a pose; the controls own the camera. Once the
+    // reader has taken hold of it the formation may move only what the camera
+    // looks AT — re-proposing a pose every frame is what made the wheel and the
+    // orbit drag appear to do nothing at all.
+    const extent = this.lastLayout?.extent ?? 12;
+    if (this.controls.engaged) this.controls.retarget(this.lookCur, extent);
+    else this.controls.frame(this.camCur, this.lookCur, extent);
+    this.controls.update();
   }
 
   private writeSemantics(): void {
@@ -279,6 +288,7 @@ export class ArenaRenderer {
         emphasis,
         maxStrength > 0 ? prominence(card.strength, maxStrength) - 0.82 : 0,
       );
+      this.cards.setBillboard(slot, this.formationName === "echo" && card.id !== this.scope?.anchorId);
     }
     this.cards.commitSemantics();
   }
@@ -449,6 +459,7 @@ export class ArenaRenderer {
     this.routes.dispose();
     this.pulses.dispose();
     this.rail.dispose();
+    this.controls.dispose();
     this.bloom.dispose();
     this.labels.dispose();
     this.renderer.dispose();

@@ -13,8 +13,8 @@
  * routes which cost a draw call each.
  */
 import {
-  AdditiveBlending, Color, DynamicDrawUsage, InstancedMesh,
-  MeshBasicMaterial, PlaneGeometry, type Scene,
+  AdditiveBlending, DynamicDrawUsage, InstancedMesh,
+  PlaneGeometry, ShaderMaterial, type Scene,
 } from "three";
 import type { ArenaRoutes } from "./ArenaRoutes";
 import { BLOOM_LAYER } from "./ArenaBloom";
@@ -29,11 +29,37 @@ export class ArenaPulses {
 
   constructor(scene: Scene, readonly capacity: number) {
     const geometry = new PlaneGeometry(SIZE, SIZE);
-    const material = new MeshBasicMaterial({
-      color: new Color(0xffd479),
-      blending: AdditiveBlending,
+    // A camera-facing spark with a soft radial falloff and a short trailing
+    // tail, not an axis-aligned quad. A flat square sliding along a curve reads
+    // as a sliding square; a billboarded point with a falloff reads as
+    // something travelling.
+    const material = new ShaderMaterial({
       transparent: true,
       depthWrite: false,
+      blending: AdditiveBlending,
+      uniforms: { uColor: { value: [1.0, 0.83, 0.47] } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+          mv.xy += position.xy;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+          vec2 d = vUv - 0.5;
+          float r = length(d) * 2.0;
+          if (r > 1.0) discard;
+          // Hot core, soft halo: the falloff is squared so the packet has a
+          // definite centre instead of reading as a smudge.
+          float core = pow(1.0 - r, 2.6);
+          float halo = pow(1.0 - r, 0.9) * 0.28;
+          gl_FragColor = vec4(uColor * (core + halo), core + halo);
+        }`,
     });
     this.mesh = new InstancedMesh(geometry, material, capacity);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
@@ -73,9 +99,15 @@ export class ArenaPulses {
     this.mesh.count = this.live;
     for (let i = 0; i < this.live; i++) {
       this.phase[i] = (this.phase[i]! + dt * speed) % 1;
+      const t = this.phase[i]!;
       const m = i * 16;
-      for (let k = 0; k < 16; k++) this.matrices[m + k] = k % 5 === 0 ? 1 : 0;
-      const point = routes.samplePoint(i % routeCount, this.phase[i]!);
+      // Fade in and out at the ends of the run so a packet arrives and departs
+      // rather than popping into existence at the subject and vanishing at the
+      // far card.
+      const fade = Math.min(1, Math.min(t, 1 - t) * 6);
+      for (let k = 0; k < 16; k++) this.matrices[m + k] = k % 5 === 0 ? fade : 0;
+      this.matrices[m + 15] = 1;
+      const point = routes.samplePoint(i % routeCount, t);
       if (!point) {
         this.matrices[m] = 0;
         this.matrices[m + 5] = 0;
@@ -92,7 +124,7 @@ export class ArenaPulses {
   dispose(): void {
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
-    (this.mesh.material as MeshBasicMaterial).dispose();
+    (this.mesh.material as ShaderMaterial).dispose();
     this.mesh.dispose();
   }
 }

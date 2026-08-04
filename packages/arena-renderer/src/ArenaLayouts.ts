@@ -127,11 +127,18 @@ export function layoutArena(
       const angle = section.from + (section.to - section.from) * f;
       const radius = 6.4 + tier * 1.85;
       if (radius > extent) extent = radius;
+      // Size the card to the seat it actually has. A fixed card width against a
+      // crowded bank makes neighbours overlap — 197 opponents across this arc
+      // gives roughly 0.54 units of pitch per seat against a 1.55-unit card,
+      // which merges the whole tier into one continuous slab instead of a row
+      // of plaques. Seats set the size; prominence varies it within that.
+      const pitch = (Math.abs(section.to - section.from) * radius) / Math.max(1, inTier);
+      const fit = Math.min(1, (pitch * 0.82) / CARD_W);
       writeCard(
         t, slot,
         Math.sin(angle) * radius, -0.4 + tier * 1.02, Math.cos(angle) * radius * 0.82,
         angle + Math.PI, -0.13,
-        prominence(card.strength, maxStrength),
+        prominence(card.strength, maxStrength) * fit,
         card.bank === AB.AGGREGATE ? BAND.AGGREGATE : BAND.DIRECT,
         1,
       );

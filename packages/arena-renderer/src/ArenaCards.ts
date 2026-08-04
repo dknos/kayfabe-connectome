@@ -33,6 +33,7 @@ const VERTEX_HEAD = /* glsl */ `
   attribute float aStrength;
   attribute float aProgress;
   attribute float aState;
+  attribute float aBillboard;
 `;
 
 export class ArenaCards {
@@ -47,6 +48,10 @@ export class ArenaCards {
   readonly aProgress: InstancedBufferAttribute;
   readonly aState: InstancedBufferAttribute;
   readonly aId: InstancedBufferAttribute;
+  /** 1 = always face the viewer, and read as subdued. Only Echo uses it: that
+   *  formation is a compressed source topology, and full-size plaques pitched
+   *  at arbitrary angles read as scattered debris rather than as a cloud. */
+  readonly aBillboard: InstancedBufferAttribute;
 
   private readonly matrices: Float32Array;
 
@@ -58,8 +63,9 @@ export class ArenaCards {
     this.aProgress = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     this.aState = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     this.aId = new InstancedBufferAttribute(new Float32Array(capacity), 1);
+    this.aBillboard = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     for (let i = 0; i < capacity; i++) (this.aId.array as Float32Array)[i] = i + 1;
-    for (const a of [this.aBank, this.aEmphasis, this.aStrength, this.aProgress, this.aState]) {
+    for (const a of [this.aBank, this.aEmphasis, this.aStrength, this.aProgress, this.aState, this.aBillboard]) {
       a.setUsage(DynamicDrawUsage);
     }
     this.geometry.setAttribute("aBank", this.aBank);
@@ -68,6 +74,7 @@ export class ArenaCards {
     this.geometry.setAttribute("aProgress", this.aProgress);
     this.geometry.setAttribute("aState", this.aState);
     this.geometry.setAttribute("aId", this.aId);
+    this.geometry.setAttribute("aBillboard", this.aBillboard);
 
     this.material = new ShaderMaterial({
       transparent: true,
@@ -76,40 +83,82 @@ export class ArenaCards {
       vertexShader: /* glsl */ `
         ${VERTEX_HEAD}
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
-        varying float vStrength; varying float vFade;
+        varying float vStrength; varying float vFade; varying float vBillboard;
         void main() {
           vUv = uv; vBank = aBank; vEmphasis = aEmphasis; vStrength = aStrength;
+          vBillboard = aBillboard;
           // Retained cards stay fully opaque so they remain trackable through
           // the whole morph; only entering and leaving cards dissolve.
           vFade = aState < 0.5 ? 0.0
                 : aState < 1.5 ? aProgress
                 : aState < 2.5 ? 1.0
                 : 1.0 - aProgress;
-          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          if (aBillboard > 0.5) {
+            // Face the viewer: take the instance's translation into view space
+            // and offset in screen-aligned axes, keeping its own scale.
+            vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+            float sx = length(instanceMatrix[0].xyz);
+            float sy = length(instanceMatrix[1].xyz);
+            mv.xy += vec2(position.x * sx, position.y * sy);
+            gl_Position = projectionMatrix * mv;
+          } else {
+            gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          }
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
         uniform vec3 uOpposed; uniform vec3 uSame; uniform vec3 uMixed; uniform vec3 uCenter;
         uniform vec3 uAggregate;
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
-        varying float vStrength; varying float vFade;
+        varying float vStrength; varying float vFade; varying float vBillboard;
+
         void main() {
           if (vFade <= 0.003) discard;
           vec3 accent = vBank < 0.5 ? uCenter
                       : vBank < 1.5 ? uOpposed
                       : vBank < 2.5 ? uSame
                       : vBank < 3.5 ? uMixed : uAggregate;
-          vec2 p = abs(vUv - 0.5) * 2.0;
-          float edge = max(p.x, p.y);
-          // a restrained plaque: dark body, accent rail down one side, edge light
-          float rail = smoothstep(0.90, 0.94, p.x) * step(vUv.x, 0.5);
-          float border = smoothstep(0.955, 1.0, edge);
-          vec3 body = mix(vec3(0.055, 0.070, 0.098), vec3(0.10, 0.12, 0.16), 1.0 - p.y * 0.5);
-          vec3 col = mix(body, accent, max(rail, border * (0.35 + vEmphasis * 0.5)));
-          col += accent * vStrength * 0.10;
-          // Dimming never reaches zero: an unemphasised card must still be
-          // readable as a card, not vanish.
-          gl_FragColor = vec4(col, vFade * (0.55 + vEmphasis * 0.45));
+
+          vec2 p = vUv;
+          vec2 d = abs(p - 0.5) * 2.0;
+
+          // Rounded silhouette, cut with a signed distance field so the card
+          // reads as a manufactured object rather than a rectangle.
+          vec2 q = d - vec2(0.90, 0.80);
+          float sdf = min(max(q.x, q.y), 0.0) + length(max(q, 0.0));
+          if (sdf > 0.09) discard;
+
+          // A dark slate face. An earlier version put a sin() grain on this to
+          // suggest brushed metal; at card size that frequency aliases into
+          // visible banding, so the surface is a plain gradient and the
+          // material reads through its EDGE instead.
+          vec3 body = mix(vec3(0.055, 0.065, 0.085), vec3(0.105, 0.120, 0.150), 1.0 - p.y);
+
+          // A machined bevel, deliberately restrained: bright along the top lip,
+          // shadowed along the bottom, enough to give thickness without turning
+          // the card into a glowing frame.
+          float lip = smoothstep(0.045, 0.0, abs(sdf + 0.022));
+          float top = smoothstep(0.35, 1.0, 1.0 - p.y);
+          body += lip * (top * 0.10 - (1.0 - top) * 0.045);
+
+          // Accent rail, inset like a printed stripe. Its weight carries
+          // documented strength; it is the only saturated thing on the card.
+          float rail = smoothstep(0.048, 0.036, abs(p.x - 0.085));
+          float rule = smoothstep(0.011, 0.005, abs(p.y - 0.26)) * 0.10;
+
+          vec3 col = body;
+          col = mix(col, accent * 0.85, rail * (0.55 + vStrength * 0.30));
+          col += accent * rule * 0.30;
+          // Emphasis lifts only the silhouette, so selection reads at the edge
+          // rather than washing across the face.
+          col += accent * lip * (0.03 + vEmphasis * 0.30);
+
+          // Echo is a SOURCE, not a reading: its chips stay quiet so the arena
+          // that peels out of them is what the eye follows.
+          float subdued = vBillboard > 0.5 ? 0.45 : 1.0;
+          col *= subdued;
+          float alpha = vFade * (0.80 + vEmphasis * 0.20) * subdued;
+          gl_FragColor = vec4(col, alpha);
         }`,
       uniforms: {
         uCenter: { value: [1.0, 0.83, 0.47] },
@@ -161,6 +210,10 @@ export class ArenaCards {
     this.aState.needsUpdate = true;
   }
 
+  setBillboard(slot: number, on: boolean): void {
+    (this.aBillboard.array as Float32Array)[slot] = on ? 1 : 0;
+  }
+
   /** Semantic attributes change only when the population or emphasis does. */
   setSemantics(slot: number, bank: number, emphasis: number, strength01: number): void {
     (this.aBank.array as Float32Array)[slot] = bank;
@@ -169,12 +222,14 @@ export class ArenaCards {
   }
 
   commitSemantics(): void {
+    this.aBillboard.needsUpdate = true;
     this.aBank.needsUpdate = true;
     this.aEmphasis.needsUpdate = true;
     this.aStrength.needsUpdate = true;
   }
 
   clearSemantics(): void {
+    (this.aBillboard.array as Float32Array).fill(0);
     (this.aBank.array as Float32Array).fill(0);
     (this.aEmphasis.array as Float32Array).fill(0);
     (this.aStrength.array as Float32Array).fill(0);
