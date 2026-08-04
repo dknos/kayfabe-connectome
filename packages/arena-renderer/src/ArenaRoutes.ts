@@ -33,11 +33,41 @@ import { AB, CS, type ArenaCard } from "./types";
 
 const SAMPLES = 24;
 
+/**
+ * How present a route is when nothing is picked out.
+ *
+ * Routes converge on one subject, so at full strength a few dozen of them read
+ * as a hairball over the near seating rather than as evidence. They are a
+ * field you read one strand of at a time: quiet by default, and unmistakable
+ * for whichever card the reader is actually pointing at.
+ */
+/**
+ * A fibre is drawn only when the reader is pointing at its card.
+ *
+ * Forty faint curves all converging on one subject told a reader nothing they
+ * could not already see from the seating: that these people are connected to
+ * the subject is the premise of the whole formation. What the fibre is FOR is
+ * answering "which one is Kenny Omega's" — so it appears for exactly that
+ * card, and the evidence it carries is read from the packet travelling it
+ * rather than from the line itself. The curve still exists on every
+ * relationship; it is a path for the pulse, and paths are not scenery.
+ */
+const EMPHASIS_OPACITY = 0.95;
+
 interface RouteSlot {
   line: Line2;
   geo: LineGeometry;
   points: Float32Array;
   key: string;
+  /** The card this route ends at, and the material it wears when the reader is
+   *  not pointing at it. */
+  otherId: string;
+  base: LineMaterial | null;
+  /** Documented encounters behind this relationship, normalised against the
+   *  strongest one on screen, and the raw count it came from. The pulse reads
+   *  both: how many packets, and how fast. */
+  strength: number;
+  encounters: number;
   /** Resolved once at build time. Re-deriving it from `key` every frame cost a
    *  string allocation per route per frame — 100 a frame at the high tier,
    *  which is exactly the per-frame allocation this renderer forbids. */
@@ -51,20 +81,36 @@ interface RouteSlot {
 export class ArenaRoutes {
   private readonly slots: RouteSlot[] = [];
   private readonly materials: Record<"opposed" | "same" | "mixed", LineMaterial>;
+  private readonly highlight: LineMaterial;
+  /** Which card's route is lifted, and the material its route came from. */
+  private emphasisId: string | null = null;
+  /** The live index of the drawn fibre, or -1. The pulse rides this one. */
+  private emphasisIndex = -1;
   private readonly ctrl = new Vector3();
   private readonly from = new Vector3();
   private readonly to = new Vector3();
   private liveCount = 0;
   /** 0..1 progressive draw-in, applied to every live route. */
   private reveal = 1;
+  /** How many cards could have carried a route, against how many did. A
+   *  budget that silently truncates reads as "these are all of them". */
+  wanted = 0;
 
   constructor(scene: Scene, readonly capacity: number) {
-    const shared = { linewidth: 2.4, transparent: true, opacity: 0.7, dashed: false };
+    // The bank materials survive because the highlighted fibre takes its colour
+    // from whichever one its card belongs to: opposition reads ember, tag
+    // partnership reads cyan, and a pair carrying both reads as neither.
+    const shared = { linewidth: 1.1, transparent: true, opacity: 0, dashed: false };
     this.materials = {
       opposed: new LineMaterial({ ...shared, color: 0xff7a4d }),
       same: new LineMaterial({ ...shared, color: 0x49d7ff }),
-      mixed: new LineMaterial({ ...shared, color: 0xe8dfcf, linewidth: 2.8, opacity: 0.78 }),
+      mixed: new LineMaterial({ ...shared, color: 0xe8dfcf }),
     };
+    // The one fibre that is drawn gets its own material, because a fat line's
+    // width and alpha both live in material uniforms shared by every route.
+    this.highlight = new LineMaterial({
+      linewidth: 2.4, transparent: true, opacity: EMPHASIS_OPACITY, dashed: false, color: 0xffffff,
+    });
     for (let i = 0; i < capacity; i++) {
       const geo = new LineGeometry();
       const points = new Float32Array(SAMPLES * 3);
@@ -83,7 +129,8 @@ export class ArenaRoutes {
       scene.add(line);
       const attr = geo.getAttribute("instanceStart") as { data?: { array: Float32Array; needsUpdate: boolean } };
       this.slots.push({
-        line, geo, points, key: "", otherSlot: -1, active: false,
+        line, geo, points, key: "", otherId: "", base: null, strength: 0, encounters: 0,
+        otherSlot: -1, active: false,
         interleaved: attr?.data ?? null,
       });
     }
@@ -146,11 +193,23 @@ export class ArenaRoutes {
   ): void {
     for (const slot of this.slots) { slot.active = false; slot.line.visible = false; }
     this.liveCount = 0;
+    this.emphasisIndex = -1;
+    // The route set is new, so nothing is emphasised on it yet. Without this a
+    // reader whose pointer never left a card keeps an id that no longer maps to
+    // a drawn fibre, and hovering it again is a no-op.
+    this.emphasisId = null;
     const anchorSlot = pool.slotOf(anchorId);
     if (anchorSlot === undefined || budget <= 0) return;
     const a3 = anchorSlot * 3;
 
     const cap = Math.min(budget, this.capacity);
+    this.wanted = 0;
+    let strongest = 0;
+    for (const card of cards) {
+      if (card.id === anchorId || card.bank === AB.AGGREGATE) continue;
+      this.wanted++;
+      if (card.strength > strongest) strongest = card.strength;
+    }
     for (const card of cards) {
       if (this.liveCount >= cap) break;
       if (card.id === anchorId || card.bank === AB.AGGREGATE) continue;
@@ -168,9 +227,15 @@ export class ArenaRoutes {
         : card.bank === AB.MIXED ? this.materials.mixed
         : this.materials.opposed;
       route.key = `${anchorId}~${card.id}`;
+      route.otherId = card.id;
+      route.base = route.line.material as LineMaterial;
+      route.strength = strongest > 0 ? card.strength / strongest : 0;
+      route.encounters = card.strength;
       route.otherSlot = slot;
       route.active = true;
-      route.line.visible = true;
+      // Invisible until pointed at. The geometry is live either way: the pulse
+      // samples it every frame.
+      route.line.visible = false;
       this.liveCount++;
     }
     this.setReveal(this.reveal);
@@ -243,12 +308,52 @@ export class ArenaRoutes {
     route.interleaved.needsUpdate = true;
   }
 
+  /**
+   * Lift one card's route out of the field, and let the rest recede.
+   *
+   * Dimming is one uniform write per shared material rather than per route, so
+   * pointing at a card costs the same whether 8 routes are live or 100.
+   */
+  setEmphasis(id: string | null): void {
+    if (this.emphasisId === id) return;
+    this.emphasisId = id;
+    this.emphasisIndex = -1;
+    for (let i = 0; i < this.liveCount; i++) {
+      const route = this.slots[i]!;
+      if (id && route.otherId === id) {
+        this.emphasisIndex = i;
+        this.highlight.color.copy((route.base ?? this.materials.mixed).color);
+        route.line.material = this.highlight;
+        route.line.visible = true;
+      } else if (route.line.visible) {
+        if (route.base) route.line.material = route.base;
+        route.line.visible = false;
+      }
+    }
+  }
+
+  /** How much documented evidence route `i` carries, 0..1 against the strongest
+   *  on screen. */
+  strengthOf(i: number): number {
+    return i >= 0 && i < this.liveCount ? this.slots[i]!.strength : 0;
+  }
+
+  /** The fibre currently drawn, and the evidence behind it. Null when the
+   *  reader is not pointing at anything, which is also when nothing pulses. */
+  emphasis(): { index: number; strength: number; encounters: number } | null {
+    const i = this.emphasisIndex;
+    if (i < 0 || i >= this.liveCount) return null;
+    const route = this.slots[i]!;
+    return { index: i, strength: route.strength, encounters: route.encounters };
+  }
+
   dispose(): void {
     for (const slot of this.slots) {
       slot.line.removeFromParent();
       slot.geo.dispose();
     }
     for (const m of Object.values(this.materials)) m.dispose();
+    this.highlight.dispose();
     this.slots.length = 0;
     this.liveCount = 0;
   }

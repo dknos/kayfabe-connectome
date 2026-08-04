@@ -66,6 +66,11 @@ export class ArenaControls {
   private boost = false;
   /** How far the reader may travel from the formation's own centre. */
   private walkReach = 60;
+  /** The distance the formation asked to be framed at. The distance CLAMP has
+   *  to respect it: derived from the layout's scalar extent alone, the ceiling
+   *  came out below the distance the framing needed and quietly pulled the
+   *  camera in, cutting the widest rows off the right of the frame. */
+  private fitDistance = 0;
   /**
    * Where the FORMATION wants the camera to look, and how far the reader has
    * since travelled from it.
@@ -196,9 +201,8 @@ export class ArenaControls {
   /** The formation's preferred pose. Applied outright until the reader engages,
    *  and after that only the target and distance bounds follow. */
   frame(position: Vector3, target: Vector3, extent: number): void {
-    this.minDistance = Math.max(2, extent * 0.25);
-    this.maxDistance = Math.max(20, extent * 6);
-    this.walkReach = Math.max(20, extent * 3);
+    this.fitDistance = position.distanceTo(target);
+    this.applyBounds(extent);
     this.formationTarget.copy(target);
     // An un-engaged reader has no travel to preserve, and carrying a stale
     // offset into a new formation would frame it off-centre.
@@ -222,6 +226,14 @@ export class ArenaControls {
    *  panned to from it. */
   private composeTarget(): void {
     this.targetGoal.copy(this.formationTarget).add(this.userOffset);
+  }
+
+  /** Distance bounds and travel range for a formation of this size. The
+   *  ceiling never sits below the framing the formation asked for. */
+  private applyBounds(extent: number): void {
+    this.minDistance = Math.max(2, Math.min(extent * 0.25, this.fitDistance * 0.9));
+    this.maxDistance = Math.max(20, extent * 6, this.fitDistance * 1.6);
+    this.walkReach = Math.max(20, extent * 3);
   }
 
   private clampGoal(): void {
@@ -326,9 +338,7 @@ export class ArenaControls {
   /** Follow the formation's look-at without touching the reader's angle or
    *  distance. Used while a transition plays after the reader has engaged. */
   retarget(target: Vector3, extent: number): void {
-    this.minDistance = Math.max(2, extent * 0.25);
-    this.maxDistance = Math.max(20, extent * 6);
-    this.walkReach = Math.max(20, extent * 3);
+    this.applyBounds(extent);
     this.formationTarget.copy(target);
     this.composeTarget();
     this.clampGoal();

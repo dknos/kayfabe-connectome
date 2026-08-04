@@ -31,6 +31,12 @@ import {
 
 const CAPACITY = 640;
 
+/** Breathing room around the fitted cards. A card is not a point and it
+ *  carries a label, so framed exactly the outermost ones sit against the
+ *  viewport edge with their names running off it. */
+const FRAME_MARGIN = 1.14;
+const WORLD_UP = new Vector3(0, 1, 0);
+
 const CAM: Record<ArenaFormation, readonly [number, number, number]> = {
   echo: [0, 0, 22],
   arena: [0, 7.5, 21],
@@ -90,6 +96,9 @@ export class ArenaRenderer {
   private frameCpuEmaMs = 0;
   private frameWallEmaMs = 0;
   private lastFrameMs = 0;
+  /** The heaviest relationship on screen, so evidence can be read as a
+   *  fraction of it rather than as a raw count. */
+  private maxStrength = 0;
 
   /** Set false to pin the tier and stop the governor stepping it down. */
   autoQuality = true;
@@ -160,7 +169,9 @@ export class ArenaRenderer {
     // Effects degrade individually: bloom is its own lever, and the low tier
     // switches it off while the scene stays coherent without it.
     this.bloom.enabled = budget.bloom;
-    this.pulses.setCount(budget.pulses);
+    // Pulses now belong to whichever fibre is pointed at, so the tier budget is
+    // a ceiling on that one stream rather than a population to spread around.
+    this.applyPulseFocus();
     this.resize();
     if (this.scope) this.setScope(this.scope);
   }
@@ -201,15 +212,23 @@ export class ArenaRenderer {
       : layoutIndex(
           this.transition, this.pool, this.active, anchorId,
           (c) => (this.scope!.kind === "promotion" ? c.era : bankLabel(c.bank)),
+          this.camera.aspect,
         );
     this.frameCamera(name, immediate);
     this.transition.reducedMotion = this.reducedMotion;
     this.transition.commit(performance.now(), immediate);
     this.writeSemantics();
     this.updateCamera();
+    // Fibres belong to the Arena reading, the same way the rail does. Drawn
+    // across the Index they run over every row of a grid whose whole point is
+    // even comparison, and the Echo is a source topology rather than a set of
+    // relationships to this subject.
     this.routes.build(
-      this.transition, this.pool, this.active, anchorId, ARENA_TIERS[this.tier].routes,
+      this.transition, this.pool, this.active, anchorId,
+      name === "arena" ? ARENA_TIERS[this.tier].routes : 0,
     );
+    // The fibre set is new, so nothing is pointed at on it yet.
+    this.applyPulseFocus();
     this.buildRail();
     // Routes resolve AFTER the cards settle, per the brief's ordering: they are
     // evidence about a formation, not part of its assembly.
@@ -232,30 +251,113 @@ export class ArenaRenderer {
     );
   }
 
+  /**
+   * Where the seated cards actually are, in world space.
+   *
+   * The layout's scalar `extent` is a radius about the origin, and no formation
+   * is centred on the origin: a person arena spans x -10..+27 because the banks
+   * are sized by evidence and one side is always heavier. Framing a radius
+   * about a point the content does not sit on is what pushed the arena into
+   * the right edge and left the bottom third of the frame empty.
+   */
+  private layoutBounds(): { center: Vector3; points: Float32Array; count: number } | null {
+    const t = this.transition;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity;
+    let x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    let seen = 0;
+    // `present` is what the LAYOUT just wrote; `state` is what the transition
+    // commits afterwards. Framing runs between the two, so reading state here
+    // saw every slot absent on a first build and quietly fell back to the fixed
+    // preset — the fit worked when switching formations on cards that were
+    // already seated, and never worked on the view a reader actually opens on.
+    for (let slot = 0; slot < t.capacity; slot++) {
+      if (t.present[slot] !== 1) continue;
+      const i3 = slot * 3;
+      const x = t.posTo[i3]!, y = t.posTo[i3 + 1]!, z = t.posTo[i3 + 2]!;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (z < z0) z0 = z; if (z > z1) z1 = z;
+      seen++;
+    }
+    if (seen === 0) return null;
+    // The centre comes from the box, but the FIT is measured against the cards
+    // themselves. A horseshoe's bounding-box corners are empty air, and fitting
+    // to them framed the arena at 42% of the viewport width with everything
+    // legible only if you leaned in.
+    const points = new Float32Array(seen * 3);
+    let w = 0;
+    for (let slot = 0; slot < t.capacity; slot++) {
+      if (t.present[slot] !== 1) continue;
+      const i3 = slot * 3;
+      const x = t.posTo[i3]!, y = t.posTo[i3 + 1]!, z = t.posTo[i3 + 2]!;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      points[w * 3] = x; points[w * 3 + 1] = y; points[w * 3 + 2] = z;
+      w++;
+    }
+    return {
+      center: new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+      points,
+      count: w,
+    };
+  }
+
+  /**
+   * The distance along `dir` at which every corner clears both frustum planes.
+   *
+   * Exact rather than a bounding-sphere approximation: the arena is wide and
+   * shallow, and a sphere fit would pull the camera back by its diagonal and
+   * waste most of the height. Each card is resolved into the camera's own
+   * basis, and the binding constraint is whichever one needs the camera
+   * furthest away. 520 cards is a few thousand operations, once per formation.
+   */
+  private fitDistance(center: Vector3, points: Float32Array, count: number, dir: Vector3): number {
+    const right = new Vector3().crossVectors(WORLD_UP, dir);
+    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    right.normalize();
+    const up = new Vector3().crossVectors(dir, right).normalize();
+    const tanV = Math.tan((this.camera.fov * Math.PI) / 360);
+    const tanH = tanV * Math.max(0.4, this.camera.aspect);
+    const local = new Vector3();
+    let needed = 0;
+    for (let i = 0; i < count; i++) {
+      local.set(points[i * 3]!, points[i * 3 + 1]!, points[i * 3 + 2]!).sub(center);
+      // Depth TOWARDS the camera: a corner nearer the eye needs more distance
+      // than a far one at the same lateral offset.
+      const depth = local.dot(dir);
+      const h = Math.abs(local.dot(right)) / tanH + depth;
+      const v = Math.abs(local.dot(up)) / tanV + depth;
+      needed = Math.max(needed, h, v);
+    }
+    return needed;
+  }
+
   private frameCamera(name: ArenaFormation, immediate: boolean): void {
-    // Frame from the layout's own extent. A subject with 142 opponents and 31
-    // partners builds a far wider arena than the reverse, and a fixed camera
-    // distance lets the wide bank run straight off the viewport — which the
-    // brief forbids at both 1920x1080 and 1366x768.
-    const extent = this.lastLayout?.extent ?? 10;
-    // The arena is wide and shallow, so the HORIZONTAL field of view is the
-    // binding constraint. Using the vertical one pulls the camera back roughly
-    // twice as far as needed and leaves the arena occupying a third of the
-    // frame — technically "all visible", practically unreadable.
-    const aspect = Math.max(0.6, this.camera.aspect);
-    const halfFovY = (this.camera.fov * Math.PI) / 360;
-    const halfWidthPerUnit = Math.tan(halfFovY) * Math.min(aspect, 2);
-    const needed = extent / Math.max(1e-3, halfWidthPerUnit);
+    // The presets are a viewing ANGLE per formation — the arena from above the
+    // seating, the index square on. The distance and the look-at come from the
+    // content, because a subject with 142 opponents and 31 partners builds a
+    // far wider arena than the reverse.
     const base = CAM[name];
-    const fit = Math.max(1, (needed * 1.26) / Math.hypot(base[0], base[1], base[2]));
+    const look = LOOK[name];
+    const dir = new Vector3(base[0] - look[0], base[1] - look[1], base[2] - look[2]);
+    if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
+    dir.normalize();
+
+    const bounds = this.layoutBounds();
+    const center = bounds ? bounds.center : new Vector3(look[0], look[1], look[2]);
+    const distance = bounds
+      ? Math.max(6, this.fitDistance(center, bounds.points, bounds.count, dir) * FRAME_MARGIN)
+      : Math.hypot(base[0], base[1], base[2]);
+    const position = center.clone().addScaledVector(dir, distance);
+
     if (immediate) {
-      this.camCur.set(base[0] * fit, base[1] * fit, base[2] * fit);
-      this.lookCur.set(...LOOK[name]);
+      this.camCur.copy(position);
+      this.lookCur.copy(center);
     }
     this.camFrom.copy(this.camCur);
     this.lookFrom.copy(this.lookCur);
-    this.camTo.set(base[0] * fit, base[1] * fit, base[2] * fit);
-    this.lookTo.set(...LOOK[name]);
+    this.camTo.copy(position);
+    this.lookTo.copy(center);
   }
 
   private updateCamera(dt = 0): void {
@@ -276,6 +378,7 @@ export class ArenaRenderer {
     this.cards.clearSemantics();
     let maxStrength = 0;
     for (const c of this.active) if (c.strength > maxStrength) maxStrength = c.strength;
+    this.maxStrength = maxStrength;
     for (const card of this.active) {
       const slot = this.pool.slotOf(card.id);
       if (slot === undefined) continue;
@@ -293,15 +396,30 @@ export class ArenaRenderer {
     this.cards.commitSemantics();
   }
 
+  /** Point the packet stream at the drawn fibre, or stop it if there is none. */
+  private applyPulseFocus(): void {
+    const emphasis = this.routes.emphasis();
+    this.pulses.focus(
+      emphasis ? emphasis.index : -1,
+      emphasis ? emphasis.encounters : 0,
+      ARENA_TIERS[this.tier].pulses,
+    );
+  }
+
   setSelected(id: string | null): void {
     this.selectedId = id;
     this.writeSemantics();
+    this.routes.setEmphasis(this.hoverId ?? this.selectedId);
+    this.applyPulseFocus();
   }
   setHover(id: string | null): void {
     if (this.hoverId === id) return;
     this.hoverId = id;
     // Hover must never trigger a layout rebuild; only emphasis changes.
     this.writeSemantics();
+    // Pointing at a card is how a reader asks which fibre is theirs.
+    this.routes.setEmphasis(this.hoverId ?? this.selectedId);
+    this.applyPulseFocus();
   }
 
   pick(px: number, py: number): ArenaPickResult | null {
@@ -316,12 +434,30 @@ export class ArenaRenderer {
     const w = this.canvas.clientWidth || 1;
     const h = this.canvas.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    const previous = this.camera.aspect;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     // CSS pixels, deliberately not multiplied by devicePixelRatio.
     this.routes.setResolution(w, h);
     this.rail.setResolution(w, h);
     this.bloom.setSize(w, h);
+
+    // The framing is SOLVED against the aspect, so an aspect that changes after
+    // the solve leaves it wrong. This is not only window resizing: the lens is
+    // framed as it mounts, and the canvas reaches its real size a beat later —
+    // which is exactly how a wide arena ended up framed for a narrower frame
+    // and ran its outermost rows off the right edge.
+    if (!this.scope || previous === this.camera.aspect) return;
+    // The Index solves its column count from the aspect too, so a real change
+    // of proportion has to rebuild it. A small one only needs re-framing.
+    const ratio = previous > 0 ? this.camera.aspect / previous : 1;
+    if (this.formationName === "index" && (ratio > 1.12 || ratio < 0.89)) {
+      this.setFormation(this.formationName, true);
+      return;
+    }
+    // A reader who has taken hold of the camera keeps it.
+    if (this.controls.engaged) return;
+    this.frameCamera(this.formationName, true);
   }
 
   start(): void {
@@ -439,15 +575,29 @@ export class ArenaRenderer {
     return this.governedDownTo;
   }
 
+  /**
+   * Label priority.
+   *
+   * Below MEMBER the priority varies CONTINUOUSLY with documented evidence
+   * rather than sitting flat at AMBIENT. Flat, every ordinary card tied, the
+   * tie broke on id, and on the Index wall — where depth is constant too — ids
+   * cluster, so one half of the grid was named and the other half was
+   * anonymous for no reason a reader could see. Ordering by evidence means the
+   * names that survive collision are the relationships the corpus documents
+   * best, which is the same rule the seating already uses.
+   */
   private labelInput(id: string): ArenaLabelInput | undefined {
     const card = this.byId.get(id);
     if (!card) return undefined;
+    const graded = this.maxStrength > 0
+      ? Math.min(0.98, card.strength / this.maxStrength) * AE.MEMBER
+      : AE.AMBIENT;
     return {
       id,
       name: card.name,
       emphasis: id === this.selectedId ? AE.SELECTED
         : id === this.hoverId ? AE.HOVERED
-        : card.strength >= 10 ? AE.MEMBER : AE.AMBIENT,
+        : card.strength >= 10 ? AE.MEMBER : graded,
     };
   }
 

@@ -19,13 +19,30 @@ import {
 import type { ArenaRoutes } from "./ArenaRoutes";
 import { BLOOM_LAYER } from "./ArenaBloom";
 
-const SIZE = 0.34;
+const SIZE = 0.22;
+
+/**
+ * The stretch of a fibre a packet is actually visible on.
+ *
+ * Every fibre starts at the subject, so the first fifth of all of them occupies
+ * the same small volume. Packets drawn there stack additively into a glare that
+ * washed out the subject's own card and the names around it — the one part of
+ * the arena a reader is most likely to be looking at. A packet now emerges once
+ * it is clear of the convergence and fades as it arrives.
+ */
+const RUN_IN = 0.3;
+const RUN_OUT = 0.94;
 
 export class ArenaPulses {
   readonly mesh: InstancedMesh;
   private readonly matrices: Float32Array;
   private readonly phase: Float32Array;
+  /** Which route each packet rides, and how fast. Both come from the evidence
+   *  rather than from the packet's index. */
+  private readonly route: Int32Array;
+  private readonly speed: Float32Array;
   private live = 0;
+  private focused = -1;
 
   constructor(scene: Scene, readonly capacity: number) {
     const geometry = new PlaneGeometry(SIZE, SIZE);
@@ -37,7 +54,7 @@ export class ArenaPulses {
       transparent: true,
       depthWrite: false,
       blending: AdditiveBlending,
-      uniforms: { uColor: { value: [1.0, 0.83, 0.47] } },
+      uniforms: { uColor: { value: [0.95, 0.79, 0.5] } },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -69,19 +86,51 @@ export class ArenaPulses {
     scene.add(this.mesh);
     this.matrices = this.mesh.instanceMatrix.array as Float32Array;
     this.phase = new Float32Array(capacity);
+    this.route = new Int32Array(capacity);
+    this.speed = new Float32Array(capacity);
   }
 
   get count(): number {
     return this.live;
   }
 
-  /** Deterministic starting offsets: an evenly spread set of packets reads as
-   *  activity, while random phases read as noise and never look the same twice
-   *  in a screenshot. */
-  setCount(n: number): void {
-    this.live = Math.max(0, Math.min(this.capacity, n));
-    this.mesh.count = this.live;
-    for (let i = 0; i < this.live; i++) this.phase[i] = i / Math.max(1, this.live);
+  /**
+   * Point every packet at the one fibre the reader is looking at.
+   *
+   * Nothing pulses on its own. The reading is per-relationship — "how much did
+   * these two actually meet" — and a field of packets on every fibre at once
+   * answered that question for nobody while stacking additively into a glare
+   * over the subject's own card. Hovering or selecting a rectangle draws its
+   * wire and runs its evidence along it: more documented encounters means more
+   * packets, moving faster.
+   */
+  focus(index: number, encounters: number, budget: number): void {
+    if (index < 0 || encounters <= 0) {
+      this.live = 0;
+      this.mesh.count = 0;
+      this.focused = -1;
+      return;
+    }
+    // Square-rooted, because encounters run from 1 to several hundred and a
+    // linear count would make a heavy pair a solid bar of light while a single
+    // documented meeting showed nothing at all.
+    const n = Math.max(2, Math.min(budget, this.capacity, Math.round(Math.sqrt(encounters) * 2.2)));
+    this.live = n;
+    this.mesh.count = n;
+    this.focused = index;
+    const speed = 0.3 + Math.min(1, Math.sqrt(encounters) / 12) * 0.55;
+    for (let i = 0; i < n; i++) {
+      this.route[i] = index;
+      this.speed[i] = speed;
+      // Evenly spaced along the run, so the packets read as a stream on one
+      // path rather than as a clump that happens to be moving.
+      this.phase[i] = i / n;
+    }
+  }
+
+  /** The fibre the packets are riding, or -1. */
+  get focusedRoute(): number {
+    return this.focused;
   }
 
   /**
@@ -89,25 +138,36 @@ export class ArenaPulses {
    * exist; if the route budget shrinks with the quality tier, the pulses follow
    * it rather than pointing at nothing.
    */
-  update(dt: number, routes: ArenaRoutes, speed = 0.4): void {
+  update(dt: number, routes: ArenaRoutes, speed = 1): void {
     if (this.live === 0) return;
     const routeCount = routes.count;
     if (routeCount === 0) {
       this.mesh.count = 0;
       return;
     }
+    // The route set is rebuilt on every formation change; a packet still
+    // pointing at a route that no longer exists would ride nothing.
+    if (this.focused >= routeCount) {
+      this.live = 0;
+      this.mesh.count = 0;
+      return;
+    }
     this.mesh.count = this.live;
     for (let i = 0; i < this.live; i++) {
-      this.phase[i] = (this.phase[i]! + dt * speed) % 1;
+      this.phase[i] = (this.phase[i]! + dt * speed * (this.speed[i] || 0.3)) % 1;
       const t = this.phase[i]!;
       const m = i * 16;
       // Fade in and out at the ends of the run so a packet arrives and departs
       // rather than popping into existence at the subject and vanishing at the
       // far card.
-      const fade = Math.min(1, Math.min(t, 1 - t) * 6);
+      const fade = Math.max(
+        0,
+        Math.min(1, (t - RUN_IN) * 7, (RUN_OUT - t) * 7),
+      );
       for (let k = 0; k < 16; k++) this.matrices[m + k] = k % 5 === 0 ? fade : 0;
       this.matrices[m + 15] = 1;
-      const point = routes.samplePoint(i % routeCount, t);
+      const r = this.route[i]!;
+      const point = routes.samplePoint(r < routeCount ? r : i % routeCount, t);
       if (!point) {
         this.matrices[m] = 0;
         this.matrices[m + 5] = 0;

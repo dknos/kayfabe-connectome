@@ -58,20 +58,29 @@ export function layoutEcho(
 ): ArenaLayoutResult {
   const t0 = performance.now();
   t.present.fill(0);
-  const SPREAD = 13;
+  // Spread and card size are one decision, not two. At SPREAD 13 and scale
+  // 0.72, 519 cards each about a unit wide sat inside a twelve-unit box: every
+  // card overlapped several others and the topology this formation exists to
+  // show was a solid grey slab. Cards read as POINTS here — the reading is
+  // where these people sit in the connectome, not what any one card says — so
+  // the field opens up and the card shrinks to match.
+  const SPREAD = 34;
+  const CARD_SCALE = 0.3;
   let seated = 0;
   let dropped = 0;
   for (const card of cards) {
     const slot = pool.acquire(card.id);
     if (slot < 0) { dropped++; continue; }
     const p = card.pos;
+    const isAnchor = card.id === anchorId;
     writeCard(
       t, slot,
       (p ? p[0] : 0) * SPREAD,
       (p ? p[1] - 0.35 : 0) * SPREAD * 0.55,
       (p ? p[2] : 0) * SPREAD,
-      0, 0, 0.72,
-      card.id === anchorId ? BAND.CENTER : BAND.AMBIENT,
+      // The subject stays findable in its own topology.
+      0, 0, isAnchor ? CARD_SCALE * 3.4 : CARD_SCALE,
+      isAnchor ? BAND.CENTER : BAND.AMBIENT,
     );
     seated++;
   }
@@ -162,6 +171,7 @@ export function layoutArena(
 export function layoutIndex(
   t: ArenaTransition, pool: SlotPool, cards: readonly ArenaCard[], anchorId: string,
   groupOf: (card: ArenaCard) => string,
+  viewportAspect = 1.78,
 ): ArenaLayoutResult {
   const t0 = performance.now();
   t.present.fill(0);
@@ -179,9 +189,18 @@ export function layoutIndex(
   }
   const keys = [...groups.keys()].sort();
 
-  const COLS = 18;
   const COL_W = 1.78;
   const ROW_H = 1.16;
+  // Columns follow the VIEWPORT, not a constant. A fixed 18 built a wall
+  // roughly as tall as three screens and a third of one wide: the camera then
+  // has to fit the height, so two thirds of the frame is empty and the cards
+  // are small in the strip that is left. Solving for a grid whose proportions
+  // match the frame is what makes "the complete set, precisely" readable.
+  const population = cards.reduce((n, c) => (c.id === anchorId ? n : n + 1), 0);
+  const COLS = Math.max(
+    8,
+    Math.min(48, Math.round(Math.sqrt(Math.max(1, population) * viewportAspect * (ROW_H / COL_W)))),
+  );
   const sections: { key: string; label: string; count: number }[] = [];
   let row = 0;
   for (const key of keys) {

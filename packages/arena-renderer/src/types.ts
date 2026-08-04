@@ -156,9 +156,14 @@ export const ARENA_TIERS: Record<"low" | "medium" | "high", ArenaTierBudget> = {
   // and leaves the names largely alone. Demoting the tier used to take names
   // away, which meant zooming in to read more of them produced fewer, and the
   // reader was punished for the thing they came to do.
-  low: { cards: 160, labels: 80, routes: 12, pulses: 0, bloom: false, pixelRatioCap: 1 },
-  medium: { cards: 360, labels: 120, routes: 40, pulses: 6, bloom: true, pixelRatioCap: 1.5 },
-  high: { cards: 600, labels: 160, routes: 100, pulses: 10, bloom: true, pixelRatioCap: 2 },
+  // Routes and pulses are priced very differently and the ladder now reflects
+  // it. A fat route is ONE DRAW CALL EACH, so its budget stays small; the whole
+  // pulse field is a single instanced draw, so it can be generous. The reading
+  // lives in the pulses — how much documented evidence a relationship carries —
+  // and the fibre is only there to say where the pulse is going.
+  low: { cards: 160, labels: 80, routes: 10, pulses: 12, bloom: false, pixelRatioCap: 1 },
+  medium: { cards: 360, labels: 120, routes: 22, pulses: 28, bloom: true, pixelRatioCap: 1.5 },
+  high: { cards: 600, labels: 160, routes: 40, pulses: 52, bloom: true, pixelRatioCap: 2 },
 };
 
 export type ArenaQualityTier = keyof typeof ARENA_TIERS;
