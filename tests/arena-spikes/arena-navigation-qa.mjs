@@ -77,6 +77,9 @@ try {
   record("camera stays above the floor", after.y > 0, `y=${after.y.toFixed(2)}`);
 
   // 4. typing must not walk the arena
+  // The camera is damped, so it keeps easing for a moment after the last key
+  // came up. Measuring before it settles reads that ease as drift.
+  await page.waitForTimeout(1500);
   const parked = await cameraOf(page);
   await page.evaluate(() => {
     const input = document.createElement("input");
