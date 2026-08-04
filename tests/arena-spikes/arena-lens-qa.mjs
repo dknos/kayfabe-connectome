@@ -110,19 +110,26 @@ try {
     // journey into one frame, so the gate is generous — anything under a third
     // is travel, not a cut.
     //
-    // SMOOTHNESS: how even was that travel? Reported, never gated, because a
-    // slow device legitimately produces coarse sampling and a card that only
-    // moves during its own delay band legitimately moves faster than the naive
-    // journey/frames average would suggest. Gating on it conflates a
-    // fill-bound renderer with a broken transition, which is exactly the
-    // mistake that sent this check chasing route allocations for an hour.
+    // SMOOTHNESS: how even was that travel? Reported against what the easing
+    // actually predicts, not against a flat average.
+    //
+    // A card does not move at constant speed and does not move for the whole
+    // clock. Quintic in-out peaks at 5x its own average (f(t)=16t^5 gives
+    // f'(0.5)=5), and each card animates over only FORMATION_WINDOW = 0.62 of
+    // the transition because delays occupy the rest. So the peak step is
+    // expected to be about 5 / 0.62 = 8x the naive journey/frames figure.
+    // Anything near that is the easing working, not a hitch — profiling a
+    // reported 13.9 found the worst frame was 32 ms with 0.56 ms of CPU, i.e.
+    // one dropped vsync, and no stall at all.
     const evenStep = travel.net / Math.max(1, travel.samples - 1);
+    const EXPECTED_PEAK_RATIO = 5 / 0.62;
     const trow = {
       check: "retained card travels Arena -> Index", viewport: `${vp.w}x${vp.h}`,
       ...travel,
       tier: await page.evaluate(() => window.__kayfabeArena.tier),
       wallMs: Number((await page.evaluate(() => window.__kayfabeArena.frameWallMs)).toFixed(1)),
       smoothnessRatio: Number((travel.maxStep / Math.max(1e-6, evenStep)).toFixed(1)),
+      expectedPeakRatio: Number(EXPECTED_PEAK_RATIO.toFixed(1)),
       journeyFractionInOneFrame: Number((travel.maxStep / Math.max(1e-6, travel.net)).toFixed(3)),
       moved: travel.net > 0.05,
       noTeleport: travel.maxStep <= travel.net * 0.33,

@@ -162,6 +162,13 @@ reader actually experiences.
 The low tier is a coherent scene, not a broken one — the selection rail is a
 real material edge, so selection stays unambiguous with bloom off entirely.
 
+**Motion is not uniform, and the tests know it.** A card animates over only
+`FORMATION_WINDOW` (0.62) of the clock, and quintic in-out peaks at 5x its own
+average, so its fastest frame is expected to be roughly 8x the naive
+journey-over-frames figure. Reporting that ratio without the model briefly made
+a healthy transition look like a hitch; profiling it found a 32 ms worst frame
+carrying 0.56 ms of CPU, which is one dropped vsync.
+
 **Evidence routes** run from the subject to its documented relationships and
 nowhere else: no all-to-all spaghetti, and aggregate cards get no route because
 a summary is not an encounter. They reveal only after the cards are 55% settled.
