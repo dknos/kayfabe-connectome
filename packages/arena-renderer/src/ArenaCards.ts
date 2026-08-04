@@ -109,6 +109,7 @@ export class ArenaCards {
         precision highp float;
         uniform vec3 uOpposed; uniform vec3 uSame; uniform vec3 uMixed; uniform vec3 uCenter;
         uniform vec3 uAggregate;
+        uniform float uLift;
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
 
@@ -153,6 +154,11 @@ export class ArenaCards {
           // rather than washing across the face.
           col += accent * lip * (0.03 + vEmphasis * 0.30);
 
+          // The Stadium reads its cards as SCREENS in the stands, so they get
+          // a small emissive lift there — and only there: uLift is zero in
+          // every other formation, which keeps them rendering untouched.
+          col += (accent * 0.20 + vec3(0.05, 0.06, 0.08)) * uLift;
+
           // Echo is a SOURCE, not a reading: its chips stay quiet so the arena
           // that peels out of them is what the eye follows.
           float subdued = vBillboard > 0.5 ? 0.45 : 1.0;
@@ -166,6 +172,7 @@ export class ArenaCards {
         uSame: { value: [0.29, 0.84, 1.0] },
         uMixed: { value: [0.91, 0.87, 0.81] },
         uAggregate: { value: [0.62, 0.66, 0.74] },
+        uLift: { value: 0 },
       },
     });
 

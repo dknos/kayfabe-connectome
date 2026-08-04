@@ -232,6 +232,121 @@ export function layoutIndex(
   return { seated, dropped, layoutMs: performance.now() - t0, sections, extent, notes };
 }
 
+/**
+ * STADIUM — the subject headlining a stadium show.
+ *
+ * Same semantics as the Arena horseshoe — the sections are supplied, so a
+ * person seats by relationship and a promotion by era — but the seating is the
+ * composed environment's real bowl: the tier ellipses below ride the seating
+ * measured from the Stad de Tanger GLB (manifest2: seat inner (17.1, 26.4)
+ * rising to (29.2, 39.7) at y 1.5..11.0 — the bowl is strongly elliptical,
+ * which is why rx and rz differ throughout). The strongest relationships
+ * stand on the field as boards around the ring, the way a show's top matches
+ * are billed, and the subject floats over the ring under the jumbotron.
+ */
+const STADIUM_SWEEP = 2.85; // max |angle|; the gap at the back is the entrance
+const SECTION_RANGE = 2.44; // the horseshoe range personSections/eraSections use
+const HEADLINERS = 8;
+const TIER_Y0 = 2.6, TIER_DY = 1.35;
+const TIER_RX0 = 18.2, TIER_DRX = 1.75;
+const TIER_RZ0 = 27.4, TIER_DRZ = 2.0;
+
+export function layoutStadium(
+  t: ArenaTransition, pool: SlotPool, cards: readonly ArenaCard[], anchorId: string,
+  sections: readonly ArenaSection[],
+): ArenaLayoutResult {
+  const t0 = performance.now();
+  t.present.fill(0);
+  const notes: string[] = [];
+  const sectionCounts: { key: string; label: string; count: number }[] = [];
+  let dropped = 0;
+  let seated = 0;
+
+  // Hovering just over the ring: the jumbotron above carries the name in
+  // lights, the card carries the data. Both saying it at the same height read
+  // as one blown-out sign.
+  const anchorSlot = pool.acquire(anchorId);
+  if (anchorSlot >= 0) {
+    writeCard(t, anchorSlot, 0, 3.4, 0, 0, 0, 2.0, BAND.CENTER);
+    seated++;
+  }
+
+  let maxStrength = 0;
+  for (const c of cards) if (c.strength > maxStrength) maxStrength = c.strength;
+
+  // Field boards: the top of the card, billed on the floor. Strongest stands
+  // centre-most, and the arc faces OUT toward the broadcast camera — these are
+  // billboards for the reader, not seats facing the ring.
+  const billed = new Set<string>();
+  const people = cards
+    .filter((c) => c.id !== anchorId && c.represents === undefined)
+    .sort((a, b) => b.strength - a.strength)
+    .slice(0, HEADLINERS);
+  for (let i = 0; i < people.length; i++) {
+    const card = people[i]!;
+    const slot = pool.acquire(card.id);
+    if (slot < 0) { dropped++; continue; }
+    // 0, -1, +1, -2, +2… of a 0.34 rad pitch: strongest centre-most.
+    const step = Math.ceil(i / 2) * (i % 2 === 1 ? -1 : 1);
+    const angle = step * 0.34;
+    writeCard(
+      t, slot,
+      Math.sin(angle) * 9.6, 1.15, Math.cos(angle) * 10.4,
+      angle, -0.04, 1.7, BAND.SPINE,
+    );
+    billed.add(card.id);
+    seated++;
+  }
+
+  // The bowl. Sections keep their semantic spans, widened from the horseshoe's
+  // range onto the stadium's near-full sweep.
+  const remap = STADIUM_SWEEP / SECTION_RANGE;
+  for (const section of sections) {
+    let count = 0;
+    for (const card of cards) {
+      if (card.id === anchorId || billed.has(card.id) || !section.match(card)) continue;
+      count++;
+    }
+    if (count === 0) continue;
+    const from = Math.max(-STADIUM_SWEEP, Math.min(STADIUM_SWEEP, section.from * remap));
+    const to = Math.max(-STADIUM_SWEEP, Math.min(STADIUM_SWEEP, section.to * remap));
+    const perTier = Math.max(8, Math.ceil(Math.sqrt(count) * 2.1));
+    let i = 0;
+    for (const card of cards) {
+      if (card.id === anchorId || billed.has(card.id) || !section.match(card)) continue;
+      const slot = pool.acquire(card.id);
+      if (slot < 0) { dropped++; i++; continue; }
+      const tier = Math.floor(i / perTier);
+      const seat = i % perTier;
+      const inTier = Math.min(perTier, count - tier * perTier);
+      const f = inTier === 1 ? 0.5 : seat / (inTier - 1);
+      const angle = from + (to - from) * f;
+      const rx = TIER_RX0 + tier * TIER_DRX;
+      const rz = TIER_RZ0 + tier * TIER_DRZ;
+      // Seat pitch on the mean radius decides the card's width, exactly as the
+      // horseshoe does — a crowded bank must not merge into a slab.
+      const pitch = (Math.abs(to - from) * (rx + rz) * 0.5) / Math.max(1, inTier);
+      const fit = Math.min(1, (pitch * 0.82) / CARD_W);
+      writeCard(
+        t, slot,
+        Math.sin(angle) * rx, TIER_Y0 + tier * TIER_DY, Math.cos(angle) * rz,
+        angle + Math.PI, -0.12,
+        prominence(card.strength, maxStrength) * fit * 0.92,
+        card.bank === AB.AGGREGATE ? BAND.AGGREGATE : BAND.DIRECT,
+        1,
+      );
+      seated++;
+      i++;
+    }
+    sectionCounts.push({ key: section.key, label: section.label, count });
+  }
+  if (dropped > 0) notes.push(`${dropped} cards exceeded the instance budget and were not seated`);
+  return {
+    seated, dropped, layoutMs: performance.now() - t0,
+    sections: sectionCounts, extent: TIER_RZ0 + 5 * TIER_DRZ, notes,
+  };
+}
+
 /** A person scope seats by documented relationship. Mixed takes the shallow
  *  front arc because it reads first. */
 export function personSections(): ArenaSection[] {

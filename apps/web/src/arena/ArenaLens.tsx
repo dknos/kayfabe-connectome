@@ -19,6 +19,7 @@ const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
   { key: "echo", label: "Echo", hint: "where these people sit in the connectome" },
   { key: "arena", label: "Arena", hint: "how they relate to the subject" },
   { key: "index", label: "Index", hint: "the complete set, precisely" },
+  { key: "stadium", label: "Stadium", hint: "the subject headlining a stadium show" },
 ];
 
 export function ArenaLens(): JSX.Element {

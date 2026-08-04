@@ -8,8 +8,9 @@ export { ArenaBloom, BLOOM_LAYER } from "./ArenaBloom";
 export { ArenaPulses } from "./ArenaPulses";
 export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail";
 export { ArenaControls } from "./ArenaControls";
+export { ArenaStadium } from "./ArenaStadium";
 export {
-  layoutArena, layoutEcho, layoutIndex, personSections, eraSections,
+  layoutArena, layoutEcho, layoutIndex, layoutStadium, personSections, eraSections,
 } from "./ArenaLayouts";
 export {
   AB, AE, BAND, BAND_COUNT, CS, ARENA_MS, ARENA_REDUCED_MS, ARENA_TIERS,

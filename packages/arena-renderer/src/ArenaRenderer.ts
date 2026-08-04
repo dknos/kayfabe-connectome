@@ -11,8 +11,9 @@
  * the one thing the Arena-to-Index transformation owes the reader, which is
  * that a named card can be followed across it.
  */
-import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
+import { ACESFilmicToneMapping, NoToneMapping, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { ArenaCards } from "./ArenaCards";
+import { ArenaStadium } from "./ArenaStadium";
 import { ArenaLabels, type ArenaLabelInput } from "./ArenaLabels";
 import { ArenaPicking } from "./ArenaPicking";
 import { ArenaRoutes } from "./ArenaRoutes";
@@ -21,7 +22,7 @@ import { ArenaPulses } from "./ArenaPulses";
 import { ArenaRail } from "./ArenaRail";
 import { ArenaControls } from "./ArenaControls";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
-import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
+import { eraSections, layoutArena, layoutEcho, layoutIndex, layoutStadium, personSections } from "./ArenaLayouts";
 import { railSegmentsFromYears } from "./ArenaRail";
 import {
   AB, AE, ARENA_TIERS, CS, easeQuintic, prominence,
@@ -41,11 +42,15 @@ const CAM: Record<ArenaFormation, readonly [number, number, number]> = {
   echo: [0, 0, 22],
   arena: [0, 7.5, 21],
   index: [0, -8, 26],
+  // Broadcast position: a crane cam over the front of the field, looking
+  // down its long axis so ring, boards and far stands stack like a hard cam.
+  stadium: [0, 13, 30],
 };
 const LOOK: Record<ArenaFormation, readonly [number, number, number]> = {
   echo: [0, 0.5, 0],
   arena: [0, 0.5, 0],
   index: [0, -8, 0],
+  stadium: [0, -0.5, -4],
 };
 
 export interface ArenaScope {
@@ -75,6 +80,7 @@ export class ArenaRenderer {
   readonly pulses: ArenaPulses;
   readonly rail: ArenaRail;
   readonly controls: ArenaControls;
+  readonly stadium: ArenaStadium;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -122,6 +128,7 @@ export class ArenaRenderer {
     this.pulses = new ArenaPulses(this.scene, ARENA_TIERS.high.pulses);
     this.rail = new ArenaRail(this.scene, 96);
     this.controls = new ArenaControls(this.camera, canvas);
+    this.stadium = new ArenaStadium(this.scene);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -218,11 +225,34 @@ export class ArenaRenderer {
           this.transition, this.pool, this.active, anchorId,
           this.scope.kind === "promotion" ? eraSections(this.active) : personSections(),
         )
+      : name === "stadium" ? layoutStadium(
+          this.transition, this.pool, this.active, anchorId,
+          this.scope.kind === "promotion" ? eraSections(this.active) : personSections(),
+        )
       : layoutIndex(
           this.transition, this.pool, this.active, anchorId,
           (c) => (this.scope!.kind === "promotion" ? c.era : bankLabel(c.bank)),
           this.camera.aspect,
         );
+    // The environment composes the Stadium: it appears with the formation and
+    // leaves with it, and the whole pipeline changes register — ACES roll-off
+    // for the lit building, and a bloom pass opened up for its emitters. Both
+    // are restored on the way out so the other formations render untouched.
+    const stadiumActive = name === "stadium";
+    if (stadiumActive !== this.stadium.isActive) {
+      this.stadium.setActive(stadiumActive);
+      this.renderer.toneMapping = stadiumActive ? ACESFilmicToneMapping : NoToneMapping;
+      this.bloom.setMode(stadiumActive ? "stadium" : "default");
+      (this.cards.material.uniforms.uLift as { value: number }).value = stadiumActive ? 1 : 0;
+    }
+    if (stadiumActive && this.scope) {
+      this.stadium.setSubject(
+        this.scope.anchorName,
+        this.scope.kind === "promotion"
+          ? `${this.active.length - 1} cards across its documented eras`
+          : `${this.active.length - 1} documented relationships`,
+      );
+    }
     this.frameCamera(name, immediate);
     this.transition.reducedMotion = this.reducedMotion;
     this.transition.commit(performance.now(), immediate);
@@ -232,7 +262,7 @@ export class ArenaRenderer {
     // across the Index they run over every row of a grid whose whole point is
     // even comparison, and the Echo is a source topology rather than a set of
     // relationships to this subject.
-    this.routes.bind(this.transition, this.pool, this.active, anchorId, name === "arena");
+    this.routes.bind(this.transition, this.pool, this.active, anchorId, name === "arena" || name === "stadium");
     // The fibre set is new, so nothing is pointed at on it yet.
     this.applyPulseFocus();
     this.buildRail();
@@ -348,6 +378,24 @@ export class ArenaRenderer {
     const dir = new Vector3(base[0] - look[0], base[1] - look[1], base[2] - look[2]);
     if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
     dir.normalize();
+
+    // The Stadium is framed by its BUILDING, not its cards: fitting the card
+    // bounds would push the camera out through the far stands to clear the
+    // bowl's back rows, and the preset already stands where a hard camera
+    // does. The reader's own controls take over from there.
+    if (name === "stadium") {
+      const position = new Vector3(base[0], base[1], base[2]);
+      const center = new Vector3(look[0], look[1], look[2]);
+      if (immediate) {
+        this.camCur.copy(position);
+        this.lookCur.copy(center);
+      }
+      this.camFrom.copy(this.camCur);
+      this.lookFrom.copy(this.lookCur);
+      this.camTo.copy(position);
+      this.lookTo.copy(center);
+      return;
+    }
 
     const bounds = this.layoutBounds();
     const center = bounds ? bounds.center : new Vector3(look[0], look[1], look[2]);
@@ -479,6 +527,7 @@ export class ArenaRenderer {
       // 120 Hz display as on a 60 Hz one.
       const dt = this.lastFrameMs > 0 ? Math.min(0.05, (now - this.lastFrameMs) / 1000) : 0;
       this.updateCamera(dt);
+      this.stadium.update(dt);
       // Routes stay attached to their cards while the formation travels, then
       // draw in over the tail of the transition.
       // Packets ride the routes only once those routes are actually drawn;
@@ -620,6 +669,7 @@ export class ArenaRenderer {
     this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
     this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.scene.remove(this.cards.mesh);
+    this.stadium.dispose();
     this.cards.dispose();
     this.routes.dispose();
     this.pulses.dispose();

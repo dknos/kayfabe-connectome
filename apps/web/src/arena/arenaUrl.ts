@@ -12,7 +12,7 @@ import { registerArenaUrl } from "../state/store";
  * governor may have chosen it without the reader ever asking — restoring one
  * machine's tier onto another would be restoring the wrong thing.
  */
-const FORMATIONS: ArenaFormation[] = ["echo", "arena", "index"];
+const FORMATIONS: ArenaFormation[] = ["echo", "arena", "index", "stadium"];
 
 let formation: ArenaFormation = "arena";
 let opened: string[] = [];

@@ -107,6 +107,28 @@ export class ArenaBloom {
     this.bloomPass.setSize(w, h);
   }
 
+  /**
+   * The Stadium formation opens the pass up.
+   *
+   * The default numbers are emphasis: tuned so a single halo reads without
+   * becoming a light source. The stadium is a LIT environment whose emitters —
+   * screens, light heads, LED strips, crowd flashes — joined the bloom layer
+   * deliberately, and at halo tuning they read as dead plastic. The closed
+   * list still holds: nothing blooms by threshold accident, because only
+   * layer members are ever rendered by the bloom pass at all.
+   */
+  setMode(mode: "default" | "stadium"): void {
+    if (mode === "stadium") {
+      this.bloomPass.strength = 0.55;
+      this.bloomPass.radius = 0.38;
+      this.bloomPass.threshold = 0.4;
+    } else {
+      this.bloomPass.strength = 0.32;
+      this.bloomPass.radius = 0.22;
+      this.bloomPass.threshold = 0.55;
+    }
+  }
+
   /** Park the halo on a card, or hide it. */
   showHaloAt(x: number, y: number, z: number, scale: number): void {
     this.halo.position.set(x, y, z);

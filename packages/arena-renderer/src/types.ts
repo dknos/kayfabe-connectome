@@ -91,7 +91,7 @@ export function prominence(strength: number, maxStrength: number): number {
   return 0.82 + t * 0.62;
 }
 
-export type ArenaFormation = "echo" | "arena" | "index";
+export type ArenaFormation = "echo" | "arena" | "index" | "stadium";
 
 export interface ArenaCard {
   id: string;
