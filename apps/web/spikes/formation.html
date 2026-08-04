@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arena spike 1 — formation morph</title>
+    <!-- inline so the spike never emits a favicon 404; the probe treats any
+         console error as a run failure -->
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #04060b; overflow: hidden; }
+      #gl { display: block; width: 100vw; height: 100vh; }
+      #hud {
+        position: fixed; left: 8px; top: 8px; z-index: 2;
+        font: 12px/1.5 ui-monospace, monospace; color: #9fb4c8;
+        background: rgba(4, 6, 11, 0.72); padding: 6px 9px; border-radius: 4px;
+        white-space: pre-wrap; pointer-events: none;
+      }
+      #keys { position: fixed; left: 8px; bottom: 8px; z-index: 2;
+        font: 11px/1.5 ui-monospace, monospace; color: #5c7089; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <div id="hud">loading…</div>
+    <div id="keys">1 echo · 2 arena · 3 index — development-only spike</div>
+    <script type="module">
+      import "./formation.ts";
+      addEventListener("keydown", (e) => {
+        const spike = window.__arenaSpike;
+        if (!spike) return;
+        if (e.key === "1") spike.setFormation("echo");
+        if (e.key === "2") spike.setFormation("arena");
+        if (e.key === "3") spike.setFormation("index");
+      });
+    </script>
+  </body>
+</html>
