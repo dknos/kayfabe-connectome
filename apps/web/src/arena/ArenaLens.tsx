@@ -13,6 +13,8 @@ import {
 import { pushUrl, useStore, writeUrl } from "../state/store";
 import { ArenaInspector } from "./ArenaInspector";
 import { defaultAnchorId, expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
+import { loadBeltIndex, type BeltIndex } from "./arenaBelts";
+import { ArenaGlyphKey } from "./ArenaGlyphKey";
 import { onArenaUrlRestore, setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
@@ -86,6 +88,27 @@ export function ArenaLens(): JSX.Element {
     })();
     return () => { cancelled = true; };
   }, [model, anchorId, isPromotion, tier]);
+
+  // Documented reigns, split singles/tag, for the card glyphs. Loaded once and
+  // never blocking: the arena renders the moment its scope exists and the
+  // championship marks appear when the record arrives.
+  //
+  // It goes to the RENDERER, not into the scope. Folding it into the cards
+  // gave the scope a new identity when the file landed, and the scope effect
+  // below re-runs the whole assembly — so every reader would have watched the
+  // arena build itself twice. Marks are semantics, and the renderer rewrites
+  // semantics in place.
+  const [belts, setBelts] = useState<BeltIndex | null>(null);
+  const beltsRef = useRef<BeltIndex | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadBeltIndex().then((index) => { if (!cancelled) setBelts(index); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    beltsRef.current = belts;
+    if (belts) rendererRef.current?.setBelts(belts);
+  }, [belts]);
 
   const baseScope = isPromotion ? promoScope : personScopeMemo;
   // Drill-down is applied on top of the built scope rather than baked into it,
@@ -167,6 +190,8 @@ export function ArenaLens(): JSX.Element {
     // The governor can drop the tier on its own; the control must follow it
     // rather than keep displaying a setting the renderer has abandoned.
     renderer.onTierChanged = (next) => setTier(next);
+    // A renderer created after the record arrived — a remount — still gets it.
+    if (beltsRef.current) renderer.setBelts(beltsRef.current);
     renderer.start();
     const onResize = (): void => renderer.resize();
     window.addEventListener("resize", onResize);
@@ -325,6 +350,10 @@ export function ArenaLens(): JSX.Element {
           onOpenArray={openArray}
         />
       )}
+      {/* Echo prints no marks — its chips are a source topology, drawn
+          subdued — so it gets no key either, rather than one explaining
+          symbols that are not on screen. */}
+      {scope && formation !== "echo" && <ArenaGlyphKey person={scope.kind === "person"} />}
       {scope && (
         <div className="arena-readout">
           <strong>{scope.anchorName}</strong>

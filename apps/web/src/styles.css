@@ -1312,6 +1312,19 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
 
 .arena-readout .arena-caveat { color: #d8a657; }
 
+/* The key to the card marks. Kept on the opposite corner from the readout:
+   the Index formation fills the left column to the bottom of the viewport, and
+   a key stacked above the readout there hid a whole row of cards. */
+.arena-key {
+  position: absolute; right: 12px; bottom: 12px; z-index: 3;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  justify-content: flex-end; max-width: min(58vw, 700px);
+  background: rgba(4, 6, 11, 0.72); padding: 4px 10px; border-radius: 6px;
+  color: #9fb4c8; font-size: 11px;
+}
+.arena-key-item { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
+.arena-key-glyph { width: 17px; height: 16px; display: block; }
+
 /* Where the reader has been, directly under the controls; the drill-down
    crumbs sit below it because a drill-down happens INSIDE a subject. */
 .arena-trail {

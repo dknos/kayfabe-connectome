@@ -25,8 +25,8 @@ import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, layoutStadium, personSections } from "./ArenaLayouts";
 import { railSegmentsFromYears } from "./ArenaRail";
 import {
-  AB, AE, ARENA_TIERS, CS, easeQuintic, prominence,
-  type ArenaCard, type ArenaFormation, type ArenaLayoutResult,
+  AB, AE, AG, ARENA_TIERS, CS, easeQuintic, prominence,
+  type ArenaBeltIndex, type ArenaCard, type ArenaFormation, type ArenaLayoutResult,
   type ArenaPickResult, type ArenaQualityTier,
 } from "./types";
 
@@ -67,6 +67,32 @@ export interface ArenaScope {
   titleYears?: { from: number; counts: number[] };
 }
 
+/**
+ * Which marks a card prints.
+ *
+ * The figure says what the CORPUS documents about this pair, so it is read
+ * from the seating bank and only in a person scope: a promotion scope seats
+ * everyone as MIXED because they share a promotion, not an opponent, and
+ * printing tag figures across it would invent 1,087 partnerships. The belts
+ * are the person's own documented reigns, split by whether the reign was held
+ * alone or with a partner, and stay absent until that record has been read
+ * rather than being guessed from the undifferentiated reign count.
+ *
+ * An aggregate stands for a group rather than a person, so it prints nothing:
+ * there is no single career to mark.
+ */
+function glyphMask(card: ArenaCard, scope: ArenaScope | null, belts: ArenaBeltIndex | null): number {
+  if (card.represents || !card.id.startsWith("p:")) return AG.NONE;
+  const partner = scope?.kind === "person"
+    && card.id !== scope.anchorId
+    && (card.bank === AB.SAME || card.bank === AB.MIXED);
+  let mask = partner ? AG.FIGURE_PAIR : AG.FIGURE_SOLO;
+  const counts = belts?.get(card.id);
+  if (counts && counts.singles > 0) mask |= AG.BELT_SINGLES;
+  if (counts && counts.tag > 0) mask |= AG.BELT_TAG;
+  return mask;
+}
+
 export class ArenaRenderer {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(46, 1, 0.1, 400);
@@ -91,6 +117,7 @@ export class ArenaRenderer {
   private readonly lookCur = new Vector3();
 
   private scope: ArenaScope | null = null;
+  private belts: ArenaBeltIndex | null = null;
   private active: ArenaCard[] = [];
   private byId = new Map<string, ArenaCard>();
   private formationName: ArenaFormation = "arena";
@@ -446,8 +473,31 @@ export class ArenaRenderer {
         maxStrength > 0 ? prominence(card.strength, maxStrength) - 0.82 : 0,
       );
       this.cards.setBillboard(slot, this.formationName === "echo" && card.id !== this.scope?.anchorId);
+      this.cards.setGlyph(slot, glyphMask(card, this.scope, this.belts));
     }
     this.cards.commitSemantics();
+  }
+
+  /** The documented reigns behind the championship marks. Applied in place:
+   *  the population has not changed, so the assembly must not replay. */
+  setBelts(index: ArenaBeltIndex): void {
+    this.belts = index;
+    this.writeSemantics();
+  }
+
+  /** What the glyph strip is actually printing, by mark. The seam the QA probe
+   *  reads: a screenshot cannot tell an unset attribute from a card that
+   *  honestly has no championships. */
+  glyphCensus(): { figures: number; pairs: number; belts: number; tagBelts: number } {
+    let figures = 0, pairs = 0, belts = 0, tagBelts = 0;
+    for (const card of this.active) {
+      const mask = glyphMask(card, this.scope, this.belts);
+      if (mask & AG.FIGURE_SOLO) figures++;
+      if (mask & AG.FIGURE_PAIR) pairs++;
+      if (mask & AG.BELT_SINGLES) belts++;
+      if (mask & AG.BELT_TAG) tagBelts++;
+    }
+    return { figures, pairs, belts, tagBelts };
   }
 
   /** Point the packet stream at the drawn fibre, or stop it if there is none. */

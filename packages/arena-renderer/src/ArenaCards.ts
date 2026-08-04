@@ -25,7 +25,7 @@ import {
   PlaneGeometry, ShaderMaterial, type Material,
 } from "three";
 import type { ArenaTransition } from "./ArenaTransition";
-import { CS } from "./types";
+import { CARD_H, CARD_W, CS } from "./types";
 
 const VERTEX_HEAD = /* glsl */ `
   attribute float aBank;
@@ -34,6 +34,60 @@ const VERTEX_HEAD = /* glsl */ `
   attribute float aProgress;
   attribute float aState;
   attribute float aBillboard;
+  attribute float aGlyph;
+`;
+
+/**
+ * The glyph strip: signed-distance marks printed on the card's top-right.
+ *
+ * Drawn procedurally in the same fragment shader rather than from a sprite
+ * atlas, for the same reason the card face is procedural — one material, one
+ * draw call for the whole population, and no texture to keep in step with the
+ * card's own resolution.
+ *
+ * Two constraints on any mark added here:
+ *
+ *   symmetry   the material is DoubleSide, so the back half of the horseshoe
+ *              draws the whole face mirrored. Every mark is left-right
+ *              symmetric by construction, which makes the mirroring invisible
+ *              — an asymmetric glyph would read backwards from half the arena.
+ *
+ *   height-units  UV is a unit square but the card is CARD_W x CARD_H world
+ *              units, so drawing in raw UV would squash a circle into an
+ *              ellipse. Marks are laid out in `g`, where x is scaled by the
+ *              card's aspect and both axes measure fractions of card HEIGHT.
+ */
+const GLYPH_GLSL = /* glsl */ `
+  float sdBox(vec2 q, vec2 b) {
+    vec2 d = abs(q) - b;
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+  }
+  /** A wrestler: head over shoulders. \`pair\` draws two, for a documented
+   *  tag partner. */
+  float sdFigure(vec2 q, float pair) {
+    float dx = pair > 0.5 ? 0.062 : 0.0;
+    float scale = pair > 0.5 ? 0.80 : 1.0;
+    float d = 1e9;
+    for (int i = 0; i < 2; i++) {
+      if (i == 1 && pair < 0.5) break;
+      vec2 c = vec2(q.x + (i == 0 ? -dx : dx), q.y);
+      d = min(d, length(c - vec2(0.0, 0.052 * scale)) - 0.038 * scale);
+      d = min(d, sdBox(c - vec2(0.0, -0.045 * scale), vec2(0.052, 0.050) * scale) - 0.016 * scale);
+    }
+    return d;
+  }
+  /** A belt: strap with a centre plate, or with two plates for a reign the
+   *  corpus records as held by a team. */
+  float sdBelt(vec2 q, float tag) {
+    float d = sdBox(q, vec2(0.115, 0.020)) - 0.010;
+    if (tag > 0.5) {
+      d = min(d, length(q - vec2(-0.052, 0.0)) - 0.042);
+      d = min(d, length(q - vec2(0.052, 0.0)) - 0.042);
+    } else {
+      d = min(d, length(q) - 0.056);
+    }
+    return d;
+  }
 `;
 
 export class ArenaCards {
@@ -52,6 +106,8 @@ export class ArenaCards {
    *  formation is a compressed source topology, and full-size plaques pitched
    *  at arbitrary angles read as scattered debris rather than as a cloud. */
   readonly aBillboard: InstancedBufferAttribute;
+  /** Packed AG bitmask: which marks this card prints. */
+  readonly aGlyph: InstancedBufferAttribute;
 
   private readonly matrices: Float32Array;
 
@@ -64,8 +120,9 @@ export class ArenaCards {
     this.aState = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     this.aId = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     this.aBillboard = new InstancedBufferAttribute(new Float32Array(capacity), 1);
+    this.aGlyph = new InstancedBufferAttribute(new Float32Array(capacity), 1);
     for (let i = 0; i < capacity; i++) (this.aId.array as Float32Array)[i] = i + 1;
-    for (const a of [this.aBank, this.aEmphasis, this.aStrength, this.aProgress, this.aState, this.aBillboard]) {
+    for (const a of [this.aBank, this.aEmphasis, this.aStrength, this.aProgress, this.aState, this.aBillboard, this.aGlyph]) {
       a.setUsage(DynamicDrawUsage);
     }
     this.geometry.setAttribute("aBank", this.aBank);
@@ -75,6 +132,7 @@ export class ArenaCards {
     this.geometry.setAttribute("aState", this.aState);
     this.geometry.setAttribute("aId", this.aId);
     this.geometry.setAttribute("aBillboard", this.aBillboard);
+    this.geometry.setAttribute("aGlyph", this.aGlyph);
 
     this.material = new ShaderMaterial({
       transparent: true,
@@ -84,9 +142,10 @@ export class ArenaCards {
         ${VERTEX_HEAD}
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
+        varying float vGlyph;
         void main() {
           vUv = uv; vBank = aBank; vEmphasis = aEmphasis; vStrength = aStrength;
-          vBillboard = aBillboard;
+          vBillboard = aBillboard; vGlyph = aGlyph;
           // Retained cards stay fully opaque so they remain trackable through
           // the whole morph; only entering and leaving cards dissolve.
           vFade = aState < 0.5 ? 0.0
@@ -110,8 +169,12 @@ export class ArenaCards {
         uniform vec3 uOpposed; uniform vec3 uSame; uniform vec3 uMixed; uniform vec3 uCenter;
         uniform vec3 uAggregate;
         uniform float uLift;
+        uniform vec3 uGold; uniform vec3 uInk;
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
+        varying float vGlyph;
+
+        ${GLYPH_GLSL}
 
         void main() {
           if (vFade <= 0.003) discard;
@@ -159,6 +222,38 @@ export class ArenaCards {
           // every other formation, which keeps them rendering untouched.
           col += (accent * 0.20 + vec3(0.05, 0.06, 0.08)) * uLift;
 
+          // The glyph strip. Echo is skipped deliberately: its chips are a
+          // compressed source topology drawn subdued, and printing marks on
+          // them puts detail where the reading is density.
+          if (vGlyph > 0.5 && vBillboard < 0.5) {
+            // Height-units, origin at the card's top-right corner.
+            vec2 g = vec2((p.x - 1.0) * ${(CARD_W / CARD_H).toFixed(4)}, p.y - 1.0);
+            float m = vGlyph;
+            float solo = mod(m, 2.0);
+            float pair = mod(floor(m / 2.0), 2.0);
+            float belt = mod(floor(m / 4.0), 2.0);
+            float tagBelt = mod(floor(m / 8.0), 2.0);
+
+            // Right-aligned, belts outermost so the championship marks sit at
+            // the card's corner where they survive the smallest on-screen size.
+            float x = -0.20;
+            float cy = -0.21;
+            float dBelt = 1e9;
+            if (tagBelt > 0.5) { dBelt = min(dBelt, sdBelt(g - vec2(x, cy), 1.0)); x -= 0.30; }
+            if (belt > 0.5) { dBelt = min(dBelt, sdBelt(g - vec2(x, cy), 0.0)); x -= 0.30; }
+            float dFig = 1e9;
+            if (pair > 0.5) dFig = sdFigure(g - vec2(x, cy), 1.0);
+            else if (solo > 0.5) dFig = sdFigure(g - vec2(x, cy), 0.0);
+
+            float aa = max(fwidth(g.x), 0.0015) * 1.1;
+            float mFig = smoothstep(aa, -aa, dFig);
+            float mBelt = smoothstep(aa, -aa, dBelt);
+            // Marks are printed, not lit: they replace the face rather than
+            // adding to it, so a card never brightens by being decorated.
+            col = mix(col, uInk, mFig * (0.55 + vEmphasis * 0.45));
+            col = mix(col, uGold, mBelt * (0.70 + vEmphasis * 0.30));
+          }
+
           // Echo is a SOURCE, not a reading: its chips stay quiet so the arena
           // that peels out of them is what the eye follows.
           float subdued = vBillboard > 0.5 ? 0.45 : 1.0;
@@ -173,6 +268,10 @@ export class ArenaCards {
         uMixed: { value: [0.91, 0.87, 0.81] },
         uAggregate: { value: [0.62, 0.66, 0.74] },
         uLift: { value: 0 },
+        // Championship marks are the only gold on a card face, so a belt reads
+        // as a belt across the whole arena without a legend lookup.
+        uGold: { value: [1.0, 0.80, 0.38] },
+        uInk: { value: [0.78, 0.82, 0.90] },
       },
     });
 
@@ -228,11 +327,19 @@ export class ArenaCards {
     (this.aStrength.array as Float32Array)[slot] = strength01;
   }
 
+  /** AG bitmask. Cleared with the rest of the semantics, because the slot pool
+   *  recycles instances across subjects and a stale mask would print the
+   *  previous occupant's championships on the new one. */
+  setGlyph(slot: number, mask: number): void {
+    (this.aGlyph.array as Float32Array)[slot] = mask;
+  }
+
   commitSemantics(): void {
     this.aBillboard.needsUpdate = true;
     this.aBank.needsUpdate = true;
     this.aEmphasis.needsUpdate = true;
     this.aStrength.needsUpdate = true;
+    this.aGlyph.needsUpdate = true;
   }
 
   clearSemantics(): void {
@@ -240,6 +347,7 @@ export class ArenaCards {
     (this.aBank.array as Float32Array).fill(0);
     (this.aEmphasis.array as Float32Array).fill(0);
     (this.aStrength.array as Float32Array).fill(0);
+    (this.aGlyph.array as Float32Array).fill(0);
   }
 
   isLive(slot: number): boolean {

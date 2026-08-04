@@ -26,6 +26,56 @@ export const AB = {
 } as const;
 export type ArenaBank = (typeof AB)[keyof typeof AB];
 
+/**
+ * Card glyphs — the small marks printed on a plaque's top-right.
+ *
+ * A bitmask rather than an enum because a card can be several of these at
+ * once: a documented tag partner who also held a singles belt and a tag belt
+ * is three marks, and collapsing them would be a claim the corpus does not
+ * make. Packed into ONE float attribute and decoded in the fragment shader,
+ * so the whole population still draws in a single instanced call.
+ *
+ * FIGURE_SOLO / FIGURE_PAIR are mutually exclusive: the pair figure means the
+ * corpus documents a tag partnership with the subject, the solo figure means
+ * it documents only opposition (or the card is not seated by relationship at
+ * all, as in a promotion scope). The belt marks are per-person reign counts
+ * from `entities/championships.json`, split by how many people held the reign
+ * — which is the only honest source for "tag title" in this corpus. Edge-level
+ * `formMask` cannot answer it: it aggregates every match in a pair, so a
+ * singles title match beside an unrelated tag match would read as a tag title.
+ */
+export const AG = {
+  NONE: 0,
+  /** documented opposition, or a card not seated by relationship */
+  FIGURE_SOLO: 1,
+  /** documented tag partnership with the subject */
+  FIGURE_PAIR: 2,
+  /** at least one documented reign held alone */
+  BELT_SINGLES: 4,
+  /** at least one documented reign held with a partner */
+  BELT_TAG: 8,
+} as const;
+
+/**
+ * Documented reigns per person, split by how many people held them.
+ *
+ * Held by the renderer rather than copied onto the cards. The record arrives
+ * on its own schedule — it is a separate file, read once — and folding it into
+ * the scope would make a card set that has not changed look new, which
+ * re-runs the whole assembly a second time the moment it lands. Glyphs are
+ * semantics, and semantics are re-writable in place.
+ *
+ * Absent means "the corpus documents no reign", which is the same as the
+ * record not having arrived yet: both draw no belt, and neither guesses one.
+ */
+export interface ArenaBeltCounts {
+  /** reigns held alone */
+  singles: number;
+  /** reigns held with at least one other person */
+  tag: number;
+}
+export type ArenaBeltIndex = ReadonlyMap<string, ArenaBeltCounts>;
+
 /** Emphasis ladder. Doubles as the label-priority order. */
 export const AE = {
   AMBIENT: 0,

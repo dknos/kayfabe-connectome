@@ -13,10 +13,10 @@ export {
   layoutArena, layoutEcho, layoutIndex, layoutStadium, personSections, eraSections,
 } from "./ArenaLayouts";
 export {
-  AB, AE, BAND, BAND_COUNT, CS, ARENA_MS, ARENA_REDUCED_MS, ARENA_TIERS,
+  AB, AE, AG, BAND, BAND_COUNT, CS, ARENA_MS, ARENA_REDUCED_MS, ARENA_TIERS,
   FORMATION_WINDOW, FORMATION_DELAY_MAX, CARD_W, CARD_H,
   bandDelay, easeQuintic, elementProgress, prominence,
-  type ArenaBank, type ArenaCard, type ArenaEmphasis, type ArenaFormation,
+  type ArenaBank, type ArenaBeltCounts, type ArenaBeltIndex, type ArenaCard, type ArenaEmphasis, type ArenaFormation,
   type ArenaLayoutResult, type ArenaPickResult, type ArenaQualityTier,
   type ArenaSection, type ArenaTierBudget,
 } from "./types";
