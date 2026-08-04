@@ -16,7 +16,9 @@ import {
   Scene, ShaderMaterial, Vector3, WebGLRenderer,
 } from "three";
 import { CS, FormationTransition, SlotPool, easeQuintic } from "./formation-transition";
-import { layoutArena, layoutEcho, layoutIndex, type LayoutResult } from "./formation-layouts";
+import {
+  eraSections, layoutArena, layoutEcho, layoutIndex, personSections, type LayoutResult,
+} from "./formation-layouts";
 import { budgetSlice, loadSpikeCorpus, type SpikeCard, type SpikeCorpus, type SpikeScope } from "./spike-corpus";
 
 const CAPACITY = 640; // 600-card budget plus headroom for leaving cards
@@ -112,6 +114,11 @@ scene.add(mesh);
 const transition = new FormationTransition(CAPACITY);
 const pool = new SlotPool(CAPACITY);
 const matrices = mesh.instanceMatrix.array as Float32Array;
+// A leaving card's slot returns to the pool only after its exit has played.
+transition.setOnReleased((slot) => {
+  const id = pool.idOf(slot);
+  if (id) pool.release(id);
+});
 
 type FormationName = "echo" | "arena" | "index";
 let corpus: SpikeCorpus | null = null;
@@ -121,7 +128,9 @@ let anchorId = "";
 let formation: FormationName = "echo";
 let lastLayout: LayoutResult | null = null;
 let lastRetargetMs = 0;
+let lastDropped = 0;
 let cpuEmaMs = 0;
+let renderEmaMs = 0;
 
 /** Per-instance semantic attributes are rewritten only when the population
  *  changes, never per frame. */
@@ -152,11 +161,15 @@ function applyFormation(name: FormationName, immediate = false): void {
     scope!.kind === "promotion" ? (card.era ?? "unknown") : (card.bank ?? "unknown");
   lastLayout =
     name === "echo" ? layoutEcho(transition, pool, active, anchorId)
-    : name === "arena" ? layoutArena(transition, pool, active, anchorId)
+    : name === "arena" ? layoutArena(
+        transition, pool, active, anchorId,
+        scope.kind === "promotion" ? eraSections(active) : personSections(),
+      )
     : layoutIndex(transition, pool, active, anchorId, groupOf);
   frameCamera(name, immediate);
   const stats = transition.commit(performance.now(), immediate);
   lastRetargetMs = stats.retargetMs;
+  lastDropped = lastLayout.dropped;
   writeInstanceAttributes();
   updateCamera();
 }
@@ -236,8 +249,16 @@ function tick(now: number): void {
   const cpu = performance.now() - t0;
   cpuEmaMs = cpuEmaMs === 0 ? cpu : cpuEmaMs * 0.9 + cpu * 0.1;
 
+  // rAF is vsync-clamped and reads a flat 16.7 ms for every configuration
+  // tested here, so it can gate a budget but cannot compare two render stacks.
+  // This is the unclamped CPU-side signal; it measures command submission, not
+  // GPU execution, and is labelled that way wherever it is quoted.
+  const r0 = performance.now();
   renderer.render(scene, camera);
-  if (!animating && hud.dataset.settled !== formation) hud.dataset.settled = formation;
+  const renderMs = performance.now() - r0;
+  renderEmaMs = renderEmaMs === 0 ? renderMs : renderEmaMs * 0.9 + renderMs * 0.1;
+  void animating;
+  if (!transition.animating && hud.dataset.settled !== formation) hud.dataset.settled = formation;
   hud.textContent =
     `${formation}  cards=${active.length}  live=${pool.liveCount}  ` +
     `layout=${lastLayout?.layoutMs.toFixed(2)}ms  retarget=${lastRetargetMs.toFixed(2)}ms  ` +
@@ -281,7 +302,31 @@ async function boot(): Promise<void> {
     ready: true,
     scopes: () => Object.keys(corpus?.scopes ?? {}),
     select: (key: string, budget: number) => selectScope(key, budget),
+    /** Change the represented population WITHOUT rebuilding the slot mapping.
+     *  This is the drill-down / aggregate-expand path, and the only one that
+     *  exercises enter, leave, slot release and slot re-acquisition. */
+    setBudget: (budget: number) => {
+      if (!scope) return;
+      active = budgetSlice(scope, budget);
+      applyFormation(formation);
+    },
     setFormation: (name: FormationName) => applyFormation(name),
+    churnStats: () => ({ ...transition.lastStats }),
+    freeSlots: () => CAPACITY - pool.liveCount,
+    slotOf: (id: string) => pool.slotOf(id) ?? -1,
+    renderEmaMs: () => renderEmaMs,
+    /** World-space position, so a path-curvature claim can be made about the
+     *  cards rather than about a camera that is itself moving. */
+    cardWorldPos: (id: string) => {
+      const slot = pool.slotOf(id);
+      if (slot === undefined) return null;
+      const i3 = slot * 3;
+      return { x: transition.posCur[i3]!, y: transition.posCur[i3 + 1]!, z: transition.posCur[i3 + 2]! };
+    },
+    timerQuery: () => {
+      const gl = renderer.getContext() as WebGL2RenderingContext;
+      return Boolean(gl.getExtension("EXT_disjoint_timer_query_webgl2"));
+    },
     formation: () => formation,
     animating: () => transition.animating,
     cardCount: () => active.length,
@@ -291,7 +336,7 @@ async function boot(): Promise<void> {
     cpuEmaMs: () => cpuEmaMs,
     drawCalls: () => renderer.info.render.calls,
     notes: () => lastLayout?.notes ?? [],
-    dropped: () => lastLayout?.dropped ?? 0,
+    dropped: () => lastDropped,
     resetFrames: () => { frameDeltas.length = 0; },
     frameStats: () => ({
       samples: frameDeltas.length,

@@ -43,7 +43,7 @@ function writeCard(
   t: FormationTransition, slot: number,
   x: number, y: number, z: number,
   yaw: number, pitch: number,
-  scale: number, band: number,
+  scale: number, band: number, bow = 0,
 ): void {
   const i3 = slot * 3;
   t.posTo[i3] = x;
@@ -54,6 +54,7 @@ function writeCard(
   t.scaleTo[i3 + 2] = 1;
   writeQuat(t, slot, yaw, pitch);
   t.delay[slot] = bandDelay(band);
+  t.bow[slot] = bow;
   t.present[slot] = 1;
 }
 
@@ -110,6 +111,7 @@ export function layoutEcho(
  */
 export function layoutArena(
   t: FormationTransition, pool: SlotPool, cards: SpikeCard[], anchorId: string,
+  sections: ArenaSection[],
 ): LayoutResult {
   const t0 = performance.now();
   beginLayout(t);
@@ -123,19 +125,11 @@ export function layoutArena(
     seated++;
   }
 
-  // Front (mixed) reads first, so it takes the shallowest arc; opposition and
-  // partnership take the two flanks. Angles are measured from center stage.
-  const BANKS: { key: SpikeCard["bank"]; from: number; to: number }[] = [
-    { key: "mixed", from: -0.34, to: 0.34 },
-    { key: "opposed", from: 0.42, to: 2.44 },
-    { key: "same", from: -2.44, to: -0.42 },
-  ];
   const maxStrength = cards.reduce((m, c) => Math.max(m, c.strength), 0);
 
-  for (const bank of BANKS) {
-    const members = cards.filter((c) => c.bank === bank.key && c.id !== anchorId);
+  for (const section of sections) {
+    const members = cards.filter((c) => c.id !== anchorId && section.match(c));
     if (members.length === 0) continue;
-    // Widest tier first keeps the strongest cards nearest the stage.
     const perTier = Math.max(6, Math.ceil(Math.sqrt(members.length) * 1.7));
     for (let i = 0; i < members.length; i++) {
       const card = members[i]!;
@@ -145,18 +139,64 @@ export function layoutArena(
       const seat = i % perTier;
       const count = Math.min(perTier, members.length - tier * perTier);
       const f = count === 1 ? 0.5 : seat / (count - 1);
-      const angle = bank.from + (bank.to - bank.from) * f;
+      const angle = section.from + (section.to - section.from) * f;
       const radius = 6.4 + tier * 1.85;
       const x = Math.sin(angle) * radius;
       const z = Math.cos(angle) * radius * 0.82;
       const y = -0.4 + tier * 1.02;
-      writeCard(t, slot, x, y, z, angle + Math.PI, -0.13, prominence(card.strength, maxStrength), BAND.DIRECT);
+      writeCard(
+        t, slot, x, y, z, angle + Math.PI, -0.13,
+        prominence(card.strength, maxStrength), BAND.DIRECT, 1,
+      );
       seated++;
     }
-    notes.push(`${bank.key}: ${members.length} across ${Math.ceil(members.length / perTier)} tiers`);
+    notes.push(`${section.key}: ${members.length} across ${Math.ceil(members.length / perTier)} tiers`);
   }
   if (dropped > 0) notes.push(`${dropped} cards exceeded the instance budget and were not seated`);
   return { seated, dropped, layoutMs: performance.now() - t0, notes };
+}
+
+export interface ArenaSection {
+  key: string;
+  /** angular span, radians, measured from center stage */
+  from: number;
+  to: number;
+  match: (card: SpikeCard) => boolean;
+}
+
+/**
+ * A person scope seats by documented relationship: mixed takes the shallow
+ * front arc because it reads first, opposition and partnership take the two
+ * flanks.
+ */
+export function personSections(): ArenaSection[] {
+  return [
+    { key: "mixed", from: -0.34, to: 0.34, match: (c) => c.bank === "mixed" },
+    { key: "opposed", from: 0.42, to: 2.44, match: (c) => c.bank === "opposed" },
+    { key: "same", from: -2.44, to: -0.42, match: (c) => c.bank === "same" },
+  ];
+}
+
+/**
+ * A promotion scope has no relationship banks at all — its cards carry an era,
+ * not an opponent/partner split. SPIKE 1 caught this the hard way: reusing the
+ * bank sections for pr:c8 matched nothing and seated exactly one card while
+ * still reporting a full slot count, because unreleased slots masked it.
+ *
+ * Eras fan chronologically left to right across the horseshoe, which is the
+ * "decade sections open like a chronological fan" reading.
+ */
+export function eraSections(cards: SpikeCard[]): ArenaSection[] {
+  const eras = [...new Set(cards.map((c) => c.era ?? "unknown"))].sort();
+  const SPAN_FROM = -2.44;
+  const SPAN_TO = 2.44;
+  const width = (SPAN_TO - SPAN_FROM) / Math.max(1, eras.length);
+  return eras.map((era, i) => ({
+    key: era,
+    from: SPAN_FROM + i * width + width * 0.06,
+    to: SPAN_FROM + (i + 1) * width - width * 0.06,
+    match: (c: SpikeCard) => (c.era ?? "unknown") === era,
+  }));
 }
 
 /**

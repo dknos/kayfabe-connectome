@@ -204,6 +204,89 @@ try {
   results.push(interruptVerdict);
   if (!interruptVerdict.continuous) notes.push(`FAIL: interruption seam ${interrupted.seamNdc.toFixed(4)} vs max ordinary step ${interrupted.maxOrdinaryStepNdc.toFixed(4)}`);
 
+  // ---- population churn: enter, leave, slot release and re-acquisition ----
+  // Every scenario above holds the population fixed, so leaving is always 0 and
+  // the shader's exit branch never runs. Drill-down is the real case: seat 600,
+  // collapse to the top 360, expand back. If leaving slots are never released
+  // the pool drains and cards start being silently dropped.
+  await page.evaluate(() => window.__arenaSpike.select("promotion:pr:c8", 600));
+  await settle();
+  await page.evaluate(() => window.__arenaSpike.setFormation("arena"));
+  await settle();
+  const churn = await page.evaluate(async () => {
+    const spike = window.__arenaSpike;
+    const trackedId = "p:d7fbacefc";
+    const slotBefore = spike.slotOf(trackedId);
+    const freeBefore = spike.freeSlots();
+    spike.setBudget(360);
+    const collapse = spike.churnStats();
+    while (spike.animating()) await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const freeAfterCollapse = spike.freeSlots();
+    spike.setBudget(600);
+    const expand = spike.churnStats();
+    while (spike.animating()) await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    return {
+      slotBefore, freeBefore, collapse, expand, freeAfterCollapse,
+      freeAfterExpand: spike.freeSlots(),
+      slotAfter: spike.slotOf(trackedId),
+      droppedAfterExpand: spike.dropped(),
+      liveAfter: spike.liveSlots(),
+    };
+  });
+  const churnVerdict = {
+    check: "drill-down churn releases and re-acquires slots",
+    ...churn,
+    leavingHappened: churn.collapse.leaving > 0,
+    enteringHappened: churn.expand.entering > 0,
+    slotsReclaimed: churn.freeAfterCollapse > churn.freeBefore,
+    noDropsAfterRoundTrip: churn.droppedAfterExpand === 0,
+    // A retained card must keep its identity across the round trip.
+    trackedKeptSlot: churn.slotBefore === churn.slotAfter,
+  };
+  console.log(JSON.stringify(churnVerdict));
+  results.push(churnVerdict);
+  if (!churnVerdict.leavingHappened) notes.push("FAIL: collapsing the population produced no leaving cards");
+  if (!churnVerdict.enteringHappened) notes.push("FAIL: expanding the population produced no entering cards");
+  if (!churnVerdict.slotsReclaimed) notes.push("FAIL: leaving cards never returned their slots to the pool");
+  if (!churnVerdict.noDropsAfterRoundTrip) notes.push(`FAIL: ${churn.droppedAfterExpand} cards dropped after a round trip`);
+  if (!churnVerdict.trackedKeptSlot) notes.push(`FAIL: tracked card changed slot ${churn.slotBefore} -> ${churn.slotAfter}`);
+
+  // ---- world-space path shape ----
+  // Screen-space path length cannot distinguish a curved card path from a
+  // straight path bent by a moving camera, so measure the bow in world space.
+  // Measured on the ASSEMBLY leg (Echo -> Arena), which is the transition the
+  // spec asks to sweep. Index is deliberately a flat snap into alignment, so
+  // measuring the bow there would only prove that a straight target is straight.
+  await page.evaluate(() => window.__arenaSpike.select("person:p:d7fbacefc", 203));
+  await settle();
+  await page.evaluate(() => window.__arenaSpike.setFormation("echo"));
+  await settle();
+  const bow = await page.evaluate(async () => {
+    const spike = window.__arenaSpike;
+    const path = [];
+    spike.setFormation("arena");
+    for (let i = 0; i < 220; i++) {
+      await new Promise(requestAnimationFrame);
+      const p = spike.cardWorldPos("p:c865d980b");
+      if (p) path.push(p);
+      if (!spike.animating()) break;
+    }
+    const d = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    let arc = 0;
+    for (let i = 1; i < path.length; i++) arc += d(path[i - 1], path[i]);
+    const chord = path.length > 1 ? d(path[0], path[path.length - 1]) : 0;
+    return { samples: path.length, arcWorld: arc, chordWorld: chord };
+  });
+  const bowVerdict = {
+    check: "world-space path shape",
+    ...bow,
+    bowRatio: bow.chordWorld > 0 ? Number((bow.arcWorld / bow.chordWorld).toFixed(4)) : 0,
+  };
+  console.log(JSON.stringify(bowVerdict));
+  results.push(bowVerdict);
+
   // ---- allocation proxy: heap across many retargets ----
   const heap = await page.evaluate(async () => {
     const spike = window.__arenaSpike;

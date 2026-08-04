@@ -124,6 +124,13 @@ export class FormationTransition {
   readonly posFrom: Float32Array;
   readonly posCur: Float32Array;
   readonly posTo: Float32Array;
+  /** Quadratic control point per card. The spec asks for curved approach
+   *  paths; a straight lerp produces a world-space arc/chord ratio of exactly
+   *  1.0000, which SPIKE 1 measured, so the bow has to be explicit state
+   *  rather than an illusion supplied by a moving camera. */
+  readonly posCtrl: Float32Array;
+  /** 0 = straight lerp, 1 = full bow through the control point */
+  readonly bow: Float32Array;
   readonly quatFrom: Float32Array;
   readonly quatCur: Float32Array;
   readonly quatTo: Float32Array;
@@ -141,12 +148,17 @@ export class FormationTransition {
   private startMs = 0;
   private durMs = FORMATION_MS;
   private firstFormation = true;
+  private cleanupPending = false;
+  private onReleased: ((slot: number) => void) | null = null;
   reducedMotion = false;
+  lastStats: FormationStats = { layoutMs: 0, retargetMs: 0, entering: 0, retaining: 0, leaving: 0, dropped: 0 };
 
   constructor(readonly capacity: number) {
     this.posFrom = new Float32Array(capacity * 3);
     this.posCur = new Float32Array(capacity * 3);
     this.posTo = new Float32Array(capacity * 3);
+    this.posCtrl = new Float32Array(capacity * 3);
+    this.bow = new Float32Array(capacity);
     this.quatFrom = new Float32Array(capacity * 4);
     this.quatCur = new Float32Array(capacity * 4);
     this.quatTo = new Float32Array(capacity * 4);
@@ -248,11 +260,29 @@ export class FormationTransition {
       this.quatFrom.set(this.quatTo);
       this.scaleFrom.set(this.scaleTo);
     }
+    // Control points are derived here because a layout knows only where a card
+    // is going, never where it currently is. The bow is radial: cards sweep
+    // outward around the arena axis rather than cutting through the middle,
+    // which is what stops a formation change looking like a shuffled deck.
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.state[i] === CS.ABSENT || this.bow[i]! <= 0) continue;
+      const i3 = i * 3;
+      const fx = this.posFrom[i3]!, fy = this.posFrom[i3 + 1]!, fz = this.posFrom[i3 + 2]!;
+      const tx = this.posTo[i3]!, ty = this.posTo[i3 + 1]!, tz = this.posTo[i3 + 2]!;
+      const mx = (fx + tx) / 2, my = (fy + ty) / 2, mz = (fz + tz) / 2;
+      const span = Math.hypot(tx - fx, ty - fy, tz - fz);
+      const radial = Math.hypot(mx, mz) || 1;
+      this.posCtrl[i3] = mx + (mx / radial) * span * 0.22;
+      this.posCtrl[i3 + 1] = my + span * 0.12;
+      this.posCtrl[i3 + 2] = mz + (mz / radial) * span * 0.22;
+    }
+
     this.startMs = nowMs;
     this.raw = this.durMs === 0 ? 1 : 0;
     this.firstFormation = false;
+    this.cleanupPending = leaving > 0;
     this.tick(nowMs);
-    return {
+    this.lastStats = {
       layoutMs: 0,
       retargetMs: performance.now() - t0,
       entering,
@@ -260,6 +290,24 @@ export class FormationTransition {
       leaving,
       dropped: 0,
     };
+    return this.lastStats;
+  }
+
+  /** Slots are returned to the pool only once their exit has finished playing.
+   *  Releasing at retarget time would let a still-visible leaving card's slot
+   *  be handed to an entering card, which reads as one wrestler mutating into
+   *  another mid-flight. */
+  setOnReleased(fn: (slot: number) => void): void {
+    this.onReleased = fn;
+  }
+
+  private cleanup(): void {
+    this.cleanupPending = false;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.state[i] !== CS.LEAVE) continue;
+      this.state[i] = CS.ABSENT;
+      this.onReleased?.(i);
+    }
   }
 
   /** Advance and recompose every live slot. Returns true while animating. */
@@ -272,14 +320,30 @@ export class FormationTransition {
       const e = easeQuintic(p);
       this.progress[i] = p;
       const i3 = i * 3;
-      this.posCur[i3] = this.posFrom[i3]! + (this.posTo[i3]! - this.posFrom[i3]!) * e;
-      this.posCur[i3 + 1] = this.posFrom[i3 + 1]! + (this.posTo[i3 + 1]! - this.posFrom[i3 + 1]!) * e;
-      this.posCur[i3 + 2] = this.posFrom[i3 + 2]! + (this.posTo[i3 + 2]! - this.posFrom[i3 + 2]!) * e;
+      const b = this.bow[i]!;
+      if (b > 0) {
+        // Quadratic Bezier: the control point is the midpoint pushed outward,
+        // blended by `bow` so a card can travel straight or sweep.
+        const u = 1 - e;
+        const w0 = u * u;
+        const w1 = 2 * u * e * b;
+        const w2 = e * e;
+        const norm = w0 + w1 + w2;
+        for (let k = 0; k < 3; k++) {
+          this.posCur[i3 + k] =
+            (w0 * this.posFrom[i3 + k]! + w1 * this.posCtrl[i3 + k]! + w2 * this.posTo[i3 + k]!) / norm;
+        }
+      } else {
+        this.posCur[i3] = this.posFrom[i3]! + (this.posTo[i3]! - this.posFrom[i3]!) * e;
+        this.posCur[i3 + 1] = this.posFrom[i3 + 1]! + (this.posTo[i3 + 1]! - this.posFrom[i3 + 1]!) * e;
+        this.posCur[i3 + 2] = this.posFrom[i3 + 2]! + (this.posTo[i3 + 2]! - this.posFrom[i3 + 2]!) * e;
+      }
       this.scaleCur[i3] = this.scaleFrom[i3]! + (this.scaleTo[i3]! - this.scaleFrom[i3]!) * e;
       this.scaleCur[i3 + 1] = this.scaleFrom[i3 + 1]! + (this.scaleTo[i3 + 1]! - this.scaleFrom[i3 + 1]!) * e;
       this.scaleCur[i3 + 2] = this.scaleFrom[i3 + 2]! + (this.scaleTo[i3 + 2]! - this.scaleFrom[i3 + 2]!) * e;
       slerpInto(this.quatCur, i * 4, this.quatFrom, i * 4, this.quatTo, i * 4, e);
     }
+    if (raw >= 1 && this.cleanupPending) this.cleanup();
     return raw < 1;
   }
 
