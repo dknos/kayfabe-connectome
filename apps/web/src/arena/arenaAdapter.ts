@@ -44,6 +44,27 @@ function cardFromNode(model: GraphModel, index: number, bank: number, strength: 
 }
 
 /**
+ * A subject to open on when the reader has not chosen one.
+ *
+ * The lens needs a centre, and requiring a search before anything renders makes
+ * an empty canvas the first impression — which reads as broken, because every
+ * other lens in this shell opens on something. The most-connected documented
+ * person is deterministic, corpus-derived, and genuinely the most interesting
+ * arena in the set, so it is a real answer rather than a placeholder.
+ */
+export function defaultAnchorId(model: GraphModel): string | null {
+  const nodes = model.nodes;
+  let best = -1;
+  let bestDegree = -1;
+  for (let i = 0; i < nodes.count; i++) {
+    if (nodes.type[i] !== 0) continue; // people only
+    const degree = nodes.degree[i] ?? 0;
+    if (degree > bestDegree) { bestDegree = degree; best = i; }
+  }
+  return best >= 0 ? nodes.id[best]! : null;
+}
+
+/**
  * A person scope: everyone the subject shares a documented match with,
  * seated by what kind of relationship the evidence supports.
  */

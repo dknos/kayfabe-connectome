@@ -11,7 +11,7 @@ import {
   type ArenaFormation, type ArenaQualityTier, type ArenaScope,
 } from "@kayfabe/arena-renderer";
 import { useStore, writeUrl } from "../state/store";
-import { expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
+import { defaultAnchorId, expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
 import { setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
@@ -35,7 +35,18 @@ export function ArenaLens(): JSX.Element {
   const [opened, setOpened] = useState<string[]>([]);
   const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
 
-  const anchorId = selection?.kind === "node" ? selection.id : null;
+  const select = useStore((s) => s.select);
+  const selectedNodeId = selection?.kind === "node" ? selection.id : null;
+
+  // Open on something. A lens that renders an empty canvas until the reader
+  // searches reads as broken, and every other lens here starts populated.
+  useEffect(() => {
+    if (!model || selectedNodeId) return;
+    const fallback = defaultAnchorId(model);
+    if (fallback) select({ kind: "node", id: fallback });
+  }, [model, selectedNodeId, select]);
+
+  const anchorId = selectedNodeId;
   // Promotions and people are different arenas. A person's arena seats by
   // documented relationship; a promotion's seats by era, because its cards have
   // no relationship to a subject — they share a promotion, not an opponent.
