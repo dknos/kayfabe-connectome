@@ -208,6 +208,41 @@ targets, and it still cannot express the brief's "pulse-only" requirement
 because the pass composites the entire read buffer. Bloom ships; afterimage
 stays rejected.
 
+## SPIKE 5 — the label field, measured
+
+Probe: `tests/arena-spikes/spike5-labels.mjs`. Pooled DOM labels, real corpus
+names, three viewports, both formations.
+
+| Viewport | Scope | Formation | Wanted | Shown | Suppressed | Overlaps | Update |
+|---|---|---|---|---|---|---|---|
+| 1920×1080 | Psycho Clown | Arena | 184 | 48 | 136 | **0** | 0.1 ms |
+| 1920×1080 | **pr:c8 (AAA)** | Arena | **513** | 48 | 465 | **0** | 0.2 ms |
+| 1920×1080 | pr:c8 | Index | 277 | 48 | 229 | **0** | 0.1 ms |
+| 1366×768 | pr:c8 | Arena | 518 | 48 | 470 | **0** | 0.2 ms |
+| 390×844 | pr:c8 | Arena | 112 | 26 | 86 | **0** | 0.2 ms |
+
+The DOM pool stays at **96 nodes, with zero growth** across every scope,
+formation and viewport — labels are bound by assignment, never created per
+frame. The selected label survives a deliberately brutal four-label budget in
+all three viewports.
+
+**513 wanted, 48 shown, zero overlapping pairs at 1920×1080 and 1366×768** is
+the acceptance criterion about `pr:c8` not producing a wall of overlapping
+names, measured rather than asserted.
+
+Two bugs this spike found in its own suppression pass, both of which looked
+correct until the probe measured the *rendered* boxes:
+
+- **Estimating text width from character count does not work.** `8 + length *
+  6.1` produced 1–3 genuinely overlapping pairs per view, because proportional
+  type gives "Pimpinela Escarlata" and "El Hijo Del Vikingo" different widths
+  at identical length. Canvas `measureText`, cached per distinct name, is exact
+  and costs one measurement per name for the life of the page.
+- **Collision boxes must match how labels are actually positioned.** The pass
+  tested centre-based boxes while the DOM positions labels top-left
+  (`transform: translate(x,y)` with `transform-origin: 0 0`), so it cleared
+  collisions that were still visibly on screen.
+
 ### Defects the spikes found
 
 1. **The camera was the teleport.** With perfectly interpolated cards but an

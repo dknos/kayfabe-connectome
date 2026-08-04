@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arena spike 5 — label field</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #04060b; overflow: hidden; }
+      #gl { display: block; width: 100vw; height: 100vh; position: absolute; inset: 0; }
+      #labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+      .arena-label {
+        position: absolute; left: 0; top: 0; will-change: transform;
+        font: 11px/1.45 ui-sans-serif, system-ui, sans-serif; color: #dbe6f2;
+        text-shadow: 0 1px 3px #04060b, 0 0 8px #04060b;
+        white-space: nowrap; transform-origin: 0 0; pointer-events: none;
+      }
+      #hud { position: fixed; left: 8px; top: 8px; z-index: 2;
+        font: 12px/1.5 ui-monospace, monospace; color: #9fb4c8;
+        background: rgba(4,6,11,.72); padding: 6px 9px; border-radius: 4px; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <div id="labels"></div>
+    <div id="hud">loading…</div>
+    <script type="module">import "./labels.ts";</script>
+  </body>
+</html>
