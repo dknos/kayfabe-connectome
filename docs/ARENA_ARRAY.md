@@ -31,8 +31,9 @@ evidence is cited. Where a choice was made, it says so.
 **A promotion scope cannot come from the edge `promoMask`.** Only 30 promotions
 own a bit; the remaining 541 share "other" bit 30. `pr:c8` (AAA) is one of the
 541, so filtering edges by its bit would silently mean *"AAA or any of 540 other
-promotions"*. A promotion scope must come from person-level `promos` counts,
-which are exact.
+promotions"*. The scope is taken from the chronology projection
+(`atlas/promotions/*`), whose per-promotion member list carries exact per-person
+match counts and spans.
 
 **A person's era inside a promotion is not their global debut decade.** They
 differ for **326 of AAA's 1,087 people**. Seating a chronological fan by career
@@ -69,9 +70,11 @@ packages/arena-renderer/     Three.js, no React inside
   ArenaCards.ts              one instanced quad field + the pick material
   ArenaLabels.ts             pooled projected DOM labels
   ArenaPicking.ts            instanced raycast
+  ArenaRoutes.ts             pooled curved fat lines, instanceCount reveal
+  ArenaBloom.ts              layer-restricted selective emphasis
   ArenaRenderer.ts           scene, camera, tiers, disposal, context loss
 apps/web/src/arena/
-  arenaAdapter.ts            canonical graph -> ArenaCard
+  arenaAdapter.ts            canonical graph + chronology -> ArenaCard
   ArenaLens.tsx              mounting, scope, controls
 ```
 
