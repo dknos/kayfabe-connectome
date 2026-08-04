@@ -10,8 +10,9 @@ import {
   ARENA_TIERS, ArenaRenderer,
   type ArenaFormation, type ArenaQualityTier, type ArenaScope,
 } from "@kayfabe/arena-renderer";
-import { useStore } from "../state/store";
+import { useStore, writeUrl } from "../state/store";
 import { expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
+import { setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
   { key: "echo", label: "Echo", hint: "where these people sit in the connectome" },
@@ -119,6 +120,21 @@ export function ArenaLens(): JSX.Element {
   useEffect(() => {
     rendererRef.current?.setFormation(formation);
   }, [formation]);
+
+  // Publish what a shared link should carry, and consume one that arrived.
+  useEffect(() => {
+    setArenaUrlState({ formation, opened });
+    writeUrl();
+  }, [formation, opened]);
+
+  useEffect(() => {
+    if (!baseScope) return;
+    const restored = takePendingArenaUrl();
+    if (!restored) return;
+    setFormation(restored.formation);
+    setOpened(restored.opened);
+    setBreadcrumb(restored.opened.map((id) => baseScope.cards.find((c) => c.id === id)?.name ?? id));
+  }, [baseScope]);
 
   useEffect(() => {
     rendererRef.current?.applyTier(tier);

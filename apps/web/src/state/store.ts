@@ -429,6 +429,9 @@ export function registerGeoUrl(serialize: UrlSerializer, restore: UrlRestorer): 
 export function registerMorphUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("morph", { serialize, restore });
 }
+export function registerArenaUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("arena", { serialize, restore });
+}
 export function registerRatingsUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("ratings", { serialize, restore });
 }
@@ -461,6 +464,10 @@ export function writeUrl(): void {
     if (s.lens === "ratings") {
       const r = lensUrl.get("ratings")?.serialize();
       if (r) for (const [k, v] of Object.entries(r)) push(k, v);
+    }
+    if (s.lens === "arena") {
+      const a = lensUrl.get("arena")?.serialize();
+      if (a) for (const [k, v] of Object.entries(a)) push(k, v);
     }
     push("focus", s.focusId);
     if (s.selection?.kind === "node") push("sel", s.selection.id);
@@ -554,7 +561,7 @@ export function restoreFromUrl(explicitHash?: string): void {
   // closest to Morph, tabular links return to Connectome, and geographic
   // tabular links remain in Geo Replay. Unknown values fail closed to Connectome.
   const restoredLens: Lens =
-    lensParam === "morph" || lensParam === "geo" || lensParam === "ratings"
+    lensParam === "morph" || lensParam === "geo" || lensParam === "ratings" || lensParam === "arena"
       ? lensParam
       : lensParam === "atlas"
         ? "morph"
