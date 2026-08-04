@@ -67,15 +67,15 @@ committing · **REJECT** do not adopt, reason recorded.
 | C2 | `webgl_interactive_cubes_gpu` | r182 | GPU integer-ID picking: 1-pixel scissored render + `readRenderTargetPixels` | Pixel-exact picking during GPU-side transforms | HIGH — readback format is driver-gated; readback also stalls the GPU (`GL Driver Message: GPU stall due to ReadPixels`) | *measured:* p50 **3.0–3.6 ms**, and **3 ms idle per sample** — every pointer move pays it | **SPIKE 2: correct (it is the reference), but ~20–30x the cost of raycast** | **REJECT for hover.** Accuracy it has; affordability it does not. Keep as a fallback only if raycast is ever shown to fail |
 | C3 | `webgl_interactive_buffergeometry` | r182 | Face-level raycast granularity + zero-allocation highlight overlay | `intersection.uv` (`Mesh.js:455`) as a **sub-card** hook — a card is 2 triangles, so `faceIndex` is useless but `uv` locates a hit *within* the card | LOW-MEDIUM. The demo itself raycasts a one-frame-stale `matrixWorld` | negligible | — | **SPLIT: SHIP `intersection.uv`**, reject the demo's overlay construction and its stale-matrix ordering |
 | D1 | `webgl_lines_fat` | r182 | Screen-space-width polylines via instanced quad expansion (`Line2`/`LineGeometry`/`LineMaterial`); width lives in a **uniform** | The base layer for curved evidence routes: sample curve → flat positions → `setPositions` | LOW. `resolution` uniform present **[verified here: `LineMaterial.js:13`]**. **Do not "clean up" the existing hand-set `resolution.set()` calls** (`RatingGuides.ts:103` and sibling): `onBeforeRender` overwrites the uniform per draw, so they are inert for *rendering* but are the only thing keeping **raycast** correct | 1 draw call per route batch | SPIKE 3 (pending) | **SHIP.** Correct and verified mechanism for controlled screen-space route width |
-| D2 | `webgl_lines_fat_raycasting` | r182 | Hover against screen-space-expanded quads | Route hover | **MEDIUM — verified silent trap.** `Raycaster.params` has **no `Line2` key** by default (`Mesh, Line, LOD, Points, Sprite`), and `LineSegments2.js:329` reads `params.Line2 !== undefined ? … : 0` → **threshold silently 0** unless you create the bucket **[verified here]** | CPU per-segment; scales with sampled points | SPIKE 3 (pending) | **PROTO.** Capability is real and present; cost depends entirely on route count and sampling density |
+| D2 | `webgl_lines_fat_raycasting` | r182 | Hover against screen-space-expanded quads | Route hover | **MEDIUM — verified silent trap.** `Raycaster.params` has **no `Line2` key** by default, and `LineSegments2.js:329` reads `params.Line2 !== undefined ? … : 0` → **threshold silently 0** unless you create the bucket **[verified here]** | *measured:* p50 0.1 ms over 100 routes | **SPIKE 3: 90% hit-rate 5 px off-centreline with the bucket, 60% without** | **SHIP.** Creating `raycaster.params.Line2` is mandatory. Dead-centre aim hits either way, which is why this must be tested off-centre |
 | D3 | `webgl_lines_colors` | r182 | Six plain `THREE.Line` objects with vertex colours. **Imports nothing from `lines/`** | The colour-parameterisation split only: hue for category, value for magnitude | LOW as written, **HIGH if adopted** — `LineBasicMaterial` linewidth is capped at 1 px by drivers (`LineBasicMaterial.js:62-64`) | trivial | — | **REJECT as a rendering path.** Structurally incapable of the brief's bounded, readable route width. Keep only the colour-encoding idea |
-| D4 | `webgl_buffergeometry_drawrange` | r182 | Prefix reveal from an over-allocated, never-reallocated buffer via `setDrawRange` | Progressive route draw-in, championship rail reveal | LOW on API (`BufferGeometry.js:350`). **Behavioural mismatch: `drawRange` works on plain line geometry, not on `Line2`'s instanced expansion** | No reallocation; refill a prefix | SPIKE 3 (pending) | **SHIP (technique, not the demo).** With the fat-line caveat: `Line2` reveal needs a shader progress uniform instead |
+| D4 | `webgl_buffergeometry_drawrange` | r182 | Prefix reveal from an over-allocated, never-reallocated buffer via `setDrawRange` | Progressive route draw-in, championship rail reveal | LOW on API. **`drawRange` is inert on `Line2`** — but the equivalent exists: `LineSegmentsGeometry extends InstancedBufferGeometry` and the renderer honours `geometry.instanceCount` **[verified here: `WebGLRenderer.js:1317`]** | No reallocation; refill a prefix | **SPIKE 3: monotonic 0 / 6 / 12 / 23 segments** at reveal 0 / .25 / .5 / 1 | **SHIP (technique, via `instanceCount`).** The drawRange idea transfers to fat lines correctly; it just is not the drawRange *field* |
 | D5 | `webgl_modifier_curve` | r182 | Curve baked to a `DataTexture` with full Frenet frame; vertices resampled in the vertex shader (`Flow`) | Wrong mode as demonstrated — the brief needs **rigid** placement, which the demo never exercises | MEDIUM-HIGH, top risk silent: the injected shader requires an **identity world matrix** | 1 half-float `DataTexture` per curve set | SPIKE 3 (pending) | **PROTO.** Not a straight port. Cards must be *positioned* by tangents, never deformed |
 | D6 | `webgl_modifier_curve_instanced` | r182 | `InstancedFlow`: per-instance curve riding by **hijacking `instanceMatrix`** to smuggle scalars | Closest fit for small luminous route markers | **HIGH — `instanceMatrix` is fully consumed** by the encoding, so it cannot also carry transforms | 1 draw call for all markers | SPIKE 3 (pending) | **PROTO.** Highest potential fit for the marker requirement, gated on questions the demo cannot answer |
-| E1 | `webgl_postprocessing_unreal_bloom_selective` | r182 | Two-composer selective bloom: layer bit for selection, darkened-material swap for masking, additive composite | Bloom restricted to selected edge, pulse, title event, focused route | MEDIUM. Four hazards incl. a DPR mismatch at init in the example itself | 2 composers + extra RTs; bloom is multi-pass mip chain | SPIKE 4 (pending) | **PROTO.** The repo *already* ships a bloom chain (`ConnectomeRenderer.ts:249`); the design question is whether a second composer is warranted |
+| E1 | `webgl_postprocessing_unreal_bloom_selective` | r182 | Two-composer selective bloom: layer bit for selection, additive composite | Bloom restricted to the pulse layer only | MEDIUM. Note the card field is ONE InstancedMesh, so the demo's darkened-material swap would blanket it — hide non-bloom objects instead | *measured:* **+0.29 ms submission, 4 render targets** | **SPIKE 4: works, layer-restricted so only pulses bloom** | **SHIP.** Cards, routes and text are excluded by construction rather than by threshold tuning |
 | E2 | `webgl_postprocessing_unreal_bloom` | r182 | The canonical whole-scene chain: `RenderPass → UnrealBloomPass → OutputPass` | Inherited, not imported | LOW — identical chain already runs in this repo at this exact version | 1 composer, mip chain | — | **SHIP (already shipped).** `ConnectomeRenderer.ts:245-256` is this example with different constants. Work is parameters, not adoption |
 | F1 | `webgl_postprocessing_outline` | r182 | Selection silhouette via a depth-compare mask over `selectedObjects` **[verified here: `OutlinePass.js:42`]** | Selection emphasis | **MEDIUM-HIGH: `selectedObjects` is object-granular.** Handing it the card `InstancedMesh` outlines *every instance* — exactly the failure the brief warns about | 2 extra full-res passes + RTs | SPIKE 4 (pending) | **PROTO with a documented reject branch.** Needs the proxy-mesh or shader-edge alternative; not shippable as-is |
-| G1 | `webgl_postprocessing_afterimage` | r182 | Full-screen ping-pong feedback trail; `damp` **[verified here: `AfterimagePass.js:31`, default 0.96]** | Requested: pulse-only afterglow | LOW compatibility, **fatal behaviourally**: the pass composites the **entire** read buffer, so any motion smears — including cards, text and camera | 2 RTs, 1 full-screen pass | SPIKE 4 (pending) | **REJECT for the stated requirement.** "Pulse-only" is not expressible in a full-screen composite. A dedicated pulse layer is the only honest route |
+| G1 | `webgl_postprocessing_afterimage` | r182 | Full-screen ping-pong feedback trail; `damp` **[verified here: `AfterimagePass.js:31`, default 0.96]** | Requested: pulse-only afterglow | LOW compatibility, **fatal behaviourally**: the pass composites the **entire** read buffer, so any motion smears — including cards, text and camera | *measured:* **+0.21 ms and 2 further render targets** on top of bloom | **SPIKE 4: runs, but still cannot be restricted to pulses** | **REJECT for the stated requirement.** Cost is modest; the blocker is that "pulse-only" is not expressible in a full-screen composite |
 | J1 | `webgl_postprocessing_transition` | r182 | Two-scene crossfade with a threshold dissolve | Explicitly *not* the Arena→Index path | MEDIUM compatibility, HIGH architectural mismatch — renders **both** scenes every frame | 2 scenes + 2 RTs every frame, always | — | **REJECT for the primary path.** The brief requires a true object morph and SPIKE 1 built one. Keep only the dissolve formula for the reduced-motion fallback |
 | I1 | `webgl_lod` | r182 | Discrete level swapping with a **hysteresis band** | Semantic LOD: far = section shells + headings + aggregates; near = names + metrics | Low on API, real on semantics — `LOD.update` measures world distance ÷ zoom, not apparent screen size | negligible | — | **SHIP (the ~10-line formula, not the class).** Drive the hysteresis band from projected screen size, which is what actually governs readability |
 | I2 | `webgl_batch_lod_bvh` | r182 | BatchedMesh LOD with a BVH | — | **BLOCKER.** The LOD API this example is named for **does not exist at 0.182.0** — `grep -ic lod src/objects/BatchedMesh.js` returns **0** **[verified here]**. Also pulls third-party `three-mesh-bvh` | — | — | **REJECT.** Not a judgement call: the API is absent and the brief forbids both master-only APIs and new dependencies |
@@ -150,6 +150,63 @@ here approximates an oriented quad with an axis-aligned screen box. Its 6.8%
 morph picker. The conclusion is narrower and fair: **the point-scan technique
 does not transfer to rotated card quads without becoming a raycast anyway**, so
 raycast is the honest choice for the Arena.
+
+## SPIKE 3 + 4 — routes and postprocessing, measured
+
+Probe: `tests/arena-spikes/spike34-routes-post.mjs`. Software renderer; CPU
+render-submission time (not GPU execution) is the comparator, because rAF is
+saturated.
+
+| Configuration | Render submit | Draw calls | Render targets |
+|---|---|---|---|
+| 0 routes | 0.209 ms | 1 | 0 |
+| 25 routes | 0.262 ms | 26 | 0 |
+| 50 routes | 0.305 ms | 51 | 0 |
+| 100 routes | 0.459 ms | 101 | 0 |
+| 100 routes + 10 pulses | 0.394 ms | 101 | 0 |
+| 100 routes + 16 pulses | 0.425 ms | 101 | 0 |
+| + selective bloom | 0.749 ms | — | 4 |
+| + bloom and afterimage | 0.961 ms | — | 6 |
+
+**Fat routes do not batch: one draw call each.** That is the single most
+important number here. 100 routes is 101 draw calls against the card field's
+one, so the brief's "routes must remain sparse" is not an aesthetic preference,
+it is the cost model. Pulses are free by comparison — 16 of them ride a single
+`InstancedMesh` and move the submission time by noise.
+
+Draw calls are omitted for the post rows on purpose: `EffectComposer` resets
+`renderer.info` on each internal render, so the number read afterwards
+describes the last pass only and is not comparable to the no-post rows.
+Reporting it as "bloom reduced draw calls to 1" would be an instrumentation
+artefact, not a finding.
+
+Three mechanisms verified working:
+
+- **Progressive reveal on fat lines.** `setDrawRange` is inert on `Line2`, but
+  `LineSegmentsGeometry extends InstancedBufferGeometry` and the renderer
+  honours `geometry.instanceCount` (`WebGLRenderer.js:1317`). Measured
+  monotonic: reveal 0 / 0.25 / 0.5 / 1 → **0 / 6 / 12 / 23 segments**. This is
+  the `drawRange` technique transferred correctly rather than abandoned.
+- **The `params.Line2` trap, quantified.** Probing 5 px off a route's
+  centreline: **90% hover hit-rate with the bucket created, 60% without.**
+  Aiming dead-centre hits either way, which is exactly why this trap survives
+  casual testing.
+- **`LineMaterial.resolution` is in CSS pixels, not drawing-buffer pixels.** At
+  devicePixelRatio 2 the buffer correctly becomes 3840×2160 while the
+  resolution uniform stays 1920×1080, because `onBeforeRender` sets it from
+  `renderer.getViewport()`, which three keeps in CSS pixels. `linewidth` is a
+  CSS-pixel width, so feeding it `w * devicePixelRatio` **halves apparent line
+  width at dpr 2**. Rendering self-corrects every draw; raycasting does not,
+  which is precisely why the shipped hand-set calls are load-bearing and must
+  be right rather than merely present.
+
+**Postprocessing verdict.** Selective bloom costs +0.29 ms submission and 4
+render targets, restricted by layer so that only the pulse `InstancedMesh` can
+bloom — cards, routes and text are excluded by construction rather than by
+threshold tuning. Adding afterimage costs a further +0.21 ms and 2 more render
+targets, and it still cannot express the brief's "pulse-only" requirement
+because the pass composites the entire read buffer. Bloom ships; afterimage
+stays rejected.
 
 ### Defects the spikes found
 
