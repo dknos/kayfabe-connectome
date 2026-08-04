@@ -12,6 +12,7 @@ import { GeoAnnouncer } from "./geo/GeoAnnouncer";
 import { GeoControls } from "./geo/GeoControls";
 import { GeoInspector } from "./geo/GeoInspector";
 import { GeoLens } from "./geo/GeoLens";
+import { ArenaLens } from "./arena/ArenaLens";
 import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
 import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
 import { scheduler, useGeo } from "./geo/geoStore";
@@ -221,6 +222,7 @@ export function App() {
         {model && lens === "connectome" && <RightPanel />}
         {model && lens === "morph" && <MorphLab engine={engineRef.current} />}
         {model && lens === "ratings" && <RatingsLab engine={engineRef.current} />}
+        {model && lens === "arena" && <ArenaLens />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
         {model && lens === "geo" && <GeoInspector />}

@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "morph" | "geo" | "ratings";
+export type Lens = "connectome" | "morph" | "geo" | "ratings" | "arena";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }

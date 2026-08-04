@@ -1270,3 +1270,40 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .rating-label { transition: none; }
 }
+
+/* ---------------------------------------------------------------- ARENA ARRAY */
+.arena-lens { position: absolute; inset: 0; }
+.arena-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* The label layer sits above the canvas and must never eat pointer events:
+   picking is a raycast against the card field, not a DOM hit test. */
+.arena-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.arena-label {
+  position: absolute; left: 0; top: 0; will-change: transform;
+  font: 11px/1.45 var(--ui-font, ui-sans-serif, system-ui, sans-serif);
+  color: #dbe6f2; text-shadow: 0 1px 3px #04060b, 0 0 8px #04060b;
+  white-space: nowrap; transform-origin: 0 0; pointer-events: none;
+}
+.arena-controls {
+  position: absolute; left: 12px; top: 12px; z-index: 3;
+  display: flex; gap: 10px; align-items: center;
+  background: rgba(4, 6, 11, 0.72); padding: 6px 8px; border-radius: 6px;
+}
+.arena-formations { display: flex; gap: 4px; }
+.arena-formations button {
+  background: transparent; color: #9fb4c8; border: 1px solid #24313f;
+  border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.arena-formations button.active { color: #04060b; background: #48d9ff; border-color: #48d9ff; }
+.arena-tier { color: #9fb4c8; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.arena-tier select {
+  background: #0b1119; color: #dbe6f2; border: 1px solid #24313f;
+  border-radius: 4px; padding: 3px 6px; font-size: 12px;
+}
+.arena-readout {
+  position: absolute; left: 12px; bottom: 12px; z-index: 3;
+  display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+  background: rgba(4, 6, 11, 0.72); padding: 6px 10px; border-radius: 6px;
+  color: #9fb4c8; font-size: 12px;
+}
+.arena-readout strong { color: #dbe6f2; font-size: 13px; }
+.arena-readout .arena-hover { color: #48d9ff; }

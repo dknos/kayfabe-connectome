@@ -29,6 +29,7 @@
     "../../packages/renderer/src",
     "../../packages/geo-renderer/src",
     "../../packages/morph-renderer/src",
+    "../../packages/arena-renderer/src",
     "../../packages/ratings-renderer/src"
   ]
 }
