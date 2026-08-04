@@ -3,8 +3,8 @@
 A database-first, time-aware, three-dimensional network of professional
 wrestling history, rendered as a living biological connectome.
 
-The production shell has four interoperable lenses: Connectome, Morph Lab,
-MELTZER RIDGE (`Meltzer Ratings`), and Geo Replay. Each secondary lens owns its
+The production shell has five interoperable lenses: Connectome, Morph Lab,
+ARENA ARRAY, MELTZER RIDGE (`Meltzer Ratings`), and Geo Replay. Each secondary lens owns its
 renderer and camera while preserving the parked Connectome state.
 
 Clean-room fresh build. This repository does not reuse, copy, or extend any prior
@@ -49,6 +49,8 @@ pnpm data:materialize     Full materialization pipeline (~6s, deterministic)
 pnpm data:validate        Re-validate an existing materialized tree
 pnpm ratings:materialize  Rebuild only the MELTZER RIDGE projection
 pnpm ratings:validate     Validate the MELTZER RIDGE ratings projection
+pnpm arena:corpus         Rebuild the Arena Array spike corpus (dev-only)
+pnpm arena:qa             Arena Array acceptance probe (dev server must be up)
 pnpm dev                  Web app → http://127.0.0.1:9460
 pnpm test                 Vitest + pytest suites
 npx playwright test       Full journey suite (desktop / mobile / reduced-motion)

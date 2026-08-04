@@ -29,7 +29,13 @@
     "build": "pnpm --filter @kayfabe/web build",
     "test": "pnpm -r --if-present test && cd services/materializer && python3.12 -m pytest -q",
     "test:py": "cd services/materializer && python3.12 -m pytest -q",
-    "geo:report": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.geo_validate --report"
+    "geo:report": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.geo_validate --report",
+    "arena:corpus": "node tests/arena-spikes/build-spike-corpus.mjs",
+    "arena:spike1": "node tests/arena-spikes/spike1-formation.mjs",
+    "arena:spike2": "node tests/arena-spikes/spike2-picking.mjs",
+    "arena:spike34": "node tests/arena-spikes/spike34-routes-post.mjs",
+    "arena:spike5": "node tests/arena-spikes/spike5-labels.mjs",
+    "arena:qa": "node tests/arena-spikes/arena-lens-qa.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"
