@@ -48,11 +48,19 @@ function cardFromNode(model: GraphModel, index: number, bank: number, strength: 
  *
  * The lens needs a centre, and requiring a search before anything renders makes
  * an empty canvas the first impression — which reads as broken, because every
- * other lens in this shell opens on something. The most-connected documented
- * person is deterministic, corpus-derived, and genuinely the most interesting
- * arena in the set, so it is a real answer rather than a placeholder.
+ * other lens in this shell opens on something.
+ *
+ * This is an editorial choice, not a derived one. The most-connected person is
+ * Colt Cabana at degree 939, which is a fact about how thoroughly the indies
+ * are documented rather than a good first arena. Matt Sydal is chosen because
+ * his 519 documented relationships span promotions and eras without the arena
+ * degenerating into one scene. The degree scan stays as the fallback, so a
+ * corpus that does not carry him still opens on something real.
  */
+const PREFERRED_ANCHOR = "p:116704"; // Matt Sydal
+
 export function defaultAnchorId(model: GraphModel): string | null {
+  if (model.indexOfId.has(PREFERRED_ANCHOR)) return PREFERRED_ANCHOR;
   const nodes = model.nodes;
   let best = -1;
   let bestDegree = -1;

@@ -32,13 +32,32 @@ function serialize(): Record<string, string | number | null> {
   return out;
 }
 
+let listener: (() => void) | null = null;
+
+/**
+ * The mounted lens asks to be told when a fragment arrives.
+ *
+ * A cold boot is not the only restore: pressing Back is a same-document
+ * navigation into an already-mounted lens. Without this the lens only ever
+ * consumed a fragment when its underlying scope changed, so stepping back to
+ * the SAME subject with a different drill-down restored nothing at all.
+ */
+export function onArenaUrlRestore(cb: (() => void) | null): void {
+  listener = cb;
+}
+
 function restore(kv: Map<string, string>): void {
   pending = new Map(kv);
+  listener?.();
 }
 
 /** Consumed by the lens once it has a scope; a cold link can arrive before the
- *  chronology projection has loaded. */
-export function takePendingArenaUrl(): { formation: ArenaFormation; opened: string[] } | null {
+ *  chronology projection has loaded. `sel` rides along so the lens can hold the
+ *  restore until its anchor has caught up, rather than applying a drill-down
+ *  belonging to a subject it has not built yet. */
+export function takePendingArenaUrl():
+  | { formation: ArenaFormation; opened: string[]; sel: string | null }
+  | null {
   if (!pending) return null;
   const kv = pending;
   pending = null;
@@ -47,6 +66,7 @@ export function takePendingArenaUrl(): { formation: ArenaFormation; opened: stri
   return {
     formation: FORMATIONS.includes(f as ArenaFormation) ? (f as ArenaFormation) : "arena",
     opened: o ? o.split(",").filter(Boolean) : [],
+    sel: kv.get("sel") ?? null,
   };
 }
 

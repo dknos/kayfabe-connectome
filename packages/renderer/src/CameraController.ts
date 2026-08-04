@@ -12,6 +12,33 @@ const FLY_KEYS: Record<string, [number, number, number]> = {
 };
 
 /**
+ * How fast each input moves the camera.
+ *
+ * These were magic numbers spread across four methods, which made "the controls
+ * are too fast" a hunt rather than an edit. Each axis scales INDEPENDENTLY: a
+ * reader who finds the orbit right and the fly wrong must be tunable without
+ * touching the other. Clamps, easing and the portrait fov are not speeds and
+ * stay where they are.
+ */
+const SPEED = {
+  /** Radians of orbit per pixel of drag. */
+  orbit: 0.0025,
+  /** Per-frame decay of orbit inertia, as the rate in exp(-dt * rate). */
+  orbitDecay: 5,
+  /** Dolly factor per wheel unit, as the base in base^deltaY. */
+  dolly: 1.00096,
+  /** Pan distance per pixel, multiplied by the orbit radius. */
+  pan: 0.0012,
+  /** Fly travel per second, multiplied by min(radius, flyRadiusCap). */
+  fly: 0.43,
+  /** Fly travel while Shift is held. */
+  flyBoost: 1.33,
+  /** Flying scales with radius only up to here, so a press at the default
+   *  framing cannot cross the whole corpus (see fly()). */
+  flyRadiusCap: 1.1,
+} as const;
+
+/**
  * Orbit/pan/zoom with damped focus flights, plus WASD free flight. The user
  * always wins: any input cancels an in-progress flight. Reduced motion snaps
  * instead of flying.
@@ -144,8 +171,8 @@ export class CameraController {
     if (e.buttons & 2 || e.shiftKey) {
       this.pan(dx, dy);
     } else if (e.buttons & 1) {
-      this.velYaw = -dx * 0.0042;
-      this.velPitch = -dy * 0.0042;
+      this.velYaw = -dx * SPEED.orbit;
+      this.velPitch = -dy * SPEED.orbit;
       this.sph.theta += this.velYaw;
       this.sph.phi = THREE.MathUtils.clamp(this.sph.phi + this.velPitch, 0.05, Math.PI - 0.05);
     }
@@ -159,7 +186,7 @@ export class CameraController {
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     this.cancelFlight();
-    this.dolly(Math.pow(1.0016, e.deltaY));
+    this.dolly(Math.pow(SPEED.dolly, e.deltaY));
   };
 
   private dolly(factor: number): void {
@@ -167,7 +194,7 @@ export class CameraController {
   }
 
   private pan(dx: number, dy: number): void {
-    const scale = this.sph.radius * 0.0012;
+    const scale = this.sph.radius * SPEED.pan;
     const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
     this.target.addScaledVector(right, -dx * scale).addScaledVector(up, dy * scale);
@@ -230,7 +257,8 @@ export class CameraController {
     // framing travelled 1.8 units through a corpus that is 2 units across —
     // you left the tissue before you saw it. The radius term survives so that
     // flying stays fine-grained once you are inside a lobe.
-    const speed = Math.min(this.sph.radius, 1.1) * (this.boost ? 1.9 : 0.62);
+    const speed =
+      Math.min(this.sph.radius, SPEED.flyRadiusCap) * (this.boost ? SPEED.flyBoost : SPEED.fly);
     this.target.addScaledVector(this.vMove, speed * dt);
     // Stay inside the dolly clamp's world: flying far outside the graph and
     // then scrolling would otherwise strand the reader in empty space.
@@ -251,8 +279,8 @@ export class CameraController {
       if (this.flight.t >= 1) this.flight = null;
     } else if (this.pointers.size === 0) {
       // inertial decay
-      this.velYaw *= Math.exp(-dt * 5);
-      this.velPitch *= Math.exp(-dt * 5);
+      this.velYaw *= Math.exp(-dt * SPEED.orbitDecay);
+      this.velPitch *= Math.exp(-dt * SPEED.orbitDecay);
       if (Math.abs(this.velYaw) > 1e-4) this.sph.theta += this.velYaw;
       if (Math.abs(this.velPitch) > 1e-4)
         this.sph.phi = THREE.MathUtils.clamp(this.sph.phi + this.velPitch, 0.05, Math.PI - 0.05);

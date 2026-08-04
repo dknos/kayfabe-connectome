@@ -1310,8 +1310,31 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
 
 .arena-readout .arena-caveat { color: #d8a657; }
 
-.arena-crumbs {
+/* Where the reader has been, directly under the controls; the drill-down
+   crumbs sit below it because a drill-down happens INSIDE a subject. */
+.arena-trail {
   position: absolute; left: 12px; top: 56px; z-index: 3;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  max-width: min(52vw, 640px);
+  background: rgba(4, 6, 11, 0.72); padding: 5px 9px; border-radius: 6px;
+  color: #9fb4c8; font-size: 12px;
+}
+.arena-trail .arena-back {
+  background: transparent; color: #dbe6f2; border: 1px solid #24313f;
+  border-radius: 4px; padding: 2px 8px; font-size: 12px; cursor: pointer;
+}
+.arena-trail .arena-back:hover:not(:disabled) { border-color: #48d9ff; color: #48d9ff; }
+.arena-trail .arena-back:disabled { opacity: 0.38; cursor: default; }
+.arena-trail-step { display: inline-flex; align-items: center; }
+.arena-trail .sep { color: #4d6076; padding: 0 2px; }
+.arena-trail .crumb {
+  background: transparent; color: #48d9ff; border: 0; padding: 0;
+  font-size: 12px; cursor: pointer;
+}
+.arena-trail .here { color: #dbe6f2; }
+
+.arena-crumbs {
+  position: absolute; left: 12px; top: 92px; z-index: 3;
   background: rgba(4, 6, 11, 0.72); padding: 5px 9px; border-radius: 6px;
   color: #9fb4c8; font-size: 12px;
 }
@@ -1324,7 +1347,26 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
   background: rgba(4, 6, 11, 0.9); border: 1px solid #24313f; border-radius: 8px;
   padding: 12px 14px; color: #dbe6f2; font-size: 12px;
 }
+.arena-inspector { max-height: calc(100% - 24px); overflow-y: auto; }
+.arena-inspector header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+}
 .arena-inspector h2 { margin: 0 0 8px; font-size: 14px; }
+.arena-inspector h3 {
+  margin: 12px 0 4px; font-size: 11px; font-weight: 600;
+  color: #9fb4c8; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.arena-inspector .arena-close {
+  border: 0; padding: 0 4px; font-size: 16px; line-height: 1; color: #9fb4c8;
+}
+.arena-inspector .arena-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.arena-inspector .arena-facts li { display: flex; justify-content: space-between; gap: 10px; }
+.arena-inspector .arena-facts b { color: #9fb4c8; font-weight: 500; }
+.arena-inspector .arena-actions { display: flex; align-items: center; gap: 8px; }
+.arena-inspector .arena-actions .primary {
+  color: #04060b; background: #48d9ff; border-color: #48d9ff; font-weight: 600;
+}
+.arena-inspector .arena-here { color: #7f93a8; }
 .arena-inspector dl { margin: 0; display: grid; gap: 4px; }
 .arena-inspector dl div { display: flex; justify-content: space-between; gap: 10px; }
 .arena-inspector dt { color: #9fb4c8; }

@@ -258,7 +258,7 @@ export class ArenaRenderer {
     this.lookTo.set(...LOOK[name]);
   }
 
-  private updateCamera(): void {
+  private updateCamera(dt = 0): void {
     const e = easeQuintic(this.transition.progressRaw);
     this.camCur.lerpVectors(this.camFrom, this.camTo, e);
     this.lookCur.lerpVectors(this.lookFrom, this.lookTo, e);
@@ -269,7 +269,7 @@ export class ArenaRenderer {
     const extent = this.lastLayout?.extent ?? 12;
     if (this.controls.engaged) this.controls.retarget(this.lookCur, extent);
     else this.controls.frame(this.camCur, this.lookCur, extent);
-    this.controls.update();
+    this.controls.update(dt);
   }
 
   private writeSemantics(): void {
@@ -332,10 +332,13 @@ export class ArenaRenderer {
       const t0 = performance.now();
       this.transition.tick(now);
       this.cards.sync(this.transition);
-      this.updateCamera();
+      // Seconds since the last frame. Read before the camera, because keyboard
+      // travel is per-second and a per-frame step would walk twice as fast on a
+      // 120 Hz display as on a 60 Hz one.
+      const dt = this.lastFrameMs > 0 ? Math.min(0.05, (now - this.lastFrameMs) / 1000) : 0;
+      this.updateCamera(dt);
       // Routes stay attached to their cards while the formation travels, then
       // draw in over the tail of the transition.
-      const dt = this.lastFrameMs > 0 ? Math.min(0.05, (now - this.lastFrameMs) / 1000) : 0;
       // Packets ride the routes only once those routes are actually drawn;
       // a pulse on an unrevealed route is a claim about nothing.
       if (this.routes.count > 0 && this.transition.progressRaw >= 1) {

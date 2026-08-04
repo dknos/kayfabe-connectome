@@ -441,55 +441,92 @@ export function registerRatingsUrl(serialize: UrlSerializer, restore: UrlRestore
 const URL_VERSION = "2";
 let urlWriteTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** The fragment for the current state, or null while there is no corpus. */
+function buildFragment(): string | null {
+  const s = useStore.getState();
+  if (!s.model) return null;
+  const p: string[] = [URL_VERSION];
+  const push = (k: string, v: string | number | null | undefined) => {
+    if (v !== null && v !== undefined && v !== "") p.push(`${k}=${encodeURIComponent(String(v))}`);
+  };
+  push("lens", s.lens !== "connectome" ? s.lens : null);
+  push("tis", s.tissue !== "cortex" ? s.tissue : null);
+  if (s.lens === "geo") {
+    const g = lensUrl.get("geo")?.serialize();
+    if (g) for (const [k, v] of Object.entries(g)) push(k, v);
+  }
+  if (s.lens === "morph") {
+    const m = lensUrl.get("morph")?.serialize();
+    if (m) for (const [k, v] of Object.entries(m)) push(k, v);
+  }
+  if (s.lens === "ratings") {
+    const r = lensUrl.get("ratings")?.serialize();
+    if (r) for (const [k, v] of Object.entries(r)) push(k, v);
+  }
+  if (s.lens === "arena") {
+    const a = lensUrl.get("arena")?.serialize();
+    if (a) for (const [k, v] of Object.entries(a)) push(k, v);
+  }
+  push("focus", s.focusId);
+  if (s.selection?.kind === "node") push("sel", s.selection.id);
+  if (s.selection?.kind === "edge") push("sele", s.selection.edge);
+  push("a", s.pathA);
+  push("b", s.pathB);
+  if (s.pathA && s.pathB) push("pm", s.pathMode);
+  const [d0, d1] = s.model.fullDayRange;
+  if (s.filters.dayMin !== d0) push("dmin", s.filters.dayMin);
+  if (s.filters.dayMax !== d1) push("dmax", s.filters.dayMax);
+  if (s.filters.promoMask !== PROMO_ALL) push("pr", s.filters.promoMask);
+  if (s.filters.formMask !== 0xff) push("fm", s.filters.formMask);
+  const rel = (s.filters.showSame ? 1 : 0) | (s.filters.showOpposed ? 2 : 0) | (s.filters.showBr ? 4 : 0);
+  if (rel !== 7) push("rel", rel);
+  if (s.filters.minEncounters !== 5) push("minE", s.filters.minEncounters);
+  if (s.timeline.mode !== "off") {
+    push("tm", s.timeline.mode);
+    push("td", s.timeline.day);
+    if (s.timeline.mode === "window") push("tw", s.timeline.windowDays);
+  }
+  return p.join("/");
+}
+
+/**
+ * Record the current state in the address bar WITHOUT adding a history entry.
+ *
+ * This fires on every state change — a slider drag alone is dozens of calls —
+ * so it must stay a replace. Pushing here would bury the reader's actual route
+ * under hundreds of entries and make the browser's Back button useless.
+ */
 export function writeUrl(): void {
   if (urlWriteTimer) clearTimeout(urlWriteTimer);
   urlWriteTimer = setTimeout(() => {
     urlWriteTimer = null;
-    const s = useStore.getState();
-    if (!s.model) return;
-    const p: string[] = [URL_VERSION];
-    const push = (k: string, v: string | number | null | undefined) => {
-      if (v !== null && v !== undefined && v !== "") p.push(`${k}=${encodeURIComponent(String(v))}`);
-    };
-    push("lens", s.lens !== "connectome" ? s.lens : null);
-    push("tis", s.tissue !== "cortex" ? s.tissue : null);
-    if (s.lens === "geo") {
-      const g = lensUrl.get("geo")?.serialize();
-      if (g) for (const [k, v] of Object.entries(g)) push(k, v);
-    }
-    if (s.lens === "morph") {
-      const m = lensUrl.get("morph")?.serialize();
-      if (m) for (const [k, v] of Object.entries(m)) push(k, v);
-    }
-    if (s.lens === "ratings") {
-      const r = lensUrl.get("ratings")?.serialize();
-      if (r) for (const [k, v] of Object.entries(r)) push(k, v);
-    }
-    if (s.lens === "arena") {
-      const a = lensUrl.get("arena")?.serialize();
-      if (a) for (const [k, v] of Object.entries(a)) push(k, v);
-    }
-    push("focus", s.focusId);
-    if (s.selection?.kind === "node") push("sel", s.selection.id);
-    if (s.selection?.kind === "edge") push("sele", s.selection.edge);
-    push("a", s.pathA);
-    push("b", s.pathB);
-    if (s.pathA && s.pathB) push("pm", s.pathMode);
-    const [d0, d1] = s.model.fullDayRange;
-    if (s.filters.dayMin !== d0) push("dmin", s.filters.dayMin);
-    if (s.filters.dayMax !== d1) push("dmax", s.filters.dayMax);
-    if (s.filters.promoMask !== PROMO_ALL) push("pr", s.filters.promoMask);
-    if (s.filters.formMask !== 0xff) push("fm", s.filters.formMask);
-    const rel = (s.filters.showSame ? 1 : 0) | (s.filters.showOpposed ? 2 : 0) | (s.filters.showBr ? 4 : 0);
-    if (rel !== 7) push("rel", rel);
-    if (s.filters.minEncounters !== 5) push("minE", s.filters.minEncounters);
-    if (s.timeline.mode !== "off") {
-      push("tm", s.timeline.mode);
-      push("td", s.timeline.day);
-      if (s.timeline.mode === "window") push("tw", s.timeline.windowDays);
-    }
-    history.replaceState(null, "", `#${p.join("/")}`);
+    const fragment = buildFragment();
+    if (fragment !== null) history.replaceState(null, "", `#${fragment}`);
   }, 150);
+}
+
+/**
+ * Record the current state as a NEW history entry, so the browser's Back button
+ * returns to what preceded it.
+ *
+ * Only for deliberate navigation — following a connection to another subject,
+ * opening or leaving a drill-down. Never for continuous controls. The pending
+ * replace is cancelled first: letting it fire afterwards would overwrite the
+ * entry that was just pushed with the same state, which looks like Back doing
+ * nothing.
+ */
+export function pushUrl(): void {
+  if (urlWriteTimer) {
+    clearTimeout(urlWriteTimer);
+    urlWriteTimer = null;
+  }
+  const fragment = buildFragment();
+  if (fragment === null) return;
+  const next = `#${fragment}`;
+  // An identical entry is not a step anywhere, and two of them means Back
+  // appears to be broken for one press.
+  if (location.hash === next) return;
+  history.pushState(null, "", next);
 }
 
 export function restoreFromUrl(explicitHash?: string): void {

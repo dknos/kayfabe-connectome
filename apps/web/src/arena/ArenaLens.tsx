@@ -5,14 +5,15 @@
  * the renderer package draws the whole population from typed arrays, which is
  * the same division every other lens in this repository uses.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ARENA_TIERS, ArenaRenderer,
   type ArenaFormation, type ArenaQualityTier, type ArenaScope,
 } from "@kayfabe/arena-renderer";
-import { useStore, writeUrl } from "../state/store";
+import { pushUrl, useStore, writeUrl } from "../state/store";
+import { ArenaInspector } from "./ArenaInspector";
 import { defaultAnchorId, expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
-import { setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
+import { onArenaUrlRestore, setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
   { key: "echo", label: "Echo", hint: "where these people sit in the connectome" },
@@ -34,6 +35,19 @@ export function ArenaLens(): JSX.Element {
   /** Aggregates the reader has opened, so a drill-down survives a re-render. */
   const [opened, setOpened] = useState<string[]>([]);
   const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
+  /** Subjects visited in this lens, oldest first. Following someone out of an
+   *  arena is the whole point of the lens, so where you came from has to stay
+   *  on screen — a Back button alone tells you nothing about where back IS. */
+  const [trail, setTrail] = useState<{ id: string; name: string }[]>([]);
+  /** Bumped whenever a fragment arrives, so the restore effect re-runs for a
+   *  Back press that lands on the SAME subject with a different drill-down. */
+  const [urlEpoch, setUrlEpoch] = useState(0);
+  const pendingUrlRef = useRef<ReturnType<typeof takePendingArenaUrl>>(null);
+  /** The drill-down the address bar already reflects. A change the reader made
+   *  is navigation and earns a history entry; a change that CAME from the
+   *  address bar must not push one, or pressing Back appends a new entry and
+   *  the reader can never leave. */
+  const lastOpenedKey = useRef("");
   const pressRef = useRef<{ x: number; y: number } | null>(null);
 
   const select = useStore((s) => s.select);
@@ -85,7 +99,58 @@ export function ArenaLens(): JSX.Element {
     return next;
   }, [baseScope, opened]);
 
-  useEffect(() => { setOpened([]); setBreadcrumb([]); setInspected(null); }, [baseScope]);
+  // One effect owns both halves of "the subject changed": clearing the previous
+  // drill-down, and applying one that arrived in the URL. They were two effects
+  // and the clear could run last, which silently threw away a restored link.
+  useEffect(() => {
+    if (!pendingUrlRef.current) pendingUrlRef.current = takePendingArenaUrl();
+    const restored = pendingUrlRef.current;
+    setInspected(null);
+    // A fragment names its subject. Holding the drill-down until the scope for
+    // that subject exists keeps a link from opening one person's era summaries
+    // on top of another person's arena.
+    const forThisSubject = restored && (!restored.sel || restored.sel === anchorId);
+    if (restored && forThisSubject) {
+      pendingUrlRef.current = null;
+      lastOpenedKey.current = restored.opened.join(",");
+      setFormation(restored.formation);
+      setOpened(restored.opened);
+      setBreadcrumb(restored.opened.map((id) => baseScope?.cards.find((c) => c.id === id)?.name ?? id));
+      return;
+    }
+    lastOpenedKey.current = "";
+    setOpened([]);
+    setBreadcrumb([]);
+  }, [baseScope, anchorId, urlEpoch]);
+
+  // A pasted or Back-navigated fragment reaches an already-mounted lens.
+  useEffect(() => {
+    onArenaUrlRestore(() => setUrlEpoch((e) => e + 1));
+    return () => onArenaUrlRestore(null);
+  }, []);
+
+  // The trail follows the subject rather than being pushed by the click that
+  // changed it, so browser Back and Forward heal it for free: returning to a
+  // subject already on the trail truncates back to it instead of repeating it.
+  useEffect(() => {
+    if (!anchorId || !model) return;
+    const i = model.indexOfId.get(anchorId);
+    const name = (i === undefined ? null : model.nodes.name[i]) ?? anchorId;
+    setTrail((prev) => {
+      const at = prev.findIndex((t) => t.id === anchorId);
+      if (at >= 0) return at === prev.length - 1 ? prev : prev.slice(0, at + 1);
+      return [...prev, { id: anchorId, name }].slice(-16);
+    });
+  }, [anchorId, model]);
+
+  /** Follow a card to its own arena. A deliberate move, so it gets a history
+   *  entry and the browser's Back button returns here. */
+  const openArray = useCallback((id: string) => {
+    if (!id || id === anchorId) return;
+    setInspected(null);
+    select({ kind: "node", id });
+    pushUrl();
+  }, [anchorId, select]);
 
   const inspectedCard = inspected ? scope?.cards.find((c) => c.id === inspected) ?? null : null;
 
@@ -133,20 +198,19 @@ export function ArenaLens(): JSX.Element {
     rendererRef.current?.setFormation(formation);
   }, [formation]);
 
-  // Publish what a shared link should carry, and consume one that arrived.
+  // Publish what a shared link should carry. Entering or leaving a drill-down
+  // is somewhere the reader went, so it earns a history entry; changing the
+  // formation is a way of looking at where they already are, so it does not.
+  const openedKey = opened.join(",");
   useEffect(() => {
     setArenaUrlState({ formation, opened });
-    writeUrl();
-  }, [formation, opened]);
-
-  useEffect(() => {
-    if (!baseScope) return;
-    const restored = takePendingArenaUrl();
-    if (!restored) return;
-    setFormation(restored.formation);
-    setOpened(restored.opened);
-    setBreadcrumb(restored.opened.map((id) => baseScope.cards.find((c) => c.id === id)?.name ?? id));
-  }, [baseScope]);
+    if (openedKey !== lastOpenedKey.current) {
+      lastOpenedKey.current = openedKey;
+      pushUrl();
+    } else {
+      writeUrl();
+    }
+  }, [formation, opened, openedKey]);
 
   useEffect(() => {
     rendererRef.current?.applyTier(tier);
@@ -188,6 +252,16 @@ export function ArenaLens(): JSX.Element {
           renderer.setSelected(hit.id);
           setInspected(hit.id);
         }}
+        onDoubleClick={(e) => {
+          // A shortcut for the inspector's own action, for readers who are
+          // travelling rather than reading.
+          const renderer = rendererRef.current;
+          if (!renderer) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const hit = renderer.pick(e.clientX - rect.left, e.clientY - rect.top);
+          const card = hit ? scope?.cards.find((c) => c.id === hit.id) : null;
+          if (card && !card.represents && card.id.startsWith("p:")) openArray(card.id);
+        }}
       />
       <div className="arena-labels" ref={labelRef} />
       <div className="arena-controls">
@@ -210,6 +284,30 @@ export function ArenaLens(): JSX.Element {
           </select>
         </label>
       </div>
+      <nav className="arena-trail" aria-label="Subjects visited">
+        <button
+          className="arena-back"
+          // The browser owns the history: every deliberate move pushed an entry,
+          // so this is the same step the Back button takes. Keeping one history
+          // instead of a parallel one is why Back and this button can never
+          // disagree about where back is.
+          onClick={() => history.back()}
+          disabled={trail.length < 2}
+          aria-label="Back to the previous subject"
+        >
+          ‹ Back
+        </button>
+        {trail.map((t, i) => (
+          <span key={`${t.id}-${i}`} className="arena-trail-step">
+            {i > 0 && <span className="sep"> › </span>}
+            {i === trail.length - 1 ? (
+              <span className="here" aria-current="page">{t.name}</span>
+            ) : (
+              <button className="crumb" onClick={() => openArray(t.id)}>{t.name}</button>
+            )}
+          </span>
+        ))}
+      </nav>
       {breadcrumb.length > 0 && (
         <nav className="arena-crumbs" aria-label="Drill-down">
           <button onClick={() => { setOpened([]); setBreadcrumb([]); }}>All eras</button>
@@ -219,27 +317,12 @@ export function ArenaLens(): JSX.Element {
         </nav>
       )}
       {inspectedCard && (
-        <aside className="arena-inspector" aria-label="Card detail">
-          <h2>{inspectedCard.name}</h2>
-          <dl>
-            <div><dt>Documented span</dt><dd>{inspectedCard.firstYear}–{inspectedCard.lastYear}</dd></div>
-            <div>
-              <dt>{scope?.kind === "promotion" ? "Matches here" : "Documented encounters"}</dt>
-              <dd>{inspectedCard.strength}</dd>
-            </div>
-            <div><dt>Era</dt><dd>{inspectedCard.era}</dd></div>
-            {inspectedCard.reigns > 0 && (
-              <div><dt>Championships</dt><dd>{inspectedCard.reigns} documented reign(s)</dd></div>
-            )}
-          </dl>
-          {/* What the number is, so a reader never has to guess its basis. */}
-          <p className="arena-basis">
-            {scope?.kind === "promotion"
-              ? "Documented matches for this person in this promotion."
-              : "Documented encounters with the subject: tag partnership, opposition, and battle-royal co-presence at reduced weight."}
-          </p>
-          <button onClick={() => setInspected(null)}>Close</button>
-        </aside>
+        <ArenaInspector
+          card={inspectedCard}
+          scope={scope}
+          onClose={() => setInspected(null)}
+          onOpenArray={openArray}
+        />
       )}
       {scope && (
         <div className="arena-readout">

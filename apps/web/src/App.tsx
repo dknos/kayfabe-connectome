@@ -163,8 +163,12 @@ export function App() {
     } else if (st.lens === "arena") {
       capture = (window as typeof window & { __kayfabeArena?: { screenshot(): string | null } })
         .__kayfabeArena?.screenshot() ?? null;
-      filename = "kayfabe-geo-replay.png";
-      metadata = `GEO REPLAY · ${yr(st.filters.dayMin)}–${yr(st.filters.dayMax)} · local corpus geography`;
+      filename = "kayfabe-arena-array.png";
+      const subjectId = st.selection?.kind === "node" ? st.selection.id : null;
+      const subjectIndex = subjectId ? st.model?.indexOfId.get(subjectId) : undefined;
+      const subject =
+        (subjectIndex === undefined ? null : st.model?.nodes.name[subjectIndex]) ?? subjectId ?? "no subject";
+      metadata = `ARENA ARRAY · ${subject} · documented relationships, seated by evidence · source: local corpus`;
     } else {
       const renderer = rendererRef.current;
       if (!renderer) return;
