@@ -63,8 +63,8 @@ committing · **REJECT** do not adopt, reason recorded.
 | B2 | `webgl_instancing_performance` | r182 | An A/B/C measurement harness (instanced vs merged vs naive), not a rendering technique | The *method*: prove the draw-call claim instead of asserting it | LOW API. Loads a model npm does not ship | — | — | **REJECT for runtime code / adopt as method.** No shippable technique. The measurement discipline is adopted in `tests/arena-spikes/` |
 | B3 | `webgl_buffergeometry_instancing` | r182 | `InstancedBufferGeometry` + custom `InstancedBufferAttribute`s over a shared base geometry, one uniform driving the animation | **The ship template** for the card field with per-instance semantic attributes | MEDIUM — the real limit is the **vertex-attribute budget**: WebGL2 floor is `MAX_VERTEX_ATTRIBS ≥ 16` and a mat4 `instanceMatrix` alone consumes 4 | 1 draw call; per-instance attribute uploads only when the population changes | **SPIKE 1: 1 draw call at 600 cards** | **SHIP.** Already validated in-repo — `RatingPeaks.ts:163-169` sets seven custom instanced attributes against this exact three version |
 | B4 | `webgl_buffergeometry_instancing_interleaved` | r182 | **Misleading name** — the interleaving is *per-vertex*, not per-instance; no `InstancedInterleavedBuffer` appears | Almost nothing. A card is a quad; interleaving its ~4 shared vertices saves ~100 bytes total | MEDIUM-HIGH if adopted wholesale — one buffer means one usage flag and one update range | — | — | **REJECT as template.** Does not demonstrate what its name implies, and its per-frame loop is the same anti-pattern as B1 |
-| C1 | `webgl_instancing_raycast` | r182 | CPU raycast against `InstancedMesh`, yielding `intersection.instanceId` | Card picking | **Real trap: stale `boundingSphere`.** It is `null` until `computeBoundingSphere()` is called and is *not* recomputed as instances move **[verified here: `InstancedMesh.js:100,151`]** | Zero GPU cost, synchronous, no readback | SPIKE 2 (pending) | **SHIP-candidate with two mandatory guards** — but see C0 below: the incumbent must be beaten first |
-| C2 | `webgl_interactive_cubes_gpu` | r182 | GPU integer-ID picking: parallel picking scene, GLSL3 signed-integer target, 1-pixel scissored render + `readRenderTargetPixels` | The only r182 path that stays pixel-exact while cards transform **on the GPU** | HIGH — readback format is driver-gated (`IMPLEMENTATION_COLOR_READ_FORMAT`), not spec-guaranteed | 1 extra scene + 1 RT + a synchronous readback per sample | SPIKE 2 (pending) | **PROTO.** Only mechanism that solves the hardest stated requirement; must not ship on reasoning alone |
+| C1 | `webgl_instancing_raycast` | r182 | CPU raycast against `InstancedMesh`, yielding `intersection.instanceId` | Card picking | **Real trap, now measured: stale `boundingSphere`.** Null until computed and *not* recomputed as instances move **[verified: `InstancedMesh.js:100,151`]** | *measured:* p50 **0.1–0.2 ms**, idle 0.1 ms | **SPIKE 2: 96.8–100% agreement** with GPU ground truth at 160/360/600, while orbiting, and mid-transition. With bounds left stale: **69.5%, with 67 false misses** | **SHIP.** Wins on cost and accuracy together. Recomputing bounds per pick is mandatory, not optional |
+| C2 | `webgl_interactive_cubes_gpu` | r182 | GPU integer-ID picking: 1-pixel scissored render + `readRenderTargetPixels` | Pixel-exact picking during GPU-side transforms | HIGH — readback format is driver-gated; readback also stalls the GPU (`GL Driver Message: GPU stall due to ReadPixels`) | *measured:* p50 **3.0–3.6 ms**, and **3 ms idle per sample** — every pointer move pays it | **SPIKE 2: correct (it is the reference), but ~20–30x the cost of raycast** | **REJECT for hover.** Accuracy it has; affordability it does not. Keep as a fallback only if raycast is ever shown to fail |
 | C3 | `webgl_interactive_buffergeometry` | r182 | Face-level raycast granularity + zero-allocation highlight overlay | `intersection.uv` (`Mesh.js:455`) as a **sub-card** hook — a card is 2 triangles, so `faceIndex` is useless but `uv` locates a hit *within* the card | LOW-MEDIUM. The demo itself raycasts a one-frame-stale `matrixWorld` | negligible | — | **SPLIT: SHIP `intersection.uv`**, reject the demo's overlay construction and its stale-matrix ordering |
 | D1 | `webgl_lines_fat` | r182 | Screen-space-width polylines via instanced quad expansion (`Line2`/`LineGeometry`/`LineMaterial`); width lives in a **uniform** | The base layer for curved evidence routes: sample curve → flat positions → `setPositions` | LOW. `resolution` uniform present **[verified here: `LineMaterial.js:13`]**. **Do not "clean up" the existing hand-set `resolution.set()` calls** (`RatingGuides.ts:103` and sibling): `onBeforeRender` overwrites the uniform per draw, so they are inert for *rendering* but are the only thing keeping **raycast** correct | 1 draw call per route batch | SPIKE 3 (pending) | **SHIP.** Correct and verified mechanism for controlled screen-space route width |
 | D2 | `webgl_lines_fat_raycasting` | r182 | Hover against screen-space-expanded quads | Route hover | **MEDIUM — verified silent trap.** `Raycaster.params` has **no `Line2` key** by default (`Mesh, Line, LOD, Points, Sprite`), and `LineSegments2.js:329` reads `params.Line2 !== undefined ? … : 0` → **threshold silently 0** unless you create the bucket **[verified here]** | CPU per-segment; scales with sampled points | SPIKE 3 (pending) | **PROTO.** Capability is real and present; cost depends entirely on route count and sampling density |
@@ -110,7 +110,48 @@ Correctness checks, all passing on both renderers:
   entering 240, slots reclaimed 39 → 279 → 39, zero drops, and the tracked card
   **holds slot 89 across the whole round trip** — identity survives.
 
-### Three defects the spikes found
+## SPIKE 2 — picking, measured
+
+Probe: `tests/arena-spikes/spike2-picking.mjs`. GPU-ID is the reference because
+it samples the exact pixel under the pointer through the same vertex path the
+card draws with. Software renderer; the CPU-side ranking is what matters and it
+is renderer-independent.
+
+| Condition (600 cards unless noted) | projected p50 | raycast p50 | gpu p50 | raycast agreement | projected agreement |
+|---|---|---|---|---|---|
+| settled, 160 | <0.05 ms | 0.2 ms | 3.6 ms | **98.7%** | 59.3% |
+| settled, 360 | <0.05 ms | 0.1 ms | 3.6 ms | **96.8%** | 6.8% |
+| settled, 600 | <0.05 ms | 0.1 ms | 3.4 ms | **98.2%** | 12.7% |
+| camera orbiting | <0.05 ms | 0.1 ms | 3.3 ms | **98.6%** | 38.6% |
+| mid-transition | <0.05 ms | 0.1 ms | 3.2 ms | **99.1%** | 36.8% |
+| mid-transition, **bounds left stale** | <0.05 ms | 0.1 ms | 3.0 ms | **69.5% (67 false misses)** | 100% |
+| devicePixelRatio 2 | <0.05 ms | 0.1 ms | 3.2 ms | **100%** | 38.2% |
+
+Three conclusions:
+
+1. **Instanced raycast wins outright.** It agrees with the pixel-exact
+   reference 96.8–100% in every condition including mid-transition and camera
+   motion, at 0.1–0.2 ms. The audit's earlier worry that only GPU picking
+   survives a transitioning field is **not borne out**, provided bounds are
+   recomputed.
+2. **GPU-ID picking is rejected on cost, not correctness.** 3 ms per sample
+   *including idle pointer movement over empty space*, plus a driver-reported
+   GPU stall on every readback. That is 20–30x raycast for an accuracy gain of
+   at most 3 points.
+3. **The stale-bounds trap is real and quantified.** Skipping
+   `computeBoundingSphere` drops raycast to 69.5% and produces **67 false
+   misses** — cards the pointer is directly over that report nothing. That is
+   the audit's predicted failure, measured.
+
+One honest caveat about the projected column: the incumbent's technique is
+built for *points* (`MorphPicking.ts` scans node positions), and the adaptation
+here approximates an oriented quad with an axis-aligned screen box. Its 6.8%
+–100% swing is a property of that approximation, not a verdict on the shipped
+morph picker. The conclusion is narrower and fair: **the point-scan technique
+does not transfer to rotated card quads without becoming a raycast anyway**, so
+raycast is the honest choice for the Arena.
+
+### Defects the spikes found
 
 1. **The camera was the teleport.** With perfectly interpolated cards but an
    instant camera cut between formations, the tracked card jumped 0.786 NDC in
@@ -126,6 +167,19 @@ Correctness checks, all passing on both renderers:
    the arc/chord ratio was **exactly 1.0000**; the curvature visible in screen
    space was entirely the camera dolly. The bow is now explicit state and the
    assembly leg measures **1.0321**.
+4. **Half the horseshoe was invisible to picking.** Cards are yawed to face
+   centre stage, which leaves roughly half the field back-facing from any given
+   camera, and single-sided plaques are silently culled. GPU ground truth hit
+   only **55.3%** of card centres until `side: DoubleSide` was set. A data
+   plaque must not vanish because of viewing angle.
+5. **A whole SPIKE 2 run was measured against a dead WebGL context.** The page
+   loses its context once during boot under SwiftShader and restores ~1.5 s
+   later, and `WebGLRenderer.render()` early-returns while it is lost — so
+   every draw reported 0 calls and every picked pixel came back empty, while
+   the probe cheerfully printed agreement percentages. Probes now refuse to
+   measure unless the context is live, and the spike re-commits its formation
+   on `webglcontextrestored`. This is also the acceptance criterion about
+   context loss, arriving early and by accident.
 
 ---
 

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arena spike 2 — picking</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #04060b; overflow: hidden; }
+      #gl { display: block; width: 100vw; height: 100vh; }
+      #hud { position: fixed; left: 8px; top: 8px; z-index: 2;
+        font: 12px/1.5 ui-monospace, monospace; color: #9fb4c8;
+        background: rgba(4,6,11,.72); padding: 6px 9px; border-radius: 4px; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <div id="hud">loading…</div>
+    <script type="module">import "./picking.ts";</script>
+  </body>
+</html>
