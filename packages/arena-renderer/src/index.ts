@@ -5,6 +5,8 @@ export { ArenaLabels, type ArenaLabelReport, type ArenaLabelInput } from "./Aren
 export { ArenaPicking } from "./ArenaPicking";
 export { ArenaRoutes } from "./ArenaRoutes";
 export { ArenaBloom, BLOOM_LAYER } from "./ArenaBloom";
+export { ArenaPulses } from "./ArenaPulses";
+export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail";
 export {
   layoutArena, layoutEcho, layoutIndex, personSections, eraSections,
 } from "./ArenaLayouts";

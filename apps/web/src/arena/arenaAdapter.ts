@@ -175,12 +175,32 @@ export async function promotionScope(
     reigns: 0,
   };
 
+  // Documented title matches per year, summed across the promotion's titles.
+  // Only years the corpus actually documents contribute; the rail draws the
+  // rest as gaps, which is the honest shape of a championship history.
+  let titleYears: { from: number; counts: number[] } | undefined;
+  if (detail.titles.length > 0) {
+    const from = Math.min(...detail.titles.map((t) => t.yearFrom));
+    const to = Math.max(...detail.titles.map((t) => t.yearFrom + t.yearCounts.length));
+    if (to > from) {
+      const counts = new Array<number>(to - from).fill(0);
+      for (const title of detail.titles) {
+        title.yearCounts.forEach((c, i) => {
+          const idx = title.yearFrom + i - from;
+          if (idx >= 0 && idx < counts.length) counts[idx] = (counts[idx] ?? 0) + c;
+        });
+      }
+      titleYears = { from, counts };
+    }
+  }
+
   return {
     kind: "promotion",
     anchorId: promotionId,
     anchorName: detail.n,
     cards: [anchor, ...seated, ...aggregates],
     represented,
+    titleYears,
   };
 }
 

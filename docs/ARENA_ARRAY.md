@@ -195,14 +195,34 @@ selection halo was blowing out into an amber wash across the whole arena — the
 "giant glow" the brief forbids. Bloom is now strength 0.32, radius 0.22,
 threshold 0.55 over a thin 0.5-opacity ring.
 
+## The championship rail
+
+A gold chronology across the front of the Arena, revealing left to right. Each
+segment is a run of years the corpus documents title activity for; **a year with
+none is left empty**, because an unbroken rail would claim a continuity the
+evidence does not have. AAA draws 3 segments across 1993–2025, so its documented
+title history has two real gaps, and the rail shows them as gaps.
+
+The rail belongs to the Arena reading only. The Index is an archive and the Echo
+is a source topology, so neither carries one. No rail is drawn at all when the
+corpus documents no title activity, rather than an empty one implying we looked.
+
+Pulses ride the routes once those routes are actually drawn — a packet on an
+unrevealed route would be a claim about nothing. They are the only objects
+besides the selection halo permitted on the bloom layer.
+
+## Chronicle: deliberately not built
+
+The brief asks for a Chronicle formation "only if completed" and warns against
+adding a helix for novelty. Chronology in this lens is already carried where it
+is legible: era sections fan chronologically across the horseshoe, and the
+championship rail is a true time axis with honest gaps. A fourth formation that
+re-spiralled the same cards would be the generic helix the brief rules out, so
+it is left unbuilt on purpose rather than by omission.
+
 ## Not yet built
 
-Stated plainly so nobody has to discover it:
-
-- timeline pulses and the championship gold rail (measured in
-  `apps/web/spikes/routes.ts`, not yet wired into the lens)
-- the drill-down cascade — aggregate cards exist and the churn mechanics are
-  proven in SPIKE 1, but opening an aggregate does not yet expand it
-- Chronicle formation
-- URL restoration, a semantic inspector, and screenshot compositing of the DOM
-  label layer (`renderer.domElement.toDataURL()` will not capture it)
+- co-holder grouping within a rail segment, and a playhead travelling the rail
+  during timeline playback
+- person-scope title rails (the promotion projection carries per-year title
+  counts; the per-person equivalent would need another projection read)

@@ -113,6 +113,23 @@ export class ArenaRoutes {
     return out;
   }
 
+  /** Position along a live route, t in 0..1. Reads the same cached samples the
+   *  geometry uses, so a packet cannot drift off the line it is riding. */
+  samplePoint(index: number, t: number): { x: number; y: number; z: number } | null {
+    if (index < 0 || index >= this.liveCount) return null;
+    const pts = this.slots[index]!.points;
+    const clamped = t <= 0 ? 0 : t >= 1 ? 1 : t;
+    const f = clamped * (SAMPLES - 1);
+    const s0 = Math.min(SAMPLES - 1, Math.floor(f));
+    const s1 = Math.min(SAMPLES - 1, s0 + 1);
+    const k = f - s0;
+    return {
+      x: pts[s0 * 3]! + (pts[s1 * 3]! - pts[s0 * 3]!) * k,
+      y: pts[s0 * 3 + 1]! + (pts[s1 * 3 + 1]! - pts[s0 * 3 + 1]!) * k,
+      z: pts[s0 * 3 + 2]! + (pts[s1 * 3 + 2]! - pts[s0 * 3 + 2]!) * k,
+    };
+  }
+
   keyOf(line: object): string | null {
     for (let i = 0; i < this.liveCount; i++) if (this.slots[i]!.line === line) return this.slots[i]!.key;
     return null;

@@ -17,8 +17,11 @@ import { ArenaLabels, type ArenaLabelInput } from "./ArenaLabels";
 import { ArenaPicking } from "./ArenaPicking";
 import { ArenaRoutes } from "./ArenaRoutes";
 import { ArenaBloom } from "./ArenaBloom";
+import { ArenaPulses } from "./ArenaPulses";
+import { ArenaRail } from "./ArenaRail";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
+import { railSegmentsFromYears } from "./ArenaRail";
 import {
   AB, AE, ARENA_TIERS, CS, easeQuintic, prominence,
   type ArenaCard, type ArenaFormation, type ArenaLayoutResult,
@@ -46,6 +49,10 @@ export interface ArenaScope {
   /** Aggregate card id -> the cards it stands for. Present only when the
    *  population was capped, which the corpus forces for large promotions. */
   represented?: Map<string, ArenaCard[]>;
+  /** Documented title activity per year, for the championship rail. Absent
+   *  when the corpus documents none — in which case no rail is drawn at all,
+   *  rather than an empty one implying we looked and found nothing. */
+  titleYears?: { from: number; counts: number[] };
 }
 
 export class ArenaRenderer {
@@ -58,6 +65,8 @@ export class ArenaRenderer {
   readonly picking = new ArenaPicking();
   readonly routes: ArenaRoutes;
   readonly bloom: ArenaBloom;
+  readonly pulses: ArenaPulses;
+  readonly rail: ArenaRail;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -99,6 +108,8 @@ export class ArenaRenderer {
     // tier's budget rather than to the card capacity.
     this.routes = new ArenaRoutes(this.scene, ARENA_TIERS.high.routes);
     this.bloom = new ArenaBloom(this.renderer, this.scene, this.camera);
+    this.pulses = new ArenaPulses(this.scene, ARENA_TIERS.high.pulses);
+    this.rail = new ArenaRail(this.scene, 96);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -146,6 +157,7 @@ export class ArenaRenderer {
     // Effects degrade individually: bloom is its own lever, and the low tier
     // switches it off while the scene stays coherent without it.
     this.bloom.enabled = budget.bloom;
+    this.pulses.setCount(budget.pulses);
     this.resize();
     if (this.scope) this.setScope(this.scope);
   }
@@ -195,9 +207,26 @@ export class ArenaRenderer {
     this.routes.build(
       this.transition, this.pool, this.active, anchorId, ARENA_TIERS[this.tier].routes,
     );
+    this.buildRail();
     // Routes resolve AFTER the cards settle, per the brief's ordering: they are
     // evidence about a formation, not part of its assembly.
     this.routes.setReveal(immediate ? 1 : 0);
+  }
+
+  /** The rail belongs to the Arena reading; the Index wall is an archive and
+   *  the Echo is a source topology, so neither carries one. */
+  private buildRail(): void {
+    const years = this.scope?.titleYears;
+    if (!years || this.formationName !== "arena" || years.counts.length === 0) {
+      this.rail.build([], 0, 0, 0, 0, 0);
+      return;
+    }
+    const segments = railSegmentsFromYears(years.from, years.counts);
+    const extent = this.lastLayout?.extent ?? 12;
+    this.rail.build(
+      segments, years.from, years.from + years.counts.length,
+      extent * 0.86, extent * 0.52, -1.6,
+    );
   }
 
   private frameCamera(name: ArenaFormation, immediate: boolean): void {
@@ -281,6 +310,7 @@ export class ArenaRenderer {
     this.camera.updateProjectionMatrix();
     // CSS pixels, deliberately not multiplied by devicePixelRatio.
     this.routes.setResolution(w, h);
+    this.rail.setResolution(w, h);
     this.bloom.setSize(w, h);
   }
 
@@ -295,11 +325,21 @@ export class ArenaRenderer {
       this.updateCamera();
       // Routes stay attached to their cards while the formation travels, then
       // draw in over the tail of the transition.
+      const dt = this.lastFrameMs > 0 ? Math.min(0.05, (now - this.lastFrameMs) / 1000) : 0;
+      // Packets ride the routes only once those routes are actually drawn;
+      // a pulse on an unrevealed route is a claim about nothing.
+      if (this.routes.count > 0 && this.transition.progressRaw >= 1) {
+        this.pulses.update(dt, this.routes);
+      } else {
+        this.pulses.mesh.count = 0;
+      }
       const raw = this.transition.progressRaw;
       if (this.routes.count > 0) {
         this.routes.follow(this.transition, this.pool, this.scope?.anchorId ?? "");
         const revealFrom = 0.55;
-        this.routes.setReveal(raw <= revealFrom ? 0 : Math.min(1, (raw - revealFrom) / (1 - revealFrom)));
+        const progress = raw <= revealFrom ? 0 : Math.min(1, (raw - revealFrom) / (1 - revealFrom));
+        this.routes.setReveal(progress);
+        this.rail.setReveal(progress);
       }
       const interval = 1000 / this.labelCadenceHz;
       if (now - this.lastLabelMs >= interval) {
@@ -407,6 +447,8 @@ export class ArenaRenderer {
     this.scene.remove(this.cards.mesh);
     this.cards.dispose();
     this.routes.dispose();
+    this.pulses.dispose();
+    this.rail.dispose();
     this.bloom.dispose();
     this.labels.dispose();
     this.renderer.dispose();
