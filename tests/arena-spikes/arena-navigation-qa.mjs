@@ -150,6 +150,66 @@ try {
     }
   }
 
+  // 6. the wire and its pulses answer for EVERY card, not just the near rows
+  await openArena(page, "2/lens=arena");
+  await page.waitForTimeout(2500);
+  const canvasBox = await page.locator("canvas.arena-gl").boundingBox();
+  const ranks = [];
+  for (const frac of [0.02, 0.35, 0.7, 0.99]) {
+    // Resolved fresh each time: the governor can demote the tier and re-seat
+    // the pool between choosing a card and pointing at it, which makes
+    // coordinates captured up front silently wrong.
+    const card = await page.evaluate((f) => {
+      const r = window.__kayfabeArena, tr = r.transition, cam = r.camera;
+      const w = r.canvas.clientWidth, h = r.canvas.clientHeight;
+      const V = Object.getPrototypeOf(cam.position).constructor;
+      const v = new V();
+      const on = [];
+      r.scope.cards.forEach((c, i) => {
+        if (c.id === r.scope.anchorId || c.represents) return;
+        const s = r.pool.slotOf(c.id);
+        if (s === undefined || tr.state[s] === 0) return;
+        v.set(tr.posCur[s * 3], tr.posCur[s * 3 + 1], tr.posCur[s * 3 + 2]).project(cam);
+        const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+        if (x > 30 && x < w - 30 && y > 30 && y < h - 30 && r.pick(x, y)?.id === c.id) {
+          on.push({ rank: i, id: c.id, name: c.name, strength: c.strength, x, y });
+        }
+      });
+      return on.length ? on[Math.min(on.length - 1, Math.floor(on.length * f))] : null;
+    }, frac);
+    if (!card) continue;
+    await page.mouse.move(canvasBox.x + card.x, canvasBox.y + card.y);
+    await page.waitForTimeout(700);
+    const state = await page.evaluate(() => ({
+      wire: window.__kayfabeArena.routes.pickTargets().filter((l) => l.visible).length,
+      pulses: window.__kayfabeArena.pulses.count,
+      hover: window.__kayfabeArena.hoverId ?? null,
+    }));
+    ranks.push({ ...card, ...state });
+  }
+  record("every rank is reachable", ranks.length === 4, `${ranks.length}/4 sampled`);
+  record(
+    "hovering any card draws exactly one wire",
+    ranks.length > 0 && ranks.every((r) => r.wire === 1 && r.hover === r.id),
+    ranks.map((r) => `#${r.rank}:${r.wire}`).join(" "),
+  );
+  record(
+    "pulses ride it, scaled by encounters",
+    ranks.length > 0 && ranks.every((r) => r.pulses >= 2)
+      && ranks[0].pulses > ranks[ranks.length - 1].pulses,
+    ranks.map((r) => `${r.strength}enc→${r.pulses}`).join(" "),
+  );
+  await page.mouse.move(canvasBox.x + 5, canvasBox.y + 5);
+  await page.waitForTimeout(500);
+  const idle = await page.evaluate(() => ({
+    wire: window.__kayfabeArena.routes.pickTargets().filter((l) => l.visible).length,
+    pulses: window.__kayfabeArena.pulses.count,
+    hover: window.__kayfabeArena.hoverId ?? null,
+    selected: window.__kayfabeArena.selectedId ?? null,
+  }));
+  record("nothing pulses while nothing is pointed at", idle.wire === 0 && idle.pulses === 0,
+    `wire=${idle.wire} pulses=${idle.pulses} hover=${idle.hover} selected=${idle.selected}`);
+
   record("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } finally {
   await browser.close();

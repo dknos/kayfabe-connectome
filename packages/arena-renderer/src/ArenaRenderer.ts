@@ -181,7 +181,16 @@ export class ArenaRenderer {
     if (this.scope) this.pool.release(this.scope.anchorId);
     this.transition.state.fill(CS.ABSENT);
     this.transition.present.fill(0);
+    const previousAnchor = this.scope?.anchorId;
     this.scope = scope;
+    // A selection belongs to the arena it was made in. Carrying one across a
+    // change of subject left the previous card's fibre lit around a subject it
+    // was never a relationship of, which reads as a claim about this arena.
+    if (previousAnchor !== undefined && previousAnchor !== scope.anchorId) {
+      this.selectedId = scope.anchorId;
+      this.hoverId = null;
+      this.routes.setEmphasis(null);
+    }
     this.selectedId ??= scope.anchorId;
     // The card budget is a quality tier, and the corpus forces it to bite:
     // pr:c8 alone is 1,087 people against 600 slots.
@@ -223,10 +232,7 @@ export class ArenaRenderer {
     // across the Index they run over every row of a grid whose whole point is
     // even comparison, and the Echo is a source topology rather than a set of
     // relationships to this subject.
-    this.routes.build(
-      this.transition, this.pool, this.active, anchorId,
-      name === "arena" ? ARENA_TIERS[this.tier].routes : 0,
-    );
+    this.routes.bind(this.transition, this.pool, this.active, anchorId, name === "arena");
     // The fibre set is new, so nothing is pointed at on it yet.
     this.applyPulseFocus();
     this.buildRail();
@@ -483,12 +489,18 @@ export class ArenaRenderer {
         this.pulses.mesh.count = 0;
       }
       const raw = this.transition.progressRaw;
+      const revealFrom = 0.55;
+      // Evidence resolves AFTER the cards settle, per the brief's ordering: it
+      // is a reading of a formation, not part of its assembly.
+      const progress = raw <= revealFrom ? 0 : Math.min(1, (raw - revealFrom) / (1 - revealFrom));
+      // The rail is drawn whether or not a fibre is: it belongs to the
+      // formation, and gating it on a hover-built route meant a promotion's
+      // championship rail never revealed unless the reader happened to be
+      // pointing at a card.
+      this.rail.setReveal(progress);
       if (this.routes.count > 0) {
         this.routes.follow(this.transition, this.pool, this.scope?.anchorId ?? "");
-        const revealFrom = 0.55;
-        const progress = raw <= revealFrom ? 0 : Math.min(1, (raw - revealFrom) / (1 - revealFrom));
         this.routes.setReveal(progress);
-        this.rail.setReveal(progress);
       }
       const interval = 1000 / this.labelCadenceHz;
       if (now - this.lastLabelMs >= interval) {

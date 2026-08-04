@@ -86,6 +86,13 @@ export class ArenaRoutes {
   private emphasisId: string | null = null;
   /** The live index of the drawn fibre, or -1. The pulse rides this one. */
   private emphasisIndex = -1;
+  /** What a fibre would be built FROM, held so one can be built the moment a
+   *  card is pointed at rather than pre-built for a privileged few. */
+  private transition: ArenaTransition | null = null;
+  private pool: SlotPool | null = null;
+  private anchorId = "";
+  private strongest = 0;
+  private readonly byId = new Map<string, ArenaCard>();
   private readonly ctrl = new Vector3();
   private readonly from = new Vector3();
   private readonly to = new Vector3();
@@ -183,62 +190,71 @@ export class ArenaRoutes {
   }
 
   /**
-   * Default route policy, from the brief: selected subject to its direct
-   * documented relationships, and nothing else. No all-to-all spaghetti, and
-   * aggregate cards get no route because a summary is not an encounter.
+   * Take the scope the fibre will be drawn from.
+   *
+   * A route is no longer built up front for the strongest N cards. That budget
+   * was the reason the wire and its pulses "only worked for the first few
+   * rows": the top 40 by evidence are seated nearest the subject, so every card
+   * further out had no fibre to light and pointing at one did nothing. Exactly
+   * one fibre is ever drawn, so exactly one is ever built — on demand, for
+   * whichever card the reader is pointing at, whoever that is.
    */
-  build(
+  bind(
     transition: ArenaTransition, pool: SlotPool,
-    cards: readonly ArenaCard[], anchorId: string, budget: number,
+    cards: readonly ArenaCard[], anchorId: string, enabled: boolean,
   ): void {
     for (const slot of this.slots) { slot.active = false; slot.line.visible = false; }
     this.liveCount = 0;
     this.emphasisIndex = -1;
-    // The route set is new, so nothing is emphasised on it yet. Without this a
+    // The scope is new, so nothing is emphasised on it yet. Without this a
     // reader whose pointer never left a card keeps an id that no longer maps to
     // a drawn fibre, and hovering it again is a no-op.
     this.emphasisId = null;
-    const anchorSlot = pool.slotOf(anchorId);
-    if (anchorSlot === undefined || budget <= 0) return;
-    const a3 = anchorSlot * 3;
+    this.transition = enabled ? transition : null;
+    this.pool = enabled ? pool : null;
+    this.anchorId = anchorId;
+    this.strongest = 0;
+    this.byId.clear();
+    if (!enabled) return;
+    for (const card of cards) {
+      if (card.id === anchorId || card.bank === AB.AGGREGATE) continue;
+      this.byId.set(card.id, card);
+      if (card.strength > this.strongest) this.strongest = card.strength;
+    }
+    this.wanted = this.byId.size;
+  }
 
-    const cap = Math.min(budget, this.capacity);
-    this.wanted = 0;
-    let strongest = 0;
-    for (const card of cards) {
-      if (card.id === anchorId || card.bank === AB.AGGREGATE) continue;
-      this.wanted++;
-      if (card.strength > strongest) strongest = card.strength;
-    }
-    for (const card of cards) {
-      if (this.liveCount >= cap) break;
-      if (card.id === anchorId || card.bank === AB.AGGREGATE) continue;
-      const slot = pool.slotOf(card.id);
-      if (slot === undefined || transition.state[slot] === CS.ABSENT) continue;
-      const route = this.slots[this.liveCount]!;
-      const b3 = slot * 3;
-      this.fill(
-        route,
-        transition.posCur[a3]!, transition.posCur[a3 + 1]!, transition.posCur[a3 + 2]!,
-        transition.posCur[b3]!, transition.posCur[b3 + 1]!, transition.posCur[b3 + 2]!,
-        true,
-      );
-      route.line.material = card.bank === AB.SAME ? this.materials.same
-        : card.bank === AB.MIXED ? this.materials.mixed
-        : this.materials.opposed;
-      route.key = `${anchorId}~${card.id}`;
-      route.otherId = card.id;
-      route.base = route.line.material as LineMaterial;
-      route.strength = strongest > 0 ? card.strength / strongest : 0;
-      route.encounters = card.strength;
-      route.otherSlot = slot;
-      route.active = true;
-      // Invisible until pointed at. The geometry is live either way: the pulse
-      // samples it every frame.
-      route.line.visible = false;
-      this.liveCount++;
-    }
-    this.setReveal(this.reveal);
+  /** Build the one fibre for `id`, or none. Returns whether it exists. */
+  private buildOne(id: string): boolean {
+    const transition = this.transition;
+    const pool = this.pool;
+    const card = this.byId.get(id);
+    if (!transition || !pool || !card) return false;
+    const anchorSlot = pool.slotOf(this.anchorId);
+    const slot = pool.slotOf(card.id);
+    if (anchorSlot === undefined || slot === undefined) return false;
+    if (transition.state[slot] === CS.ABSENT) return false;
+    const a3 = anchorSlot * 3;
+    const b3 = slot * 3;
+    const route = this.slots[0]!;
+    this.fill(
+      route,
+      transition.posCur[a3]!, transition.posCur[a3 + 1]!, transition.posCur[a3 + 2]!,
+      transition.posCur[b3]!, transition.posCur[b3 + 1]!, transition.posCur[b3 + 2]!,
+      true,
+    );
+    route.base = card.bank === AB.SAME ? this.materials.same
+      : card.bank === AB.MIXED ? this.materials.mixed
+      : this.materials.opposed;
+    route.key = `${this.anchorId}~${card.id}`;
+    route.otherId = card.id;
+    route.strength = this.strongest > 0 ? card.strength / this.strongest : 0;
+    route.encounters = card.strength;
+    route.otherSlot = slot;
+    route.active = true;
+    this.liveCount = 1;
+    this.setReveal(1);
+    return true;
   }
 
   /** Refresh geometry against current card positions, so routes stay attached
@@ -318,18 +334,17 @@ export class ArenaRoutes {
     if (this.emphasisId === id) return;
     this.emphasisId = id;
     this.emphasisIndex = -1;
-    for (let i = 0; i < this.liveCount; i++) {
-      const route = this.slots[i]!;
-      if (id && route.otherId === id) {
-        this.emphasisIndex = i;
-        this.highlight.color.copy((route.base ?? this.materials.mixed).color);
-        route.line.material = this.highlight;
-        route.line.visible = true;
-      } else if (route.line.visible) {
-        if (route.base) route.line.material = route.base;
-        route.line.visible = false;
-      }
+    const route = this.slots[0]!;
+    if (!id || !this.buildOne(id)) {
+      this.liveCount = 0;
+      route.active = false;
+      route.line.visible = false;
+      return;
     }
+    this.emphasisIndex = 0;
+    this.highlight.color.copy((route.base ?? this.materials.mixed).color);
+    route.line.material = this.highlight;
+    route.line.visible = true;
   }
 
   /** How much documented evidence route `i` carries, 0..1 against the strongest
