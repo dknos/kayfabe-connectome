@@ -13,6 +13,7 @@ import { GeoControls } from "./geo/GeoControls";
 import { GeoInspector } from "./geo/GeoInspector";
 import { GeoLens } from "./geo/GeoLens";
 import { ArenaLens } from "./arena/ArenaLens";
+import { SpacetimeLens } from "./spacetime/SpacetimeLens";
 import { GeoTimelineReadout } from "./geo/GeoTimelineReadout";
 import { applyPendingGeoUrl, installGeoUrl } from "./geo/geoUrl";
 import { scheduler, useGeo } from "./geo/geoStore";
@@ -169,6 +170,11 @@ export function App() {
       const subject =
         (subjectIndex === undefined ? null : st.model?.nodes.name[subjectIndex]) ?? subjectId ?? "no subject";
       metadata = `ARENA ARRAY · ${subject} · documented relationships, seated by evidence · source: local corpus`;
+    } else if (st.lens === "spacetime") {
+      capture = (window as typeof window & { __kayfabeSpacetime?: { screenshot(): string | null } })
+        .__kayfabeSpacetime?.screenshot() ?? null;
+      filename = "kayfabe-spacetime.png";
+      metadata = "KAYFABE SPACETIME · career worldlines, documented matches as convergence events · source: local corpus";
     } else {
       const renderer = rendererRef.current;
       if (!renderer) return;
@@ -230,6 +236,7 @@ export function App() {
         {model && lens === "morph" && <MorphLab engine={engineRef.current} />}
         {model && lens === "ratings" && <RatingsLab engine={engineRef.current} />}
         {model && lens === "arena" && <ArenaLens />}
+        {model && lens === "spacetime" && <SpacetimeLens />}
         {model && lens === "geo" && <GeoLens />}
         {model && lens === "geo" && <GeoControls />}
         {model && lens === "geo" && <GeoInspector />}

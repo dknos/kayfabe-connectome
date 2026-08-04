@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@kayfabe/arena-renderer':
+        specifier: workspace:*
+        version: link:../../packages/arena-renderer
       '@kayfabe/geo-renderer':
         specifier: workspace:*
         version: link:../../packages/geo-renderer
@@ -29,6 +32,9 @@ importers:
       '@kayfabe/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
+      '@kayfabe/spacetime-renderer':
+        specifier: workspace:*
+        version: link:../../packages/spacetime-renderer
       cesium:
         specifier: 1.143.0
         version: 1.143.0
@@ -73,6 +79,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/arena-renderer:
+    dependencies:
+      '@kayfabe/graph-contract':
+        specifier: workspace:*
+        version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+
   packages/geo-renderer:
     dependencies:
       cesium:
@@ -108,6 +127,19 @@ importers:
         version: 0.182.0
 
   packages/renderer:
+    dependencies:
+      '@kayfabe/graph-contract':
+        specifier: workspace:*
+        version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+
+  packages/spacetime-renderer:
     dependencies:
       '@kayfabe/graph-contract':
         specifier: workspace:*

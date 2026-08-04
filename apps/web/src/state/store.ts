@@ -7,7 +7,7 @@ import { GraphModel, type FilteredView, type Filters } from "../graph/model";
 import { resolveMembers, type GroupKey, type MemberResult } from "../graph/members";
 import { loadChampionships, loadPersonDossier } from "../data/loader";
 
-export type Lens = "connectome" | "morph" | "geo" | "ratings" | "arena";
+export type Lens = "connectome" | "morph" | "geo" | "ratings" | "arena" | "spacetime";
 export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; edge: number }
@@ -182,6 +182,8 @@ export const useStore = create<AppState>((set, get) => ({
           ? "Meltzer Ratings — reported ratings across wrestling history. Missing is not zero."
         : lens === "morph"
           ? "Morph Lab — the tissue reorganises around whatever you select."
+        : lens === "spacetime"
+          ? "Kayfabe Spacetime — a career as a worldline; documented matches as convergence events."
           : "Connectome view",
     );
   },
@@ -435,6 +437,9 @@ export function registerArenaUrl(serialize: UrlSerializer, restore: UrlRestorer)
 export function registerRatingsUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
   lensUrl.set("ratings", { serialize, restore });
 }
+export function registerSpacetimeUrl(serialize: UrlSerializer, restore: UrlRestorer): void {
+  lensUrl.set("spacetime", { serialize, restore });
+}
 
 // v2: day numbers re-based to the 1900 epoch, promo bits widened — old
 // v1 fragments are ignored safely rather than restored wrong.
@@ -466,6 +471,10 @@ function buildFragment(): string | null {
   if (s.lens === "arena") {
     const a = lensUrl.get("arena")?.serialize();
     if (a) for (const [k, v] of Object.entries(a)) push(k, v);
+  }
+  if (s.lens === "spacetime") {
+    const sp = lensUrl.get("spacetime")?.serialize();
+    if (sp) for (const [k, v] of Object.entries(sp)) push(k, v);
   }
   push("focus", s.focusId);
   if (s.selection?.kind === "node") push("sel", s.selection.id);
@@ -598,7 +607,8 @@ export function restoreFromUrl(explicitHash?: string): void {
   // closest to Morph, tabular links return to Connectome, and geographic
   // tabular links remain in Geo Replay. Unknown values fail closed to Connectome.
   const restoredLens: Lens =
-    lensParam === "morph" || lensParam === "geo" || lensParam === "ratings" || lensParam === "arena"
+    lensParam === "morph" || lensParam === "geo" || lensParam === "ratings" ||
+    lensParam === "arena" || lensParam === "spacetime"
       ? lensParam
       : lensParam === "atlas"
         ? "morph"

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@kayfabe/arena-renderer": "workspace:*",
+    "@kayfabe/spacetime-renderer": "workspace:*",
     "@kayfabe/geo-renderer": "workspace:*",
     "@kayfabe/graph-contract": "workspace:*",
     "@kayfabe/morph-renderer": "workspace:*",

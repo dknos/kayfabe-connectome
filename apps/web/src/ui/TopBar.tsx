@@ -32,6 +32,9 @@ export function TopBar({ onScreenshot }: { onScreenshot: () => void }) {
         </button>{" "}
         <button className={lens === "arena" ? "active" : ""} onClick={() => setLens("arena")}>
           Arena Array
+        </button>{" "}
+        <button className={lens === "spacetime" ? "active" : ""} onClick={() => setLens("spacetime")}>
+          Spacetime
         </button>
         <button className={lens === "ratings" ? "active" : ""} onClick={() => setLens("ratings")}>
           Meltzer Ratings
