@@ -6,9 +6,12 @@
  * the same division every other lens in this repository uses.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArenaRenderer, type ArenaFormation, type ArenaQualityTier } from "@kayfabe/arena-renderer";
+import {
+  ARENA_TIERS, ArenaRenderer,
+  type ArenaFormation, type ArenaQualityTier, type ArenaScope,
+} from "@kayfabe/arena-renderer";
 import { useStore } from "../state/store";
-import { personScope } from "./arenaAdapter";
+import { personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
 
 const FORMATIONS: { key: ArenaFormation; label: string; hint: string }[] = [
   { key: "echo", label: "Echo", hint: "where these people sit in the connectome" },
@@ -28,10 +31,31 @@ export function ArenaLens(): JSX.Element {
   const [hoverName, setHoverName] = useState<string | null>(null);
 
   const anchorId = selection?.kind === "node" ? selection.id : null;
-  const scope = useMemo(
-    () => (model && anchorId ? personScope(model, anchorId) : null),
-    [model, anchorId],
+  // Promotions and people are different arenas. A person's arena seats by
+  // documented relationship; a promotion's seats by era, because its cards have
+  // no relationship to a subject — they share a promotion, not an opponent.
+  const isPromotion = Boolean(anchorId && model && model.nodes.type[model.indexOfId.get(anchorId) ?? -1] === 1);
+  const personScopeMemo = useMemo(
+    () => (model && anchorId && !isPromotion ? personScope(model, anchorId) : null),
+    [model, anchorId, isPromotion],
   );
+  const [promoScope, setPromoScope] = useState<ArenaScope | null>(null);
+  const [truncated, setTruncated] = useState(0);
+
+  useEffect(() => {
+    if (!model || !anchorId || !isPromotion) { setPromoScope(null); setTruncated(0); return; }
+    let cancelled = false;
+    void (async () => {
+      const built = await promotionScope(model, anchorId, ARENA_TIERS[tier].cards);
+      const left = await promotionTruncation(anchorId);
+      if (cancelled) return;
+      setPromoScope(built);
+      setTruncated(left);
+    })();
+    return () => { cancelled = true; };
+  }, [model, anchorId, isPromotion, tier]);
+
+  const scope = isPromotion ? promoScope : personScopeMemo;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,7 +84,11 @@ export function ArenaLens(): JSX.Element {
     if (!renderer || !scope) return;
     renderer.setScope(scope);
     renderer.setFormation(formation, true);
-    announce(`Arena Array: ${scope.anchorName}, ${scope.cards.length - 1} documented relationships.`);
+    announce(
+      scope.kind === "promotion"
+        ? `Arena Array: ${scope.anchorName}, ${scope.cards.length - 1} cards across its documented eras.`
+        : `Arena Array: ${scope.anchorName}, ${scope.cards.length - 1} documented relationships.`,
+    );
     // formation is intentionally not a dependency: changing scope should not
     // replay the assembly, and changing formation is handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,13 +146,23 @@ export function ArenaLens(): JSX.Element {
       {scope && (
         <div className="arena-readout">
           <strong>{scope.anchorName}</strong>
-          <span>{scope.cards.length - 1} documented relationships</span>
+          <span>
+            {scope.kind === "promotion"
+              ? `${scope.cards.length - 1} cards across its documented eras`
+              : `${scope.cards.length - 1} documented relationships`}
+          </span>
+          {/* A capped roster that reads as complete is a false claim. */}
+          {truncated > 0 && (
+            <span className="arena-caveat">
+              {truncated} further documented people are not in this projection
+            </span>
+          )}
           {hoverName && <span className="arena-hover">{hoverName}</span>}
         </div>
       )}
       {!scope && (
         <div className="arena-readout">
-          <span>Select a wrestler to build an arena around them.</span>
+          <span>Select a wrestler or a promotion to build an arena around them.</span>
         </div>
       )}
     </div>

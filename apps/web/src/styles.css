@@ -1307,3 +1307,5 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
 }
 .arena-readout strong { color: #dbe6f2; font-size: 13px; }
 .arena-readout .arena-hover { color: #48d9ff; }
+
+.arena-readout .arena-caveat { color: #d8a657; }

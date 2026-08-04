@@ -19,6 +19,7 @@
  */
 import { AB, type ArenaCard } from "@kayfabe/arena-renderer";
 import type { ArenaScope } from "@kayfabe/arena-renderer";
+import { loadChronologyPromotionDetail } from "../data/chronology/loader";
 import { EF, STRIDE, type GraphModel } from "../graph/model";
 
 /** The corpus epoch is 1900-01-01 (docs/DECISIONS.md D-008). */
@@ -74,4 +75,99 @@ export function personScope(model: GraphModel, anchorId: string): ArenaScope | n
     dayToYear(model.nodes.lastDay[anchorIndex]!),
   ));
   return { kind: "person", anchorId, anchorName, cards };
+}
+
+
+/**
+ * A promotion scope, from the chronology projection.
+ *
+ * Two reasons this does not come from the graph. The edge `promoMask` cannot
+ * express it: only 30 promotions own a bit and the other 541 share bit 30, so
+ * filtering pr:c8 by its bit would silently mean "AAA or any of 540 others".
+ * And the era a card belongs to is its span INSIDE this promotion, which the
+ * atlas already carries per person per promotion — using a career debut
+ * instead would mis-seat 326 of AAA's 1,087 people into decades the promotion
+ * never had.
+ */
+export async function promotionScope(
+  model: GraphModel, promotionId: string, budget: number,
+): Promise<ArenaScope | null> {
+  const detail = await loadChronologyPromotionDetail(promotionId);
+  if (!detail) return null;
+
+  const cards: ArenaCard[] = [];
+  for (const member of detail.members) {
+    const firstYear = dayToYear(member.firstDay);
+    const index = model.indexOfId.get(member.p);
+    cards.push({
+      id: member.p,
+      name: member.n,
+      // A promotion scope has no relationship banks: these people are seated
+      // by when they worked here, not by how they related to a subject.
+      bank: AB.MIXED,
+      strength: member.matches,
+      era: decadeOf(firstYear),
+      firstYear,
+      lastYear: dayToYear(member.lastDay),
+      pos: index === undefined ? null : [
+        model.nodes.pos[index * 3]!, model.nodes.pos[index * 3 + 1]!, model.nodes.pos[index * 3 + 2]!,
+      ],
+      reigns: member.champ ? 1 : 0,
+    });
+  }
+
+  const seated = cards.slice(0, Math.max(0, budget - 1));
+  const remainder = cards.slice(seated.length);
+  // Aggregation is forced by the corpus, not chosen: AAA alone is 1,087 people
+  // against a 600-card budget and 417 of them have a single documented match.
+  // The tail becomes one clearly-labelled summary per era rather than being
+  // dropped silently, and the projection's own truncation is added to it so a
+  // capped roster never reads as a complete one.
+  const byEra = new Map<string, { count: number; matches: number }>();
+  for (const card of remainder) {
+    const agg = byEra.get(card.era) ?? { count: 0, matches: 0 };
+    agg.count++;
+    agg.matches += card.strength;
+    byEra.set(card.era, agg);
+  }
+  const aggregates: ArenaCard[] = [...byEra.entries()].sort().map(([era, agg]) => ({
+    id: `agg:${promotionId}:${era}`,
+    name: `+${agg.count} more · ${era}`,
+    bank: AB.AGGREGATE,
+    strength: Math.max(1, Math.round(agg.matches / Math.max(1, agg.count))),
+    era,
+    firstYear: Number(era.slice(0, 4)),
+    lastYear: Number(era.slice(0, 4)) + 9,
+    pos: null,
+    reigns: 0,
+    represents: agg.count,
+  }));
+
+  const anchorIndex = model.indexOfId.get(promotionId);
+  const anchor: ArenaCard = {
+    id: promotionId,
+    name: detail.n,
+    bank: AB.CENTER,
+    strength: seated[0]?.strength ?? 1,
+    era: decadeOf(dayToYear(detail.firstDay)),
+    firstYear: dayToYear(detail.firstDay),
+    lastYear: dayToYear(detail.lastDay),
+    pos: anchorIndex === undefined ? null : [
+      model.nodes.pos[anchorIndex * 3]!, model.nodes.pos[anchorIndex * 3 + 1]!, model.nodes.pos[anchorIndex * 3 + 2]!,
+    ],
+    reigns: 0,
+  };
+
+  return {
+    kind: "promotion",
+    anchorId: promotionId,
+    anchorName: detail.n,
+    cards: [anchor, ...seated, ...aggregates],
+  };
+}
+
+/** How many people the projection itself left out, if any. Never hidden. */
+export async function promotionTruncation(promotionId: string): Promise<number> {
+  const detail = await loadChronologyPromotionDetail(promotionId);
+  return detail?.membersTruncated ?? 0;
 }
