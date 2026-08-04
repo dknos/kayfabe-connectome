@@ -15,6 +15,7 @@ import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { ArenaCards } from "./ArenaCards";
 import { ArenaLabels, type ArenaLabelInput } from "./ArenaLabels";
 import { ArenaPicking } from "./ArenaPicking";
+import { ArenaRoutes } from "./ArenaRoutes";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
 import {
@@ -51,6 +52,7 @@ export class ArenaRenderer {
   readonly cards: ArenaCards;
   readonly labels: ArenaLabels;
   readonly picking = new ArenaPicking();
+  readonly routes: ArenaRoutes;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -81,6 +83,9 @@ export class ArenaRenderer {
     this.cards = new ArenaCards(CAPACITY);
     this.scene.add(this.cards.mesh);
     this.labels = new ArenaLabels(labelLayer, 96, CAPACITY);
+    // Fat routes cost one draw call each, so the pool is sized to the highest
+    // tier's budget rather than to the card capacity.
+    this.routes = new ArenaRoutes(this.scene, ARENA_TIERS.high.routes);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -159,6 +164,12 @@ export class ArenaRenderer {
     this.transition.commit(performance.now(), immediate);
     this.writeSemantics();
     this.updateCamera();
+    this.routes.build(
+      this.transition, this.pool, this.active, anchorId, ARENA_TIERS[this.tier].routes,
+    );
+    // Routes resolve AFTER the cards settle, per the brief's ordering: they are
+    // evidence about a formation, not part of its assembly.
+    this.routes.setReveal(immediate ? 1 : 0);
   }
 
   private frameCamera(name: ArenaFormation, immediate: boolean): void {
@@ -240,6 +251,8 @@ export class ArenaRenderer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // CSS pixels, deliberately not multiplied by devicePixelRatio.
+    this.routes.setResolution(w, h);
   }
 
   start(): void {
@@ -251,6 +264,14 @@ export class ArenaRenderer {
       this.transition.tick(now);
       this.cards.sync(this.transition);
       this.updateCamera();
+      // Routes stay attached to their cards while the formation travels, then
+      // draw in over the tail of the transition.
+      const raw = this.transition.progressRaw;
+      if (this.routes.count > 0) {
+        this.routes.follow(this.transition, this.pool, this.scope?.anchorId ?? "");
+        const revealFrom = 0.55;
+        this.routes.setReveal(raw <= revealFrom ? 0 : Math.min(1, (raw - revealFrom) / (1 - revealFrom)));
+      }
       const interval = 1000 / this.labelCadenceHz;
       if (now - this.lastLabelMs >= interval) {
         this.lastLabelMs = now;
@@ -289,6 +310,7 @@ export class ArenaRenderer {
     this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.scene.remove(this.cards.mesh);
     this.cards.dispose();
+    this.routes.dispose();
     this.labels.dispose();
     this.renderer.dispose();
   }
