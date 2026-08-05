@@ -83,11 +83,17 @@ export const PAIR_DX = 0.15;
  *
  * Both sit at the waist, the tag belt below the singles one, close enough that
  * someone carrying two reads as carrying two rather than as wearing a thick
- * band. They are the only gold on a body, so they survive being small.
+ * band.
+ *
+ * The scale is set by the BODY, not by taste: a raised belt could be small
+ * because it was silhouetted against the background, and the first worn
+ * version kept that size and vanished into the torso. A belt is as wide as the
+ * hips it is strapped around — 0.128 of frame width against a torso half-width
+ * of 0.088 — which stops just inside the arms hanging at 0.156.
  */
-export const BELT_SCALE = 0.85;
+export const BELT_SCALE = 1.12;
 export const BELT_Y_SINGLES = 0.455;
-export const BELT_Y_TAG = 0.36;
+export const BELT_Y_TAG = 0.35;
 
 /**
  * The seat's local vertex position.
@@ -287,6 +293,26 @@ export class ArenaCards {
 
     this.material = new ShaderMaterial({
       transparent: true,
+      // Depth is UNWRITTEN, and there is a known problem behind that.
+      //
+      // The whole population is one instanced draw, so the order bodies paint
+      // in is their INSTANCE INDEX and has nothing to do with where they stand.
+      // Measured on a 160-card arena: 1,380 pairs of figures overlap on screen
+      // and 664 of them — 48% — paint the farther body over the nearer one.
+      // Which pairs overlap changes as the camera moves, so bodies can swap in
+      // front of each other while the reader orbits. It was invisible with flat
+      // plaques and is not with billboarded figures 1.65 seat-heights tall.
+      //
+      // depthWrite: true resolves it in principle, and a controlled A/B at two
+      // framings (same camera, one variable) showed NO visible difference — so
+      // it has not been taken on that evidence, and the cost is real: a body
+      // that writes depth has to be a hard cutout, which loses the anti-aliased
+      // silhouette, and the transition fade has to become a screen door.
+      //
+      // The fix that would actually pay is sorting the instances back to front
+      // each frame, which keeps the soft edge. It is not free: every
+      // per-instance attribute has to be permuted along with the matrices, and
+      // aId has to keep carrying the original slot so picking still resolves.
       depthWrite: false,
       side: DoubleSide,
       vertexShader: /* glsl */ `
