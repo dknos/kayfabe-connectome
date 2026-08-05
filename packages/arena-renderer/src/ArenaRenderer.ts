@@ -258,6 +258,7 @@ export class ArenaRenderer {
       tier: this.tier,
       extent: this.lastLayout?.extent ?? 12,
       sections: this.lastLayout?.sections ?? [],
+      dropped: this.lastLayout?.dropped ?? 0,
     });
     // Routes resolve AFTER the cards settle, per the brief's ordering: they are
     // evidence about a formation, not part of its assembly.
@@ -524,6 +525,9 @@ export class ArenaRenderer {
       // championship rail never revealed unless the reader happened to be
       // pointing at a card.
       this.rail.setReveal(progress);
+      // Section names resolve with the cards that fill them, on the same clock
+      // the rail and the routes use. Reduced motion skips the fade entirely.
+      this.environment.setReveal(this.reducedMotion ? 1 : progress);
       if (this.routes.count > 0) {
         this.routes.follow(this.transition, this.pool, this.scope?.anchorId ?? "");
         this.routes.setReveal(progress);

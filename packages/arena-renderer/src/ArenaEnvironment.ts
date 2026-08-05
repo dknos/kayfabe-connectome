@@ -25,6 +25,7 @@ import {
 } from "three";
 import { buildArchitecture } from "./ArenaArchitecture";
 import { ArenaLighting, lightConeMaterial, makeLightConeMesh, ribbonMaterial } from "./ArenaLighting";
+import { ArenaSignage } from "./ArenaSignage";
 import { buildStage } from "./ArenaStage";
 import type { ArenaFormation, ArenaQualityTier, ArenaSectionReport } from "./types";
 
@@ -33,6 +34,9 @@ export interface ArenaEnvironmentInput {
   tier: ArenaQualityTier;
   extent: number;
   sections: readonly ArenaSectionReport[];
+  /** Cards the budget could not seat. Surfaced ON the signage, because a
+   *  truncated roster that reads as a complete one is a false claim. */
+  dropped?: number;
 }
 
 type Detail = "full" | "medium" | "simple";
@@ -54,6 +58,7 @@ export class ArenaEnvironment {
   private ribbons: Mesh | null = null;
   private cones: Mesh | null = null;
   private readonly lighting: ArenaLighting;
+  readonly signage: ArenaSignage;
 
   private signature = "";
   private visible = false;
@@ -67,6 +72,8 @@ export class ArenaEnvironment {
   constructor(private readonly scene: Scene) {
     this.lighting = new ArenaLighting(scene);
     this.lighting.setVisible(false);
+    this.signage = new ArenaSignage(scene);
+    this.signage.setVisible(false);
   }
 
   /**
@@ -177,6 +184,12 @@ export class ArenaEnvironment {
     }
 
     this.lighting.apply({ detail });
+    // Signage is rebuilt with the shell but keyed independently: the labels and
+    // counts can change without the terraces moving at all.
+    this.signage.build(
+      input.sections,
+      input.dropped && input.dropped > 0 ? `+${input.dropped} not seated` : null,
+    );
     this.rebuilds++;
     this.lastBuildMs = performance.now() - t0;
   }
@@ -209,13 +222,14 @@ export class ArenaEnvironment {
       if (mesh) mesh.visible = visible;
     }
     this.lighting.setVisible(visible);
+    this.signage.setVisible(visible);
   }
 
   /** Draw calls this shell contributes, for the tier budget table. Counted
    *  from what is actually in the scene rather than from what was intended. */
   get drawCalls(): number {
     if (!this.visible) return 0;
-    let n = 0;
+    let n = this.signage.drawCalls;
     for (const mesh of [this.stage, this.structure, this.bowl, this.ribbons, this.cones]) {
       if (mesh && mesh.visible) n++;
     }
@@ -253,10 +267,24 @@ export class ArenaEnvironment {
    *  the shell is already correct and skip the rebuild entirely. */
   invalidate(): void {
     this.signature = "";
+    this.signage.invalidate();
+  }
+
+  /**
+   * Reveal the signage on the formation's clock.
+   *
+   * The names of the sections resolve as the cards settle into them, the same
+   * ordering the evidence routes follow. Reduced motion is handed 1 outright
+   * by the caller, because a sign animating in is a decorative entrance and
+   * the brief forbids one.
+   */
+  setReveal(t: number): void {
+    this.signage.setReveal(t);
   }
 
   dispose(): void {
     this.disposeMeshes();
+    this.signage.dispose();
     this.lighting.dispose();
   }
 }

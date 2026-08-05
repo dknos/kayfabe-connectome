@@ -200,6 +200,32 @@ try {
     notes.push(`FAIL: the stadium changed ${picking.answersChangedByShell} picking answers — architecture is intercepting card picks`);
   }
 
+  // --- signage says what the layout says ---------------------------------
+  // The sign is a CLAIM about the corpus. If it disagrees with the layout it
+  // is placed from, it is a false one, so this compares the two rather than
+  // merely asserting that some signs exist.
+  const signage = await page.evaluate(() => {
+    const r = window.__kayfabeArena;
+    const signs = r.environment.signage.signs;
+    const sections = (r.layout?.sections ?? []).filter((s) => s.arc && s.count > 0);
+    const mismatches = [];
+    for (const section of sections) {
+      const sign = signs.find((s) => s.key === section.key);
+      if (!sign) { mismatches.push(`${section.key}: no sign`); continue; }
+      if (sign.count !== section.count) {
+        mismatches.push(`${section.key}: sign says ${sign.count}, layout says ${section.count}`);
+      }
+      if (sign.label !== section.label) {
+        mismatches.push(`${section.key}: sign labelled "${sign.label}", layout says "${section.label}"`);
+      }
+    }
+    return { sections: sections.length, signs: signs.length, mismatches, drawCalls: r.environment.signage.drawCalls };
+  });
+  record({ check: "every section has a sign, and it agrees with the layout", ...signage });
+  if (signage.mismatches.length > 0) notes.push(`FAIL: signage disagrees with the layout: ${signage.mismatches.join("; ")}`);
+  if (signage.signs !== signage.sections) notes.push(`FAIL: ${signage.sections} sections but ${signage.signs} signs`);
+  if (signage.drawCalls > 1) notes.push(`FAIL: signage costs ${signage.drawCalls} draw calls; it is meant to be one atlas`);
+
   // --- every card still inside the viewport ------------------------------
   for (const vp of [{ w: 1920, h: 1080 }, { w: 1366, h: 768 }, { w: 390, h: 844 }]) {
     await page.setViewportSize({ width: vp.w, height: vp.h });

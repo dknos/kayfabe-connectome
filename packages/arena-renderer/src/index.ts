@@ -9,6 +9,7 @@ export { ArenaPulses } from "./ArenaPulses";
 export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail";
 export { ArenaControls } from "./ArenaControls";
 export { ArenaEnvironment, type ArenaEnvironmentInput } from "./ArenaEnvironment";
+export { ArenaSignage } from "./ArenaSignage";
 export { buildStage, type ArenaStageOptions } from "./ArenaStage";
 export { buildArchitecture, type ArenaArchitectureOptions } from "./ArenaArchitecture";
 export { ArenaLighting, buildLightCones } from "./ArenaLighting";
