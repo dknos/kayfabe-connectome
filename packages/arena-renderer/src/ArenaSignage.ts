@@ -78,6 +78,7 @@ export class ArenaSignage {
         attribute vec3 center;
         attribute vec2 corner;
         varying vec2 vUv;
+        varying float vFade;
         void main() {
           vUv = uv;
           // Row 0 of the view matrix is the camera's right axis in world
@@ -85,15 +86,21 @@ export class ArenaSignage {
           // instead of rolling with the orbit.
           vec3 right = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]));
           vec3 p = center + right * corner.x + vec3(0.0, corner.y, 0.0);
+          // Signage is written to be read from across the room. Close in it is
+          // enormous — at the ring viewpoint a near section sign spanned the
+          // whole frame and cut across the scoreboard — so it fades out as the
+          // reader approaches, and the cards it names take the foreground back.
+          vFade = smoothstep(7.0, 17.0, distance(center, cameraPosition));
           gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: `
         uniform sampler2D map;
         uniform float uOpacity;
         varying vec2 vUv;
+        varying float vFade;
         void main() {
           vec4 texel = texture2D(map, vUv);
-          gl_FragColor = vec4(texel.rgb, texel.a * uOpacity);
+          gl_FragColor = vec4(texel.rgb, texel.a * uOpacity * vFade);
           if (gl_FragColor.a < 0.01) discard;
         }`,
     });

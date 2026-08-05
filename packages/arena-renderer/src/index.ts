@@ -9,6 +9,10 @@ export { ArenaPulses } from "./ArenaPulses";
 export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail";
 export { ArenaControls } from "./ArenaControls";
 export { ArenaEnvironment, type ArenaEnvironmentInput } from "./ArenaEnvironment";
+export {
+  ArenaCameraDirector, ARENA_PRESETS,
+  type ArenaDirectorContext, type ArenaPresetKey, type ArenaPresetResult,
+} from "./ArenaCameraDirector";
 export { ArenaSignage } from "./ArenaSignage";
 export { ArenaScoreboard, type ArenaSubjectFacts } from "./ArenaScoreboard";
 export { buildStage, type ArenaStageOptions } from "./ArenaStage";

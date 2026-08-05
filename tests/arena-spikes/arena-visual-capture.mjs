@@ -65,7 +65,15 @@ try {
       await page.evaluate(() => { window.__kayfabeArena.autoQuality = false; });
     }
     await page.waitForTimeout(1500);
-    await saveShot(page, `arena-${vp.w}x${vp.h}${tier ? `-${tier}` : ""}`);
+    // Optional camera preset, so a capture can show a directed viewpoint
+    // rather than only the establishing framing.
+    const preset = process.env.QA_PRESET;
+    if (preset) {
+      const outcome = await page.evaluate((k) => window.__kayfabeArena.director.apply(k), preset);
+      if (!outcome.ok) console.log(`preset ${preset} refused: ${outcome.reason}`);
+      await page.waitForTimeout(2200);
+    }
+    await saveShot(page, `arena-${vp.w}x${vp.h}${tier ? `-${tier}` : ""}${preset ? `-${preset}` : ""}`);
     await context.close();
   }
 } finally {

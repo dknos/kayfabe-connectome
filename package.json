@@ -38,6 +38,7 @@
     "arena:qa": "node tests/arena-spikes/arena-lens-qa.mjs",
     "arena:nav": "node tests/arena-spikes/arena-navigation-qa.mjs",
     "arena:stadium": "node tests/arena-spikes/arena-stadium-qa.mjs",
+    "arena:director": "node tests/arena-spikes/arena-director-qa.mjs",
     "arena:shots": "node tests/arena-spikes/arena-visual-capture.mjs"
   },
   "devDependencies": {

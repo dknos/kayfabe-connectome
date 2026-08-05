@@ -20,6 +20,7 @@ import { ArenaBloom } from "./ArenaBloom";
 import { ArenaPulses } from "./ArenaPulses";
 import { ArenaRail } from "./ArenaRail";
 import { ArenaControls } from "./ArenaControls";
+import { ArenaCameraDirector, type ArenaDirectorContext } from "./ArenaCameraDirector";
 import { ArenaEnvironment } from "./ArenaEnvironment";
 import type { ArenaSubjectFacts } from "./ArenaScoreboard";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
@@ -82,6 +83,7 @@ export class ArenaRenderer {
   readonly rail: ArenaRail;
   readonly controls: ArenaControls;
   readonly environment: ArenaEnvironment;
+  readonly director: ArenaCameraDirector;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -137,6 +139,14 @@ export class ArenaRenderer {
     this.rail = new ArenaRail(this.scene, 96);
     this.controls = new ArenaControls(this.camera, canvas);
     this.environment = new ArenaEnvironment(this.scene);
+    this.director = new ArenaCameraDirector(this.controls, () => this.directorContext());
+    // Non-travel keys route through ArenaControls so they inherit its typing
+    // and modifier guards — a reader typing "1" in the search box must not be
+    // thrown across the arena.
+    this.controls.onAction = (key) => {
+      if (!this.director.handleKey(key)) return;
+      this.onDirectorAction?.(key);
+    };
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -347,13 +357,19 @@ export class ArenaRenderer {
    * basis, and the binding constraint is whichever one needs the camera
    * furthest away. 520 cards is a few thousand operations, once per formation.
    */
-  private fitDistance(center: Vector3, points: Float32Array, count: number, dir: Vector3): number {
+  private fitDistance(
+    center: Vector3, points: Float32Array, count: number, dir: Vector3,
+    shrinkX = 1, shrinkY = 1,
+  ): number {
     const right = new Vector3().crossVectors(WORLD_UP, dir);
     if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
     right.normalize();
     const up = new Vector3().crossVectors(dir, right).normalize();
-    const tanV = Math.tan((this.camera.fov * Math.PI) / 360);
-    const tanH = tanV * Math.max(0.4, this.camera.aspect);
+    // Interface chrome eats part of the frame. Shrinking the usable half-angle
+    // is what keeps a focused card out from under the inspector rather than
+    // merely centred in a viewport that is partly covered.
+    const tanV = Math.tan((this.camera.fov * Math.PI) / 360) * shrinkY;
+    const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * Math.max(0.4, this.camera.aspect) * shrinkX;
     const local = new Vector3();
     let needed = 0;
     for (let i = 0; i < count; i++) {
@@ -366,6 +382,56 @@ export class ArenaRenderer {
       needed = Math.max(needed, h, v);
     }
     return needed;
+  }
+
+  /**
+   * Solve a camera pose that fits these world points.
+   *
+   * Public because the camera director frames the same way the formation does
+   * — same exact fit, same margin, same safe area. A director carrying its own
+   * copy of this arithmetic would drift from the framing the reader already
+   * trusts, and the two would disagree about what "everything is visible"
+   * means.
+   *
+   * `occlusion` shrinks the usable frame: the desktop inspector and the mobile
+   * bottom sheet cover part of the canvas, and fitting to the full viewport
+   * puts content underneath them.
+   */
+  solveFraming(
+    points: Float32Array, count: number, target: Vector3, dir: Vector3,
+    margin = FRAME_MARGIN,
+    occlusion: { x?: number; y?: number } = {},
+  ): { position: Vector3; target: Vector3 } {
+    const shrinkX = Math.max(0.25, 1 - (occlusion.x ?? 0));
+    const shrinkY = Math.max(0.25, 1 - (occlusion.y ?? 0));
+    const distance = Math.max(
+      4,
+      this.fitDistance(target, points, count, dir, shrinkX, shrinkY) * margin,
+    );
+    return { position: target.clone().addScaledVector(dir, distance), target: target.clone() };
+  }
+
+  /** World positions of the seated cards matching a predicate. */
+  cardPoints(match: (id: string) => boolean): { points: Float32Array; count: number; center: Vector3 } {
+    const t = this.transition;
+    const out: number[] = [];
+    let cx = 0, cy = 0, cz = 0;
+    for (let slot = 0; slot < t.capacity; slot++) {
+      if (t.state[slot] === CS.ABSENT) continue;
+      const id = this.pool.idOf(slot);
+      if (!id || !match(id)) continue;
+      const i3 = slot * 3;
+      const x = t.posCur[i3]!, y = t.posCur[i3 + 1]!, z = t.posCur[i3 + 2]!;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      out.push(x, y, z);
+      cx += x; cy += y; cz += z;
+    }
+    const count = out.length / 3;
+    return {
+      points: new Float32Array(out),
+      count,
+      center: count > 0 ? new Vector3(cx / count, cy / count, cz / count) : new Vector3(),
+    };
   }
 
   private frameCamera(name: ArenaFormation, immediate: boolean): void {
@@ -532,6 +598,9 @@ export class ArenaRenderer {
       // travel is per-second and a per-frame step would walk twice as fast on a
       // 120 Hz display as on a 60 Hz one.
       const dt = this.lastFrameMs > 0 ? Math.min(0.05, (now - this.lastFrameMs) / 1000) : 0;
+      // Manual input cancels automated direction. Checked here rather than in
+      // the input handlers so there is exactly one place it can happen.
+      this.director.noticeUserInput();
       this.updateCamera(dt);
       // Routes stay attached to their cards while the formation travels, then
       // draw in over the tail of the transition.
@@ -633,6 +702,27 @@ export class ArenaRenderer {
     this.governedDownTo = next;
     this.applyTier(next);
     this.onTierChanged?.(next);
+  }
+
+  /** Notified after the director handles a key, so a UI can surface the new
+   *  viewpoint or the reason it was refused. */
+  onDirectorAction: ((key: string) => void) | null = null;
+
+  /** What the director needs to solve a viewpoint. Assembled here because the
+   *  renderer is what owns the scope, the layout and the card field. */
+  private directorContext(): ArenaDirectorContext {
+    return {
+      anchorId: this.scope?.anchorId ?? null,
+      selectedId: this.selectedId,
+      hoverId: this.hoverId,
+      formation: this.formationName,
+      layout: this.lastLayout,
+      hasRail: Boolean(this.scope?.titleYears && this.scope.titleYears.counts.length > 0),
+      cardPoints: (match) => this.cardPoints(match),
+      solveFraming: (points, count, target, dir, margin, occlusion) =>
+        this.solveFraming(points, count, target, dir, margin, occlusion),
+      setFormation: (formation) => this.setFormation(formation),
+    };
   }
 
   /** Notified when the governor changes the tier, so a UI showing the tier
