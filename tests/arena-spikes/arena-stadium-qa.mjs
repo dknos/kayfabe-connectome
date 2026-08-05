@@ -226,6 +226,40 @@ try {
   if (signage.signs !== signage.sections) notes.push(`FAIL: ${signage.sections} sections but ${signage.signs} signs`);
   if (signage.drawCalls > 1) notes.push(`FAIL: signage costs ${signage.drawCalls} draw calls; it is meant to be one atlas`);
 
+  // --- the scoreboard is the subject, and it does not churn --------------
+  const board = await page.evaluate(async () => {
+    const r = window.__kayfabeArena;
+    const sb = r.environment.scoreboard;
+    const before = sb.redraws;
+    // Move the camera, which must not touch the board at all.
+    r.controls.moveTo(r.camera.position.clone().multiplyScalar(1.1), r.controls.target.clone(), 20);
+    await new Promise((res) => setTimeout(res, 1800));
+    const afterCamera = sb.redraws - before;
+    // A selection change is content, and must.
+    const someone = r.layout?.sections?.length ? r.pool.idOf(1) : null;
+    r.setSelected(someone);
+    await new Promise((res) => setTimeout(res, 400));
+    const afterSelection = sb.redraws - before - afterCamera;
+    return { drawCalls: sb.drawCalls, redrawsOnCameraMove: afterCamera, redrawsOnSelection: afterSelection };
+  });
+  record({ check: "scoreboard redraws on content, never on camera", ...board });
+  // moveTo ENGAGES the camera, and an engaged camera deliberately survives a
+  // resize — "a reader who has taken hold of it keeps it" (ArenaControls). So
+  // the framing checks below have to start from an un-engaged camera or they
+  // measure this probe's camera move rather than the product. Leaving that out
+  // reported 38% of cards off-screen at 390x844 and the regression was entirely
+  // the test's own.
+  await page.evaluate(() => {
+    const r = window.__kayfabeArena;
+    r.controls.reset();
+    r.setFormation(r.formation, true);
+  });
+  await page.waitForTimeout(900);
+  if (board.redrawsOnCameraMove !== 0) {
+    notes.push(`FAIL: the scoreboard redrew ${board.redrawsOnCameraMove}x for a camera move; it must only redraw on content`);
+  }
+  if (board.drawCalls !== 1) notes.push(`FAIL: scoreboard costs ${board.drawCalls} draw calls, expected 1`);
+
   // --- every card still inside the viewport ------------------------------
   for (const vp of [{ w: 1920, h: 1080 }, { w: 1366, h: 768 }, { w: 390, h: 844 }]) {
     await page.setViewportSize({ width: vp.w, height: vp.h });

@@ -18,7 +18,7 @@
  * See docs/ARENA_ARRAY.md.
  */
 import { AB, type ArenaCard } from "@kayfabe/arena-renderer";
-import type { ArenaScope } from "@kayfabe/arena-renderer";
+import type { ArenaScope, ArenaSubjectFacts } from "@kayfabe/arena-renderer";
 import { loadChronologyPromotionDetail } from "../data/chronology/loader";
 import { EF, STRIDE, type GraphModel } from "../graph/model";
 
@@ -73,6 +73,39 @@ export function defaultAnchorId(model: GraphModel): string | null {
 }
 
 /**
+ * What the corpus documents about a subject, for the scoreboard.
+ *
+ * The nulls matter more than the numbers. A field the projection does not
+ * carry comes back null and the board prints "not documented"; returning 0
+ * instead would put a fabricated record in the largest type in the arena, and
+ * a reader has no way to tell an absent count from a real zero.
+ *
+ * `matches` is a person's total across the WHOLE corpus, which is deliberately
+ * not the same as the sum of the relationships seated in this arena — a
+ * multi-way match contributes one match and several relationships. The board
+ * labels them separately for that reason.
+ */
+function subjectFacts(
+  model: GraphModel, index: number, name: string,
+  relationships: number | null, scopeLabel: string,
+): ArenaSubjectFacts {
+  const nodes = model.nodes;
+  const firstDay = nodes.firstDay[index];
+  const lastDay = nodes.lastDay[index];
+  const matches = nodes.matches[index];
+  const reigns = nodes.reigns[index];
+  return {
+    name,
+    firstYear: firstDay === undefined ? null : dayToYear(firstDay),
+    lastYear: lastDay === undefined ? null : dayToYear(lastDay),
+    matches: matches === undefined ? null : matches,
+    relationships,
+    reigns: reigns === undefined ? null : reigns,
+    scopeLabel,
+  };
+}
+
+/**
  * A person scope: everyone the subject shares a documented match with,
  * seated by what kind of relationship the evidence supports.
  */
@@ -98,12 +131,16 @@ export function personScope(model: GraphModel, anchorId: string): ArenaScope | n
   cards.sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1));
   const anchorIndex = ai;
   const anchorName = model.nodes.name[anchorIndex] ?? anchorId;
+  const relationships = cards.length;
   cards.unshift(cardFromNode(
     model, anchorIndex, AB.CENTER, cards[0]?.strength ?? 1,
     dayToYear(model.nodes.firstDay[anchorIndex]!),
     dayToYear(model.nodes.lastDay[anchorIndex]!),
   ));
-  return { kind: "person", anchorId, anchorName, cards };
+  return {
+    kind: "person", anchorId, anchorName, cards,
+    subject: subjectFacts(model, anchorIndex, anchorName, relationships, "Person"),
+  };
 }
 
 
@@ -223,6 +260,11 @@ export async function promotionScope(
     }
   }
 
+  // Promotion totals come from the projection's own members, not from the
+  // graph node: the roster count is what this scope actually seats, and the
+  // match total is the sum the projection documents FOR THIS PROMOTION rather
+  // than each person's whole career.
+  const promotionMatches = detail.members.reduce((n, m) => n + m.matches, 0);
   return {
     kind: "promotion",
     anchorId: promotionId,
@@ -230,6 +272,17 @@ export async function promotionScope(
     cards: [anchor, ...seated, ...aggregates],
     represented,
     titleYears,
+    subject: {
+      name: detail.n,
+      firstYear: dayToYear(detail.firstDay),
+      lastYear: dayToYear(detail.lastDay),
+      matches: promotionMatches,
+      relationships: detail.members.length,
+      // A promotion does not hold reigns; its wrestlers do. Null rather than
+      // zero, because zero would be a claim that it held none.
+      reigns: null,
+      scopeLabel: "Promotion",
+    } satisfies ArenaSubjectFacts,
   };
 }
 

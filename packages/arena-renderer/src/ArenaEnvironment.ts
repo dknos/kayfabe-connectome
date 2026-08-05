@@ -25,6 +25,7 @@ import {
 } from "three";
 import { buildArchitecture } from "./ArenaArchitecture";
 import { ArenaLighting, lightConeMaterial, makeLightConeMesh, ribbonMaterial } from "./ArenaLighting";
+import { ArenaScoreboard } from "./ArenaScoreboard";
 import { ArenaSignage } from "./ArenaSignage";
 import { buildStage } from "./ArenaStage";
 import type { ArenaFormation, ArenaQualityTier, ArenaSectionReport } from "./types";
@@ -59,6 +60,7 @@ export class ArenaEnvironment {
   private cones: Mesh | null = null;
   private readonly lighting: ArenaLighting;
   readonly signage: ArenaSignage;
+  readonly scoreboard: ArenaScoreboard;
 
   private signature = "";
   private visible = false;
@@ -74,6 +76,8 @@ export class ArenaEnvironment {
     this.lighting.setVisible(false);
     this.signage = new ArenaSignage(scene);
     this.signage.setVisible(false);
+    this.scoreboard = new ArenaScoreboard(scene);
+    this.scoreboard.setVisible(false);
   }
 
   /**
@@ -223,13 +227,14 @@ export class ArenaEnvironment {
     }
     this.lighting.setVisible(visible);
     this.signage.setVisible(visible);
+    this.scoreboard.setVisible(visible);
   }
 
   /** Draw calls this shell contributes, for the tier budget table. Counted
    *  from what is actually in the scene rather than from what was intended. */
   get drawCalls(): number {
     if (!this.visible) return 0;
-    let n = this.signage.drawCalls;
+    let n = this.signage.drawCalls + this.scoreboard.drawCalls;
     for (const mesh of [this.stage, this.structure, this.bowl, this.ribbons, this.cones]) {
       if (mesh && mesh.visible) n++;
     }
@@ -268,6 +273,7 @@ export class ArenaEnvironment {
   invalidate(): void {
     this.signature = "";
     this.signage.invalidate();
+    this.scoreboard.invalidate();
   }
 
   /**
@@ -285,6 +291,7 @@ export class ArenaEnvironment {
   dispose(): void {
     this.disposeMeshes();
     this.signage.dispose();
+    this.scoreboard.dispose();
     this.lighting.dispose();
   }
 }

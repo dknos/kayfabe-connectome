@@ -10,6 +10,7 @@ export { ArenaRail, railSegmentsFromYears, type RailSegment } from "./ArenaRail"
 export { ArenaControls } from "./ArenaControls";
 export { ArenaEnvironment, type ArenaEnvironmentInput } from "./ArenaEnvironment";
 export { ArenaSignage } from "./ArenaSignage";
+export { ArenaScoreboard, type ArenaSubjectFacts } from "./ArenaScoreboard";
 export { buildStage, type ArenaStageOptions } from "./ArenaStage";
 export { buildArchitecture, type ArenaArchitectureOptions } from "./ArenaArchitecture";
 export { ArenaLighting, buildLightCones } from "./ArenaLighting";

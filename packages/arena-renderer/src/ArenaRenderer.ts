@@ -21,6 +21,7 @@ import { ArenaPulses } from "./ArenaPulses";
 import { ArenaRail } from "./ArenaRail";
 import { ArenaControls } from "./ArenaControls";
 import { ArenaEnvironment } from "./ArenaEnvironment";
+import type { ArenaSubjectFacts } from "./ArenaScoreboard";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
 import { railSegmentsFromYears } from "./ArenaRail";
@@ -61,6 +62,10 @@ export interface ArenaScope {
    *  when the corpus documents none — in which case no rail is drawn at all,
    *  rather than an empty one implying we looked and found nothing. */
   titleYears?: { from: number; counts: number[] };
+  /** What the corpus documents about the subject, for the scoreboard. Computed
+   *  by the adapter; a null field means the projection does not carry it and
+   *  the board says so rather than showing a zero. */
+  subject?: ArenaSubjectFacts;
 }
 
 export class ArenaRenderer {
@@ -260,6 +265,7 @@ export class ArenaRenderer {
       sections: this.lastLayout?.sections ?? [],
       dropped: this.lastLayout?.dropped ?? 0,
     });
+    this.updateScoreboard();
     // Routes resolve AFTER the cards settle, per the brief's ordering: they are
     // evidence about a formation, not part of its assembly.
     this.routes.setReveal(immediate ? 1 : 0);
@@ -426,6 +432,26 @@ export class ArenaRenderer {
     this.cards.commitSemantics();
   }
 
+  /**
+   * Push the current reading to the scoreboard.
+   *
+   * Called on scope, formation and selection changes — never per frame. The
+   * board itself compares a signature and redraws only when the text actually
+   * differs, so a repeated call costs a string compare rather than a canvas
+   * upload.
+   */
+  private updateScoreboard(): void {
+    const facts = this.scope?.subject ?? null;
+    const selected = this.selectedId && this.selectedId !== this.scope?.anchorId
+      ? this.byId.get(this.selectedId)?.name ?? null
+      : null;
+    this.environment.scoreboard.update(facts, selected, this.replayDate);
+  }
+
+  /** Set while History Replay is running, so the board can carry the date the
+   *  reader is looking at. Null when playback is not active. */
+  replayDate: string | null = null;
+
   /** Point the packet stream at the drawn fibre, or stop it if there is none. */
   private applyPulseFocus(): void {
     const emphasis = this.routes.emphasis();
@@ -438,6 +464,7 @@ export class ArenaRenderer {
 
   setSelected(id: string | null): void {
     this.selectedId = id;
+    this.updateScoreboard();
     this.writeSemantics();
     this.routes.setEmphasis(this.hoverId ?? this.selectedId);
     this.applyPulseFocus();
