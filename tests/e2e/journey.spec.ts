@@ -27,8 +27,26 @@ test.describe("vertical slice journey", () => {
     await expect(page.getByText("Person dossier")).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("complementary", { name: "Semantic inspector" })).toBeVisible();
     await page.getByRole("button", { name: "Close dossier" }).click();
+    // FIVE lenses since Arena Array shipped. This assertion said 4 and had been
+    // failing on mobile ever since — corrected rather than relaxed, and the
+    // fifth lens is named so the count cannot drift again without saying which.
     const lenses = page.getByRole("group", { name: "Lens" }).getByRole("button");
-    await expect(lenses).toHaveCount(4);
+    await expect(lenses).toHaveCount(5);
+    await expect(page.getByRole("button", { name: "Arena Array", exact: true })).toBeVisible();
+    // All five have to be genuinely reachable, not merely present: no
+    // horizontal document overflow, and touch targets at the 44px minimum.
+    const nav = await page.evaluate(() => {
+      const group = document.querySelector('[role="group"][aria-label="Lens"]');
+      const buttons = [...group!.querySelectorAll("button")];
+      return {
+        overflows: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        minHeight: Math.min(...buttons.map((b) => b.getBoundingClientRect().height)),
+        hidden: buttons.filter((b) => b.getBoundingClientRect().width === 0).length,
+      };
+    });
+    expect(nav.overflows).toBe(false);
+    expect(nav.hidden).toBe(0);
+    expect(nav.minHeight).toBeGreaterThanOrEqual(44);
     await expect(page.getByRole("button", { name: "Meltzer Ratings", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Atlas", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Table", exact: true })).toHaveCount(0);
@@ -127,7 +145,7 @@ test.describe("vertical slice journey", () => {
     for (const [legacy, expected] of migrations) {
       await page.goto(`/#2/lens=${legacy}`);
       await expect(page.locator(".app")).toHaveAttribute("data-lens", expected, { timeout: 90000 });
-      await expect(page.getByRole("group", { name: "Lens" }).getByRole("button")).toHaveCount(4);
+      await expect(page.getByRole("group", { name: "Lens" }).getByRole("button")).toHaveCount(5);
       await expect(page.getByRole("button", { name: "Meltzer Ratings", exact: true })).toBeVisible();
     }
   });
