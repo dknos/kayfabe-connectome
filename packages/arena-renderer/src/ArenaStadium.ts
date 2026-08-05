@@ -450,57 +450,60 @@ export class ArenaStadium {
   private async loadEnvironment(url: string): Promise<void> {
     try {
       const gltf = await this.loader.loadAsync(url);
-      // Materials are SHARED across many SketchUp meshes (Seat alone is on 9
-      // primitives). Dim once per material identity — multiplyScalar per mesh
-      // was 0.55^9 ≈ black, and under the cool hemi the crushed bowl read as
-      // translucent blue glass instead of solid plastic seating.
-      const tuned = new Set<Material>();
+      // The bowl is a SketchUp shell lit only by a cool hemi + four ring spots.
+      // MeshStandard on that setup paints every under-lit face the sky colour,
+      // so the stands and upper tiers read as translucent blue glass even when
+      // opacity is 1. Swap the env to MeshBasic (unlit, fully opaque) so the
+      // seat atlas and structure flats keep their own colour and write depth.
+      //
+      // Materials are SHARED across many primitives (Seat alone on 9). Build
+      // one replacement per source material, then rebind every mesh.
+      const replace = new Map<Material, Material>();
+      const take = (mat: Material): Material => {
+        const hit = replace.get(mat);
+        if (hit) return hit;
+        const std = mat as MeshStandardMaterial;
+        const name = mat.name || "";
+        const isGlass = /glass|transparent/i.test(name);
+        const isSeat = /^Seat$/i.test(name);
+        const isGrass = /^Grass/i.test(name);
+
+        if (std.map) {
+          std.map.colorSpace = SRGBColorSpace;
+          std.map.needsUpdate = true;
+        }
+
+        // Night flats: pull daylight greys down. Seats keep full map strength.
+        let color = std.color ? std.color.clone() : undefined;
+        if (color && !isSeat) color.multiplyScalar(std.map ? 0.7 : 0.45);
+        if (color && isSeat) color.setRGB(1, 1, 1);
+        // Grass stays recognisable green under the unlit path.
+        if (color && isGrass) color.multiplyScalar(1.15);
+
+        const next = new MeshBasicMaterial({
+          name: mat.name,
+          map: std.map ?? null,
+          color: color ?? 0x888888,
+          side: DoubleSide,
+          transparent: isGlass,
+          opacity: isGlass ? 0.28 : 1,
+          depthWrite: !isGlass,
+          alphaTest: 0,
+          // Still pass through ACES so the bowl matches the lit ring/rig.
+          toneMapped: true,
+        });
+        replace.set(mat, next);
+        this.disposables.push(next);
+        return next;
+      };
+
       gltf.scene.traverse((obj) => {
         if (!(obj as Mesh).isMesh) return;
         const mesh = obj as Mesh;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const mat of materials) {
-          if (!mat || tuned.has(mat)) continue;
-          tuned.add(mat);
-          // SketchUp-lineage geometry has no reliable winding; from inside the
-          // bowl a single-sided shell is full of holes.
-          mat.side = DoubleSide;
-          const std = mat as MeshStandardMaterial;
-          const isSeat = /^Seat$/i.test(mat.name);
-
-          // Seats carry their own atlas (blue/orange/green plastic). Keep the
-          // tint at full strength so the map reads, force a solid write, and
-          // never alpha-test: the baked atlas has no transparent gaps, and
-          // alphaTest was punching real holes through the bowl (see-through
-          // "glass" stands). A small emissive lift keeps them solid under the
-          // cool hemi without turning them into light sources.
-          if (isSeat) {
-            if (std.color) std.color.setRGB(1, 1, 1);
-            if (std.emissive) std.emissive.setRGB(0.04, 0.05, 0.07);
-            mat.transparent = false;
-            mat.opacity = 1;
-            mat.depthWrite = true;
-            mat.alphaTest = 0;
-            if (std.map) {
-              std.map.colorSpace = SRGBColorSpace;
-              std.map.needsUpdate = true;
-            }
-            continue;
-          }
-
-          // Night register for untextured flats: daylight greys fight the
-          // show lighting until dimmed. Textured non-seat materials keep more
-          // of their map so they do not collapse into the sky colour.
-          if (std.color) std.color.multiplyScalar(std.map ? 0.75 : 0.55);
-          mat.transparent = false;
-          mat.opacity = 1;
-          mat.depthWrite = true;
-          mat.alphaTest = 0;
-          if (/glass|transparent/i.test(mat.name)) {
-            mat.transparent = true;
-            mat.opacity = 0.28;
-            mat.depthWrite = false;
-          }
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map((m) => take(m));
+        } else if (mesh.material) {
+          mesh.material = take(mesh.material);
         }
       });
       this.root.add(gltf.scene);
