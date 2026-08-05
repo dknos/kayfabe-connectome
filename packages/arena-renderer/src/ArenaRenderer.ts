@@ -522,6 +522,7 @@ export class ArenaRenderer {
     this.writeSemantics();
     this.routes.setEmphasis(this.hoverId ?? this.selectedId);
     this.applyPulseFocus();
+    this.syncBanner();
   }
   setHover(id: string | null): void {
     if (this.hoverId === id) return;
@@ -531,6 +532,29 @@ export class ArenaRenderer {
     // Pointing at a card is how a reader asks which fibre is theirs.
     this.routes.setEmphasis(this.hoverId ?? this.selectedId);
     this.applyPulseFocus();
+    this.syncBanner();
+  }
+
+  /**
+   * Put whoever the reader is pointing at on the ribbon board.
+   *
+   * Hover wins over selection, the same precedence the fibre and the pulses
+   * use, so the board answers the pointer immediately rather than only on a
+   * click. The subject is left OFF the ribbon — the tron is already holding
+   * their name in letters two metres tall, and a board repeating it says
+   * nothing. That is also why an empty selection clears rather than falling
+   * back here: the fallback lives in the stadium, which knows the subject.
+   */
+  private syncBanner(): void {
+    const id = this.hoverId ?? this.selectedId;
+    const card = id && id !== this.scope?.anchorId ? this.byId.get(id) : undefined;
+    if (!card) { this.stadium.setBanner("", ""); return; }
+    const line = card.represents !== undefined
+      ? `${card.represents} more from the ${card.era}`
+      : this.scope?.kind === "promotion"
+        ? `${card.strength} documented matches here · ${card.firstYear}–${card.lastYear}`
+        : `${card.strength} documented with ${this.scope?.anchorName ?? "the subject"}`;
+    this.stadium.setBanner(card.name, line);
   }
 
   pick(px: number, py: number): ArenaPickResult | null {

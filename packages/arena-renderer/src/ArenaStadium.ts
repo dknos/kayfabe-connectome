@@ -52,6 +52,10 @@ export class ArenaStadium {
 
   private subjectName = "";
   private subjectLine = "";
+  /** What the LED ribbon crawls — the reader's current selection, or the
+   *  subject when they have not pointed at anyone. */
+  private bannerName = "";
+  private bannerLine = "";
 
   private jumboTexture: CanvasTexture | null = null;
   private tronTexture: CanvasTexture | null = null;
@@ -80,14 +84,31 @@ export class ArenaStadium {
     return this.active;
   }
 
-  /** The screens follow the subject: jumbotron, entrance tron and the LED
-   *  ribbon all bill the arena's current headliner. */
+  /** The big screens bill the arena's headliner: jumbotron and entrance tron
+   *  carry the subject the whole show is built around. */
   setSubject(name: string, line: string): void {
     if (name === this.subjectName && line === this.subjectLine) return;
     this.subjectName = name;
     this.subjectLine = line;
     if (this.jumboTexture) this.paintJumbo();
     if (this.tronTexture) this.paintTron();
+    if (this.ledTexture) this.paintLed();
+  }
+
+  /**
+   * The ribbon reads whoever the reader is pointing at.
+   *
+   * Split from the subject on purpose: a real board crawls the card while the
+   * tron holds the headliner, and here that division does actual work — the
+   * screens say what this arena IS, the ribbon says what you are looking at,
+   * so selecting someone across the bowl names them without moving the camera
+   * or opening a panel. Empty falls back to the subject, so the ribbon is
+   * never blank.
+   */
+  setBanner(name: string, line: string): void {
+    if (name === this.bannerName && line === this.bannerLine) return;
+    this.bannerName = name;
+    this.bannerLine = line;
     if (this.ledTexture) this.paintLed();
   }
 
@@ -512,7 +533,9 @@ export class ArenaStadium {
     ctx.textBaseline = "middle";
     ctx.fillStyle = ACCENT;
     ctx.font = "700 56px Inter, system-ui, sans-serif";
-    const text = `${(this.subjectName || "").toUpperCase()}  ✦  ${this.subjectLine.toUpperCase()}  ✦  `;
+    const name = this.bannerName || this.subjectName || "";
+    const line = this.bannerName ? this.bannerLine : this.subjectLine;
+    const text = `${name.toUpperCase()}  ✦  ${line.toUpperCase()}  ✦  `;
     // Tile to the canvas edge so the wrap seam lands between repeats.
     const span = Math.max(1, ctx.measureText(text).width);
     for (let x = 0; x < w; x += span) ctx.fillText(text, x, h / 2);

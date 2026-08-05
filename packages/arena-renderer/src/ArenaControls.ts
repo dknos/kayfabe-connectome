@@ -83,6 +83,7 @@ export class ArenaControls {
   private readonly formationTarget = new Vector3();
   private readonly userOffset = new Vector3();
   private readonly walkScratch = new Vector3();
+  private readonly lookScratch = new Vector3();
   private readonly walkFwd = new Vector3();
   private readonly walkRight = new Vector3();
 
@@ -236,6 +237,42 @@ export class ArenaControls {
     this.walkReach = Math.max(20, extent * 3);
   }
 
+  /**
+   * Turn on the spot — zero turn radius.
+   *
+   * The rig is still a target with a camera on a sphere around it, because
+   * every other part of this lens depends on that (the formation proposes a
+   * look-at, the dolly is a radius, the floor clamp is a polar angle). What
+   * changes is which end of the stick moves: instead of swinging the CAMERA
+   * around the target, this swings the TARGET around the camera and leaves the
+   * camera exactly where it stands.
+   *
+   * The difference is the whole feel of it. Orbiting a target 24 units away
+   * means a small drag walks the camera metres sideways through the crowd; the
+   * reader asked to look around from where they are, which is what a person
+   * standing in a stadium actually does.
+   *
+   * The travel has to land in `userOffset`, not in `targetGoal` directly: the
+   * formation re-proposes its own look-at every engaged frame through
+   * `retarget`, and anything written straight to the goal is overwritten on the
+   * next one.
+   */
+  private look(dTheta: number, dPhi: number): void {
+    // Where the camera stands right now, from the GOAL state, so a turn during
+    // a damped move pivots about where it is heading rather than snapping.
+    this.lookScratch.setFromSpherical(this.sphericalGoal).add(this.targetGoal);
+    this.sphericalGoal.theta += dTheta;
+    this.sphericalGoal.phi += dPhi;
+    this.clampGoal();
+    // Put the target back under the new direction at the same distance, then
+    // record it as reader travel so the formation cannot undo it.
+    this.offset.setFromSpherical(this.sphericalGoal);
+    this.lookScratch.sub(this.offset);
+    this.userOffset.copy(this.lookScratch).sub(this.formationTarget);
+    this.clampTravel();
+    this.composeTarget();
+  }
+
   private clampGoal(): void {
     this.sphericalGoal.phi = Math.max(MIN_POLAR, Math.min(MAX_POLAR, this.sphericalGoal.phi));
     this.sphericalGoal.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.sphericalGoal.radius));
@@ -289,9 +326,7 @@ export class ArenaControls {
       this.engaged = true;
       const w = this.dom.clientWidth || 1;
       const h = this.dom.clientHeight || 1;
-      this.sphericalGoal.theta -= (dx / w) * Math.PI * 2;
-      this.sphericalGoal.phi -= (dy / h) * Math.PI;
-      this.clampGoal();
+      this.look(-(dx / w) * Math.PI * 2, -(dy / h) * Math.PI);
     } else if (this.mode === "pan") {
       this.engaged = true;
       this.pan(dx, dy);
