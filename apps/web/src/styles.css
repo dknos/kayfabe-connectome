@@ -1409,6 +1409,16 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
 .arena-meetings .rel-tag { white-space: nowrap; }
 .arena-meetings .ev-what { color: #b9c8d8; }
 .arena-meetings .link { font-size: 11px; }
+/* A whole career is longer than a rivalry, so it gets more of the panel — and
+   still scrolls inside it rather than pushing the actions off the bottom. */
+.arena-history .arena-meetings { max-height: 320px; }
+.arena-history .res-1 { background: rgba(73, 215, 255, 0.16); color: #8fe3ff; }
+.arena-history .res-0 { background: rgba(255, 122, 77, 0.16); color: #ffb08d; }
+.arena-history .res-2 { background: rgba(159, 180, 200, 0.16); color: #c4d2e0; }
+.arena-history code {
+  font-family: var(--font-data); font-size: 10px;
+  background: rgba(159, 180, 200, 0.12); padding: 1px 4px; border-radius: 3px;
+}
 .arena-inspector dl { margin: 0; display: grid; gap: 4px; }
 .arena-inspector dl div { display: flex; justify-content: space-between; gap: 10px; }
 .arena-inspector dt { color: #9fb4c8; }

@@ -116,6 +116,31 @@ fnv1a32: h=2166136261; for each byte: h ^= b; h = (h * 16777619) mod 2^32.
 consumers must check `res`). `unk` true when a side contained a placeholder.
 `dur` seconds or null. `t` title id or null; `tc` 0/1.
 
+### evidence/person/{bb}.json — bb = fnv1a32(canonical person id) % 256, hex
+
+The canonical timeline inverted by PARTICIPANT: one entry per person, holding
+every canonical match they appear in, sorted by `(d, m)`.
+
+```json
+{"p:116704": [
+  {"m":"m:c53941","d":"2003-02-05","pr":"pr:c377","f":"singles","r":0,
+   "o":["p:125540"],"en":"NWA TNA Xplosion #18 Taping","fin":"pin"}, ...]}
+```
+
+`r` is 1 won, 0 lost, 2 drawn — read from the match's `res`, not from side
+membership, because a draw is not a loss for the side listed second. `o` is the
+opposing side, `p` the person's own side minus themselves and present only when
+they had partners. `en`, `fin`, `stip`, `t` and `tc` are copied from the
+canonical record and OMITTED when it does not carry them: a row with no `fin`
+means no finish is recorded, not a finish of "unknown".
+
+Every person's row count MUST equal their `entities/people` dossier `m`.
+
+This exists because neither of the other two shapes can answer "one person's
+whole career" affordably: `timeline/by-year` costs every year they worked (69
+MB for one subject, measured) and `evidence/pairs` is keyed by pair, so their
+matches scatter across effectively all 256 buckets. Here it is one bucket.
+
 ### entities/people/{bb}.json — bb = fnv1a32(canonical id) % 256, hex
 ```json
 {"p:86": {"n":"Christian York","first":"…","last":"…","m":42,

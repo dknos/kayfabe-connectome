@@ -11,6 +11,7 @@
     "data:validate": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.validate",
     "data:materialize": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.materialize",
     "ratings:materialize": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.ratings_project",
+    "person:materialize": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.person_matches_project",
     "ratings:validate": "PYTHONPATH=services/materializer python3.12 -m kayfabe_materializer.ratings_validate",
     "ratings:qa": "node tests/ratings-qa.mjs",
     "ratings:performance": "node tests/ratings-performance.mjs",

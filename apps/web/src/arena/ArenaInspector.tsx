@@ -12,12 +12,17 @@
  * championship row at all, because "none recorded" and "none" are different
  * claims and this corpus can only make the first one.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ArenaCard, ArenaScope } from "@kayfabe/arena-renderer";
-import type { EvidenceEntry } from "@kayfabe/graph-contract";
+import type { EvidenceEntry, PersonMatchRow } from "@kayfabe/graph-contract";
 import { pairKey } from "@kayfabe/graph-contract";
-import { loadChampionships, loadEvidenceForPair, loadPersonDossier } from "../data/loader";
+import {
+  loadChampionships, loadEvidenceForPair, loadPersonDossier, loadPersonMatches,
+} from "../data/loader";
 import { pushUrl, useStore } from "../state/store";
+
+/** How many rows of a career are on screen before the reader asks for more. */
+const HISTORY_PAGE = 60;
 
 interface Linked { id: string; name: string; count: number }
 
@@ -119,6 +124,49 @@ export function ArenaInspector({
     })();
     return () => { cancelled = true; };
   }, [pair]);
+
+  /**
+   * The subject's whole documented career.
+   *
+   * Loaded on ASK rather than on open: it is one bucket of `evidence/person`,
+   * around 700 KB, and a reader who clicked a card to see who someone is
+   * should not pay for it. Once fetched the bucket is cached, so every other
+   * person who hashes into it is free.
+   */
+  const [history, setHistory] = useState<PersonMatchRow[] | null>(null);
+  const [historyState, setHistoryState] = useState<"idle" | "loading" | "error">("idle");
+  const [shown, setShown] = useState(HISTORY_PAGE);
+  useEffect(() => { setHistory(null); setHistoryState("idle"); setShown(HISTORY_PAGE); }, [card.id]);
+
+  const loadHistory = (): void => {
+    if (historyState === "loading" || history) return;
+    setHistoryState("loading");
+    void Promise.all([loadPersonMatches(card.id), loadChampionships().catch(() => null)])
+      .then(([bucket, championships]) => {
+        const rows = bucket[card.id] ?? [];
+        setHistory(rows);
+        // Resolved once for the whole career rather than per row, the same way
+        // the head-to-head does it: a 1,151-match career is a lot of lookups.
+        if (championships) {
+          setTitleNames((prev) => {
+            const names = { ...prev };
+            for (const row of rows) {
+              if (row.t && championships[row.t]) names[row.t] = championships[row.t]!.n;
+            }
+            return names;
+          });
+        }
+        setHistoryState("idle");
+      })
+      .catch(() => setHistoryState("error"));
+  };
+
+  /** id → name for everyone the corpus knows, from the index already in memory. */
+  const nameOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of core?.search ?? []) map.set(e.id, e.n);
+    return (id: string): string => map.get(id) ?? model?.nodes.name[model.indexOfId.get(id) ?? -1] ?? id;
+  }, [core, model]);
 
   /** A promotion builds its own arena, so it is a link like any wrestler. */
   const openPromotion = (id: string): void => {
@@ -225,6 +273,95 @@ export function ArenaInspector({
           </ul>
           {meetings && meetings.length > 40 && (
             <p className="micro">{meetings.length - 40} further documented meetings not listed</p>
+          )}
+        </section>
+      )}
+
+      {/* The whole career, for the subject the arena is built around. */}
+      {isAnchor && isPerson && (
+        <section className="arena-history">
+          <h3>
+            Match history
+            {history && <span className="micro"> · {history.length.toLocaleString()} documented</span>}
+          </h3>
+          {!history && historyState !== "error" && (
+            <button className="link" onClick={loadHistory} disabled={historyState === "loading"}>
+              {historyState === "loading" ? "reading the record…" : "Read every documented match"}
+            </button>
+          )}
+          {historyState === "error" && (
+            <p className="micro">
+              The per-person match index is not in this build of the data. Run
+              <code> pnpm person:materialize</code> to project it.
+            </p>
+          )}
+          {history && history.length === 0 && (
+            <p className="micro">
+              The corpus documents no matches for this person, which is a gap in the record
+              rather than a career of none.
+            </p>
+          )}
+          {history && history.length > 0 && (
+            <>
+              <ul className="arena-meetings">
+                {/* Most recent first: a career is read backwards from where it got to. */}
+                {history.slice().reverse().slice(0, shown).map((m) => (
+                  <li key={m.m}>
+                    <span className="d">{m.d}</span>
+                    <span className={`rel-tag res-${m.r}`}>
+                      {m.r === 1 ? "won" : m.r === 0 ? "lost" : "drew"}
+                    </span>
+                    <span className="ev-what">
+                      {m.f.replace(/_/g, " ")}
+                      {m.o.length > 0 && (
+                        <>
+                          {" · vs "}
+                          {m.o.map((id, i) => (
+                            <span key={id}>
+                              {i > 0 && ", "}
+                              <button className="link" onClick={() => onOpenArray(id)}>{nameOf(id)}</button>
+                            </span>
+                          ))}
+                        </>
+                      )}
+                      {m.p && m.p.length > 0 && (
+                        <>
+                          {" · with "}
+                          {m.p.map((id, i) => (
+                            <span key={id}>
+                              {i > 0 && ", "}
+                              <button className="link" onClick={() => onOpenArray(id)}>{nameOf(id)}</button>
+                            </span>
+                          ))}
+                        </>
+                      )}
+                      {core?.promotions?.[m.pr] && (
+                        <>
+                          {" · "}
+                          <button className="link" onClick={() => openPromotion(m.pr)}>
+                            {core.promotions[m.pr]!.n}
+                          </button>
+                        </>
+                      )}
+                      {m.t && (
+                        <>
+                          {" · "}
+                          <button className="link gold-tag" onClick={() => openTitle(m.t!)}>
+                            {titleNames[m.t] ?? "title"}{m.tc ? " CHANGE" : ""}
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {shown < history.length && (
+                <button className="link" onClick={() => setShown((n) => n + HISTORY_PAGE)}>
+                  Show {Math.min(HISTORY_PAGE, history.length - shown)} more
+                  <span className="micro"> · {history.length - shown} remaining</span>
+                </button>
+              )}
+            </>
           )}
         </section>
       )}

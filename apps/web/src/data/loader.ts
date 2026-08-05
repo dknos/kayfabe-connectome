@@ -7,6 +7,7 @@ import type {
   Manifest,
   NodesColumnar,
   PeopleBucket,
+  PersonMatchesBucket,
   PromotionsFile,
   SearchEntity,
   TimelineEvent,
@@ -116,6 +117,28 @@ export function loadEvidenceForPair(pairKeyStr: string): Promise<EvidenceBucket>
     evidenceCache.set(b, p);
     void p.catch(() => {
       if (evidenceCache.get(b) === p) evidenceCache.delete(b);
+    });
+  }
+  return p;
+}
+
+/**
+ * One person's whole documented career, in one fetch.
+ *
+ * Bucketed by the person's own id rather than by pair, which is the entire
+ * point: assembling a career out of `evidence/pairs` means touching a bucket
+ * per opponent, and out of `timeline/by-year` means every year they worked.
+ * Cached by BUCKET, so the second person from the same bucket is free.
+ */
+const personMatchCache = new Map<string, Promise<PersonMatchesBucket>>();
+export function loadPersonMatches(id: string): Promise<PersonMatchesBucket> {
+  const b = bucketOf(id);
+  let p = personMatchCache.get(b);
+  if (!p) {
+    p = getJSON<PersonMatchesBucket>(`evidence/person/${b}.json`);
+    personMatchCache.set(b, p);
+    void p.catch(() => {
+      if (personMatchCache.get(b) === p) personMatchCache.delete(b);
     });
   }
   return p;

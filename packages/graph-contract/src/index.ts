@@ -136,6 +136,39 @@ export interface PersonDossier {
 }
 export type PeopleBucket = Record<string, PersonDossier>;
 
+/**
+ * One person's side of one canonical match — `evidence/person/{bb}.json`.
+ *
+ * Optional fields are OMITTED rather than nulled when the corpus does not
+ * carry them, so `fin === undefined` means no finish is recorded and never a
+ * finish of "unknown". `r` comes from the match's `res`, not from which side
+ * the person is listed on, because a draw is not a loss for the second side.
+ */
+export interface PersonMatchRow {
+  /** match id */
+  m: string;
+  /** ISO date */
+  d: string;
+  /** promotion id */
+  pr: string;
+  /** match form */
+  f: MatchForm;
+  /** 1 won · 0 lost · 2 drawn */
+  r: 0 | 1 | 2;
+  /** the opposing side */
+  o: string[];
+  /** their own side, minus themselves; absent when they worked alone */
+  p?: string[];
+  en?: string;
+  fin?: string;
+  stip?: string;
+  /** title id, when the corpus records the match as being for one */
+  t?: string;
+  /** 1 when the corpus records the title changing hands */
+  tc?: 1;
+}
+export type PersonMatchesBucket = Record<string, PersonMatchRow[]>;
+
 export interface ChampionshipRecord {
   n: string;
   pr: string;
