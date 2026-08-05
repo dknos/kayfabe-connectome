@@ -465,20 +465,37 @@ export class ArenaStadium {
           // SketchUp-lineage geometry has no reliable winding; from inside the
           // bowl a single-sided shell is full of holes.
           mat.side = DoubleSide;
-          // Night register: the source colors are daylight flats, and at full
-          // value they fight the show lighting — decimation-stretched UVs on
-          // the concourse read as loud banding until dimmed under it.
           const std = mat as MeshStandardMaterial;
-          if (std.color) std.color.multiplyScalar(0.55);
-          // Seat texture is an atlas with transparent gaps between chair
-          // pixels. OPAQUE mode still samples those texels' RGB (pale blue),
-          // which filled the bowl with a milky wash. Cut them out cleanly.
-          if (/^Seat$/i.test(mat.name)) {
+          const isSeat = /^Seat$/i.test(mat.name);
+
+          // Seats carry their own atlas (blue/orange/green plastic). Keep the
+          // tint at full strength so the map reads, force a solid write, and
+          // never alpha-test: the baked atlas has no transparent gaps, and
+          // alphaTest was punching real holes through the bowl (see-through
+          // "glass" stands). A small emissive lift keeps them solid under the
+          // cool hemi without turning them into light sources.
+          if (isSeat) {
+            if (std.color) std.color.setRGB(1, 1, 1);
+            if (std.emissive) std.emissive.setRGB(0.04, 0.05, 0.07);
             mat.transparent = false;
             mat.opacity = 1;
             mat.depthWrite = true;
-            mat.alphaTest = 0.5;
+            mat.alphaTest = 0;
+            if (std.map) {
+              std.map.colorSpace = SRGBColorSpace;
+              std.map.needsUpdate = true;
+            }
+            continue;
           }
+
+          // Night register for untextured flats: daylight greys fight the
+          // show lighting until dimmed. Textured non-seat materials keep more
+          // of their map so they do not collapse into the sky colour.
+          if (std.color) std.color.multiplyScalar(std.map ? 0.75 : 0.55);
+          mat.transparent = false;
+          mat.opacity = 1;
+          mat.depthWrite = true;
+          mat.alphaTest = 0;
           if (/glass|transparent/i.test(mat.name)) {
             mat.transparent = true;
             mat.opacity = 0.28;
