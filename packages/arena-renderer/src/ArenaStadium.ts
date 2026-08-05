@@ -26,7 +26,7 @@ import {
   CanvasTexture, ConeGeometry, CylinderGeometry, DoubleSide, Group,
   HemisphereLight, InstancedMesh, Material, Matrix4, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, Object3D, PlaneGeometry, Points, RepeatWrapping,
-  Scene, ShaderMaterial, SpotLight, SRGBColorSpace, Sphere, Vector3,
+  Scene, ShaderMaterial, SpotLight, SphereGeometry, SRGBColorSpace, Sphere, Vector3,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { BLOOM_LAYER } from "./ArenaBloom";
@@ -123,11 +123,64 @@ export class ArenaStadium {
   // ------------------------------------------------------------- procedural
 
   private buildRig(): void {
+    this.buildSky();
     this.buildLights();
     this.buildJumbotron();
     this.buildEntrance();
     this.buildLedRibbon();
     this.buildFlashes();
+  }
+
+  /**
+   * Night over an open bowl.
+   *
+   * The composed stadium has no roof, so until the camera could tilt up this
+   * was never visible and never needed. Freeing the pitch made it the first
+   * thing a reader finds when they look up, and an empty black frame reads as
+   * the scene having failed rather than as sky.
+   *
+   * One inverted sphere with a vertical gradient — no texture, no stars, no
+   * horizon line. It is deliberately barely-there: the arena is lit like a
+   * night show and anything brighter overhead flattens the floodlights, which
+   * are the only reason the bowl reads as three-dimensional at all. It stays
+   * off BLOOM_LAYER for the same reason the building does.
+   */
+  private buildSky(): void {
+    const sky = new Mesh(
+      new SphereGeometry(150, 24, 16),
+      new ShaderMaterial({
+        side: BackSide,
+        depthWrite: false,
+        vertexShader: /* glsl */ `
+          varying float vUp;
+          void main() {
+            vec4 world = modelMatrix * vec4(position, 1.0);
+            vUp = clamp(world.y / 150.0, -1.0, 1.0);
+            gl_Position = projectionMatrix * viewMatrix * world;
+          }`,
+        fragmentShader: /* glsl */ `
+          precision highp float;
+          varying float vUp;
+          void main() {
+            // Horizon haze fading to near-black overhead: the bowl rim sits at
+            // y 10.6, so the reader mostly sees the bottom of this range.
+            //
+            // These are DISPLAY values, not linear ones. This renderer writes
+            // its buffer without an sRGB encode, so a colour here lands on
+            // screen at roughly value x 255 — the first pass used 0.02 and
+            // rendered (5,8,14), which is why the sky read as a black void
+            // rather than as night.
+            vec3 horizon = vec3(0.165, 0.215, 0.300);
+            vec3 zenith = vec3(0.055, 0.075, 0.120);
+            gl_FragColor = vec4(mix(horizon, zenith, smoothstep(-0.05, 0.55, vUp)), 1.0);
+          }`,
+      }),
+    );
+    sky.frustumCulled = false;
+    // Behind everything: the bowl, the masts and the flashes all draw over it.
+    sky.renderOrder = -1;
+    this.root.add(sky);
+    this.track(sky.geometry, sky.material as Material);
   }
 
   private buildLights(): void {

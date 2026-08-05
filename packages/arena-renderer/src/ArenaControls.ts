@@ -18,7 +18,27 @@
 import { Spherical, Vector3, type PerspectiveCamera } from "three";
 
 const MIN_POLAR = 0.12;
-const MAX_POLAR = Math.PI * 0.495; // never below the floor plane
+/**
+ * How far up the reader may tilt.
+ *
+ * This used to be `PI * 0.495` — a hair under level — because on an ORBIT rig
+ * the polar angle is what keeps the camera above the floor, and letting it
+ * past 90 degrees swung the camera under the seating to look at the backs of
+ * the cards. Pivoting in place broke that equivalence: the camera no longer
+ * moves when the angle does, so the old clamp was buying nothing and cost the
+ * reader the ceiling. At 89.1 degrees the best available view was still 0.9
+ * degrees BELOW horizontal, in a room whose whole point is that it rises
+ * around you.
+ *
+ * 2.62 rad is 60 degrees above horizontal: enough to look up the far stands,
+ * the truss and the screens. What keeps the camera out of the floor now is
+ * FLOOR_Y, which guards the thing that was actually at risk.
+ */
+const MAX_POLAR = 2.62;
+/** The camera never composes below this, whatever the dolly and the pitch
+ *  combine to ask for. The arena's lowest drawn thing is the championship rail
+ *  at y −1.6; this sits just under it. */
+const FLOOR_Y = -1.8;
 const DAMPING = 0.12;
 
 /**
@@ -288,6 +308,10 @@ export class ArenaControls {
     this.target.lerp(this.targetGoal, DAMPING);
     this.offset.setFromSpherical(this.spherical);
     this.camera.position.copy(this.target).add(this.offset);
+    // Tilted up past level, the offset points DOWNWARD from the target, so a
+    // dolly out is a dolly under the floor. The pitch is free now and this is
+    // what is not.
+    if (this.camera.position.y < FLOOR_Y) this.camera.position.y = FLOOR_Y;
     this.camera.lookAt(this.target);
   }
 
