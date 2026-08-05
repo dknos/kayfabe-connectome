@@ -244,7 +244,18 @@ export function layoutIndex(
  * stand on the field as boards around the ring, the way a show's top matches
  * are billed, and the subject floats over the ring under the jumbotron.
  */
-const STADIUM_SWEEP = 2.85; // max |angle|; the gap at the back is the entrance
+/**
+ * Max |angle| a bowl seat is placed at; the gap it leaves at the back is the
+ * entrance.
+ *
+ * Sized by the ENTRANCE STRUCTURE, not by taste. `ArenaStadium` parks an 11-unit
+ * tron at z −26.0 with truss posts out to x ±6.2, and the innermost tier sits at
+ * rx 18.2 — so at the old 2.85 the first seat each side landed at x ±5.23,
+ * z −26.24: behind the screen and inside its width, which hid three people at
+ * the low tier and more at every tier above it. 2.76 puts that seat at x ±6.78,
+ * clear of the truss with room for the body's own width.
+ */
+const STADIUM_SWEEP = 2.76;
 const SECTION_RANGE = 2.44; // the horseshoe range personSections/eraSections use
 const HEADLINERS = 8;
 const TIER_Y0 = 2.6, TIER_DY = 1.35;
