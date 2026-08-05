@@ -78,22 +78,28 @@ export const PAIR_SCALE = 0.72;
 export const PAIR_DX = 0.15;
 
 /**
- * Where a belt is worn, in figure units. Shared with the legend for the same
+ * Where a belt sits, in figure units. Shared with the legend for the same
  * reason the pair spacing is.
  *
- * Both sit at the waist, the tag belt below the singles one, close enough that
- * someone carrying two reads as carrying two rather than as wearing a thick
- * band.
+ * Over the head, not at the waist. A worn belt has to compete with the torso
+ * it is drawn on and loses; held up it is silhouetted against the background
+ * and reads at any size the arena gets drawn at. The arms stay down — the
+ * raised-arms pose was the part that read badly, not the raised belt.
  *
- * The scale is set by the BODY, not by taste: a raised belt could be small
- * because it was silhouetted against the background, and the first worn
- * version kept that size and vanished into the torso. A belt is as wide as the
- * hips it is strapped around — 0.128 of frame width against a torso half-width
- * of 0.088 — which stops just inside the arms hanging at 0.156.
+ * A champion with both kinds gets one on each side rather than a stack: the
+ * singles reign to the left, the tag reign to the right, so neither hides the
+ * other. Alone, a belt is centred and a little larger.
+ *
+ * Every number here is bounded by the frame. At y 0.93 a plate reaches 0.99
+ * against a ceiling of 1.0 and clears the top of the head at 0.871; the
+ * two-belt spread reaches 0.337 of frame half-width against 0.357, and that is
+ * measured on a PAIR, where the whole group is scaled by PAIR_SCALE and pushed
+ * out by PAIR_DX. Re-check both if any of them moves.
  */
-export const BELT_SCALE = 1.12;
-export const BELT_Y_SINGLES = 0.455;
-export const BELT_Y_TAG = 0.35;
+export const BELT_Y = 0.93;
+export const BELT_SCALE_ALONE = 1.08;
+export const BELT_SCALE_BOTH = 1.0;
+export const BELT_DX = 0.135;
 
 /**
  * The seat's local vertex position.
@@ -392,18 +398,20 @@ export class ArenaCards {
               dFig = min(dFig, sdWrestler(b1 / s) * s);
             }
 
-            // Worn, both of them, and by the LEFT body in a pair: these are
-            // this card's person's reigns, and hanging them between two figures
-            // would attribute them to a partnership the corpus records against
-            // one name. Read in that body's frame so they lean with the waist
-            // they are strapped to.
+            // Held up, and by the LEFT body in a pair: these are this card's
+            // person's reigns, and hanging them between two figures would
+            // attribute them to a partnership the corpus records against one
+            // name. Read in that body's frame so they ride its lean.
+            float both = belt * tagBelt;
+            float k = mix(${BELT_SCALE_ALONE.toFixed(3)}, ${BELT_SCALE_BOTH.toFixed(3)}, both) * s;
+            float bx = both * ${BELT_DX.toFixed(3)} * s;
+            float by = ${BELT_Y.toFixed(3)} * s;
             float dBelt = 1e9;
-            float k = ${BELT_SCALE.toFixed(3)} * s;
             if (belt > 0.5) {
-              dBelt = min(dBelt, sdBelt((b0 - vec2(0.0, ${BELT_Y_SINGLES.toFixed(3)} * s)) / k, 0.0) * k);
+              dBelt = min(dBelt, sdBelt((b0 - vec2(-bx, by)) / k, 0.0) * k);
             }
             if (tagBelt > 0.5) {
-              dBelt = min(dBelt, sdBelt((b0 - vec2(0.0, ${BELT_Y_TAG.toFixed(3)} * s)) / k, 1.0) * k);
+              dBelt = min(dBelt, sdBelt((b0 - vec2(bx, by)) / k, 1.0) * k);
             }
 
             float aa = max(fwidth(f.x), 0.0006) * 1.15;
@@ -576,7 +584,7 @@ export class ArenaCards {
    */
   nameplateLift(slot: number, worldHeight: number): number {
     if ((this.aGlyph.array as Float32Array)[slot]! < 0.5) return 0;
-    return worldHeight * (FIGURE_Y - 0.5) * 0.94;
+    return worldHeight * (FIGURE_Y - 0.5);
   }
 
   /** The crowd's clock, in seconds. Both materials read it: the visible one to

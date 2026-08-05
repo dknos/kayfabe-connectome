@@ -1,7 +1,7 @@
 export { ArenaRenderer, type ArenaScope } from "./ArenaRenderer";
 export { ArenaTransition, SlotPool, slerpInto, type ArenaTransitionStats } from "./ArenaTransition";
 export {
-  ArenaCards, PAIR_SCALE, PAIR_DX, BELT_SCALE, BELT_Y_SINGLES, BELT_Y_TAG,
+  ArenaCards, PAIR_SCALE, PAIR_DX, BELT_Y, BELT_DX, BELT_SCALE_ALONE, BELT_SCALE_BOTH,
 } from "./ArenaCards";
 export { ArenaLabels, type ArenaLabelReport, type ArenaLabelInput } from "./ArenaLabels";
 export { ArenaPicking } from "./ArenaPicking";

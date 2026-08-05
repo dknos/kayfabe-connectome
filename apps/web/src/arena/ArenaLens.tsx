@@ -12,7 +12,10 @@ import {
 } from "@kayfabe/arena-renderer";
 import { pushUrl, useStore, writeUrl } from "../state/store";
 import { ArenaInspector } from "./ArenaInspector";
-import { defaultAnchorId, expandAggregate, personScope, promotionScope, promotionTruncation } from "./arenaAdapter";
+import {
+  DEFAULT_VIEW, defaultAnchorId, expandAggregate, personScope, promotionScope,
+  promotionTruncation, type ArenaView,
+} from "./arenaAdapter";
 import { loadBeltIndex, type BeltIndex } from "./arenaBelts";
 import { ArenaGlyphKey } from "./ArenaGlyphKey";
 import { onArenaUrlRestore, setArenaUrlState, takePendingArenaUrl } from "./arenaUrl";
@@ -69,9 +72,14 @@ export function ArenaLens(): JSX.Element {
   // documented relationship; a promotion's seats by era, because its cards have
   // no relationship to a subject — they share a promotion, not an opponent.
   const isPromotion = Boolean(anchorId && model && model.nodes.type[model.indexOfId.get(anchorId) ?? -1] === 1);
+  // How the reader has asked to read this arena. Person scopes only: a
+  // promotion seats people by the era they worked there, not by a relationship
+  // to a subject, so "partners only" has nothing to filter and the chronology
+  // is already the seating.
+  const [view, setView] = useState<ArenaView>(DEFAULT_VIEW);
   const personScopeMemo = useMemo(
-    () => (model && anchorId && !isPromotion ? personScope(model, anchorId) : null),
-    [model, anchorId, isPromotion],
+    () => (model && anchorId && !isPromotion ? personScope(model, anchorId, view) : null),
+    [model, anchorId, isPromotion, view],
   );
   const [promoScope, setPromoScope] = useState<ArenaScope | null>(null);
   const [truncated, setTruncated] = useState(0);
@@ -309,6 +317,34 @@ export function ArenaLens(): JSX.Element {
             <option value="low">Low</option>
           </select>
         </label>
+        {!isPromotion && (
+          <>
+            <label className="arena-tier">
+              Order
+              <select
+                value={view.sort}
+                onChange={(e) => setView((v) => ({ ...v, sort: e.target.value as ArenaView["sort"] }))}
+              >
+                <option value="matches">Most matches</option>
+                <option value="chronological">First met</option>
+              </select>
+            </label>
+            <label className="arena-toggle" title="Only relationships with a documented title match">
+              <input
+                type="checkbox" checked={view.titlesOnly}
+                onChange={(e) => setView((v) => ({ ...v, titlesOnly: e.target.checked }))}
+              />
+              Title matches
+            </label>
+            <label className="arena-toggle" title="Only relationships the corpus documents as a tag partnership">
+              <input
+                type="checkbox" checked={view.partnersOnly}
+                onChange={(e) => setView((v) => ({ ...v, partnersOnly: e.target.checked }))}
+              />
+              Partners
+            </label>
+          </>
+        )}
       </div>
       <nav className="arena-trail" aria-label="Subjects visited">
         <button
@@ -362,6 +398,13 @@ export function ArenaLens(): JSX.Element {
               ? `${scope.cards.length - 1} cards across its documented eras`
               : `${scope.cards.length - 1} documented relationships`}
           </span>
+          {/* A narrowed arena that reads as the whole relationship set is the
+              same false claim as a capped roster, so it is stated the same way. */}
+          {(scope.hidden ?? 0) > 0 && (
+            <span className="arena-caveat">
+              {scope.hidden} more documented relationships are filtered out
+            </span>
+          )}
           {/* A capped roster that reads as complete is a false claim. */}
           {truncated > 0 && (
             <span className="arena-caveat">

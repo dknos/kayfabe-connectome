@@ -12,9 +12,7 @@
  * nothing to compare itself against.
  */
 import type { JSX } from "react";
-import {
-  BELT_SCALE, BELT_Y_SINGLES, BELT_Y_TAG, PAIR_DX, PAIR_SCALE,
-} from "@kayfabe/arena-renderer";
+import { BELT_SCALE_ALONE, BELT_Y, PAIR_DX, PAIR_SCALE } from "@kayfabe/arena-renderer";
 
 const INK = "#c7d1e6";
 const GOLD = "#ffcc61";
@@ -70,8 +68,8 @@ function Seat({ pose }: { pose: Pose }): JSX.Element {
         <Body x={-dx} s={s} />
         {pair && <Body x={dx} s={s} />}
       </g>
-      {pose === "belt" && <Belt tag={false} x={0} y={BELT_Y_SINGLES} k={BELT_SCALE} />}
-      {pose === "tagBelt" && <Belt tag x={0} y={BELT_Y_TAG} k={BELT_SCALE} />}
+      {pose === "belt" && <Belt tag={false} x={0} y={BELT_Y} k={BELT_SCALE_ALONE} />}
+      {pose === "tagBelt" && <Belt tag x={0} y={BELT_Y} k={BELT_SCALE_ALONE} />}
     </svg>
   );
 }

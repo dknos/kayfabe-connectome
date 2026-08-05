@@ -31,6 +31,9 @@ export interface ArenaLabelReport {
   updateMs: number;
 }
 
+/** Label box height in CSS pixels, at the 11px type this field uses. */
+const LABEL_H = 17;
+
 interface LabelSlot {
   el: HTMLDivElement;
   boundId: string | null;
@@ -145,10 +148,14 @@ export class ArenaLabels {
       c.name = input.name;
       c.emphasis = input.emphasis;
       c.x = x;
-      c.y = y;
+      // The anchor is the TOP of the figure, and a label box grows downward
+      // from wherever it is put — so anchoring at the anchor lays the name
+      // across the belt a champion is holding up. Lift the box by its own
+      // height and the name sits clear above everything the body draws.
+      c.y = y - LABEL_H;
       c.depth = this.proj.z;
       c.w = this.textWidth(input.name) + 10;
-      c.h = 17;
+      c.h = LABEL_H;
       count++;
     }
 

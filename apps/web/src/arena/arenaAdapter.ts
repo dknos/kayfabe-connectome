@@ -73,19 +73,48 @@ export function defaultAnchorId(model: GraphModel): string | null {
 }
 
 /**
+ * How the reader has asked to order and narrow a person's arena.
+ *
+ * Both are readings of the SAME evidence, never a different corpus: a filter
+ * removes cards whose edge does not carry the thing being asked about, and a
+ * sort reorders what is left. Nothing here invents a value to sort by — every
+ * key is a field the edge already holds.
+ */
+export interface ArenaView {
+  /** `matches` is documented encounters, `chronological` is first meeting. */
+  sort: "matches" | "chronological";
+  /** only relationships with at least one documented TITLE match */
+  titlesOnly: boolean;
+  /** only relationships the corpus documents as a tag partnership */
+  partnersOnly: boolean;
+}
+
+export const DEFAULT_VIEW: ArenaView = {
+  sort: "matches", titlesOnly: false, partnersOnly: false,
+};
+
+/**
  * A person scope: everyone the subject shares a documented match with,
  * seated by what kind of relationship the evidence supports.
  */
-export function personScope(model: GraphModel, anchorId: string): ArenaScope | null {
+export function personScope(
+  model: GraphModel, anchorId: string, view: ArenaView = DEFAULT_VIEW,
+): ArenaScope | null {
   const ai = model.indexOfId.get(anchorId);
   if (ai === undefined) return null;
   const cards: ArenaCard[] = [];
+  let hidden = 0;
   for (const { node, edge } of model.neighbors(ai)) {
     const o = edge * STRIDE;
     const same = model.edges[o + EF.same]!;
     const opposed = model.edges[o + EF.opposed]!;
     const br = model.edges[o + EF.br]!;
     if (same + opposed + br === 0) continue;
+    // Filters read the edge's own counters. `title` is documented title
+    // matches between these two, so "title matches only" is a fact about the
+    // pair rather than about either person's reigns.
+    if (view.titlesOnly && model.edges[o + EF.title]! === 0) { hidden++; continue; }
+    if (view.partnersOnly && same === 0) { hidden++; continue; }
     const bank = same > 0 && opposed > 0 ? AB.MIXED : same > 0 ? AB.SAME : AB.OPPOSED;
     cards.push(cardFromNode(
       model, node, bank, same + opposed + br * 0.25,
@@ -93,9 +122,13 @@ export function personScope(model: GraphModel, anchorId: string): ArenaScope | n
       dayToYear(model.edges[o + EF.lastDay]!),
     ));
   }
-  // matches-desc-then-id, the stable order the atlas projection uses, so any
-  // budget slice is deterministic rather than adjacency-order dependent.
-  cards.sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1));
+  // The tiebreak stays id, so any budget slice is deterministic rather than
+  // adjacency-order dependent, whichever key is in front of it.
+  if (view.sort === "chronological") {
+    cards.sort((a, b) => a.firstYear - b.firstYear || b.strength - a.strength || (a.id < b.id ? -1 : 1));
+  } else {
+    cards.sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1));
+  }
   const anchorIndex = ai;
   const anchorName = model.nodes.name[anchorIndex] ?? anchorId;
   cards.unshift(cardFromNode(
@@ -103,7 +136,9 @@ export function personScope(model: GraphModel, anchorId: string): ArenaScope | n
     dayToYear(model.nodes.firstDay[anchorIndex]!),
     dayToYear(model.nodes.lastDay[anchorIndex]!),
   ));
-  return { kind: "person", anchorId, anchorName, cards };
+  // A narrowed arena must say how much it is not showing, or a filtered view
+  // reads as the whole relationship set.
+  return { kind: "person", anchorId, anchorName, cards, hidden };
 }
 
 

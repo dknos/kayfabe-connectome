@@ -65,6 +65,9 @@ export interface ArenaScope {
    *  when the corpus documents none — in which case no rail is drawn at all,
    *  rather than an empty one implying we looked and found nothing. */
   titleYears?: { from: number; counts: number[] };
+  /** Documented relationships a filter removed. Absent means nothing was
+   *  narrowed; a number means the arena on screen is a SUBSET and says so. */
+  hidden?: number;
 }
 
 /**
@@ -83,9 +86,13 @@ export interface ArenaScope {
  */
 function glyphMask(card: ArenaCard, scope: ArenaScope | null, belts: ArenaBeltIndex | null): number {
   if (card.represents || !card.id.startsWith("p:")) return AG.NONE;
+  // SAME only, deliberately: a card the corpus documents as BOTH partner and
+  // opponent gets one body. Two bodies is the mark for a tag team, and a
+  // relationship that is also an opposition is not one — AB.MIXED exists
+  // precisely because that pair is a third thing rather than an average.
   const partner = scope?.kind === "person"
     && card.id !== scope.anchorId
-    && (card.bank === AB.SAME || card.bank === AB.MIXED);
+    && card.bank === AB.SAME;
   let mask = partner ? AG.FIGURE_PAIR : AG.FIGURE_SOLO;
   const counts = belts?.get(card.id);
   if (counts && counts.singles > 0) mask |= AG.BELT_SINGLES;
