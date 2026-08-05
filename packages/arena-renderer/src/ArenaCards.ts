@@ -49,8 +49,16 @@ const VERTEX_HEAD = /* glsl */ `
  * rather than resized in `ArenaLayouts`. Seat pitch, tier spacing and the
  * camera fit all keep working off the original footprint, and figures rise out
  * of their row and overlap the row behind exactly as a crowd does.
+ *
+ * FIGURE_X is margin, not size: a body's proportions come from FIGURE_Y and
+ * the card height, so widening the quad only buys room around the figure. It
+ * has to buy enough. At 0.55 a tag pair needed 0.326 of frame half-width and
+ * had 0.281, so both partners had their OUTER ARMS SLICED OFF at the quad
+ * edge — and the arm that survived was the inner one, which is why a pair read
+ * as two people fused together. Any change to the pair spacing, the arm reach
+ * or the lean amplitude has to be checked against this number.
  */
-const FIGURE_X = 0.55;
+const FIGURE_X = 0.7;
 const FIGURE_Y = 1.65;
 /** The figure's own frame: x in ±ASPECT/2, y from 0 at the feet to 1 at the
  *  top of a raised belt. Every number in FIGURE_GLSL is in these units. */
@@ -90,32 +98,20 @@ export const BELT_Y_TAG = 0.36;
  * can see and cannot click. That failure is silent and intermittent, which is
  * the worst kind, so there is one copy of this and both materials include it.
  *
- * The sway is a LEAN, not a slide. Offsetting the whole quad moved the feet
- * with the head and read as skating; scaling the offset by height above the
- * floor plants the feet and lets the body shift its weight over them, which is
- * what a person standing in a crowd actually does.
- *
- * Nothing in here may have a corner in it. The first version bobbed on
- * `abs(sin(t))`, whose derivative flips sign at every zero crossing — a hard
- * kick twice a cycle, which is exactly what "sudden" looks like on screen. The
- * vertical term is `0.5 - 0.5*cos`, the same shape without the corner, and the
- * horizontal terms are plain sines. Per-instance PHASE alone still left the
- * whole arena moving at one rate, so the rate is jittered per instance too.
+ * The quad itself no longer moves. Swaying it moved everything drawn inside
+ * it as ONE rigid thing, which is fine for a lone figure and wrong for a tag
+ * pair: two people who lean in perfect lockstep read as a cardboard cutout of
+ * two people. The motion lives in the fragment shader now, per BODY — see
+ * `arenaBody` — so partners drift in and out of step with each other the way
+ * two people standing together actually do.
  */
 const SEAT_VERTEX_GLSL = /* glsl */ `
-  vec3 arenaSeat(vec3 pos, float glyph, float id, float time) {
+  vec3 arenaSeat(vec3 pos, float glyph) {
     if (glyph < 0.5) return pos;
-    float ph = id * 1.61803;
-    float rate = 0.78 + fract(id * 0.61803) * 0.44;
-    float t = time * rate;
-    // 0 at the floor, 1 at the top of the figure: the lean scales with it, so
-    // the feet stay where the layout put them.
     float up = pos.y + 0.5;
-    float lean = (sin(t * 0.62 + ph) * 0.052 + sin(t * 0.27 + ph * 1.7) * 0.020) * up;
-    float bob = (0.5 - 0.5 * cos(t * 0.62 + ph * 1.3)) * 0.016;
     return vec3(
-      pos.x * ${FIGURE_X.toFixed(3)} + lean,
-      up * ${FIGURE_Y.toFixed(3)} - 0.5 + bob,
+      pos.x * ${FIGURE_X.toFixed(3)},
+      up * ${FIGURE_Y.toFixed(3)} - 0.5,
       pos.z);
   }
   /**
@@ -204,6 +200,25 @@ export const GLYPH_GLSL = /* glsl */ `
  * claim reigns the corpus attributes to one of them.
  */
 const FIGURE_GLSL = /* glsl */ `
+  /**
+   * Into one body's own frame: feet planted at y = 0, weight shifting over
+   * them. Returning the INVERSE of the motion means the body moves while the
+   * quad it is drawn on stays still, which is what lets two partners on a
+   * shared quad move independently.
+   *
+   * Nothing in here may have a corner in it. An early version bobbed on
+   * abs(sin(t)), whose derivative flips sign at every zero crossing — a hard
+   * kick twice a cycle, and exactly what "sudden" looks like on screen. The
+   * vertical term is 0.5 - 0.5*cos, the same shape without the corner. Phase
+   * alone left the whole arena moving at one rate, so the rate varies too.
+   */
+  vec2 arenaBody(vec2 f, float seed, float time) {
+    float ph = seed * 1.61803;
+    float t = time * (0.78 + fract(seed * 0.61803) * 0.44);
+    float lean = sin(t * 0.62 + ph) * 0.052 + sin(t * 0.27 + ph * 1.7) * 0.020;
+    float bob = (0.5 - 0.5 * cos(t * 0.62 + ph * 1.3)) * 0.016;
+    return vec2(f.x - lean * f.y, f.y - bob);
+  }
   float sdSeg(vec2 p, vec2 a, vec2 b, float r) {
     vec2 pa = p - a, ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
@@ -279,17 +294,17 @@ export class ArenaCards {
         ${SEAT_VERTEX_GLSL}
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
-        varying float vGlyph;
+        varying float vGlyph; varying float vSeed;
         void main() {
           vUv = uv; vBank = aBank; vEmphasis = aEmphasis; vStrength = aStrength;
-          vBillboard = aBillboard; vGlyph = aGlyph;
+          vBillboard = aBillboard; vGlyph = aGlyph; vSeed = aId;
           // Retained cards stay fully opaque so they remain trackable through
           // the whole morph; only entering and leaving cards dissolve.
           vFade = aState < 0.5 ? 0.0
                 : aState < 1.5 ? aProgress
                 : aState < 2.5 ? 1.0
                 : 1.0 - aProgress;
-          vec3 seat = arenaSeat(position, aGlyph, aId, uTime);
+          vec3 seat = arenaSeat(position, aGlyph);
           gl_Position = arenaSeatClip(
             seat, max(aBillboard, aGlyph > 0.5 ? 1.0 : 0.0),
             instanceMatrix, modelViewMatrix, projectionMatrix);
@@ -300,9 +315,10 @@ export class ArenaCards {
         uniform vec3 uAggregate;
         uniform float uLift;
         uniform vec3 uGold;
+        uniform float uTime;
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
-        varying float vGlyph;
+        varying float vGlyph; varying float vSeed;
 
         ${GLYPH_GLSL}
         ${FIGURE_GLSL}
@@ -326,24 +342,29 @@ export class ArenaCards {
             float tagBelt = mod(floor(m / 8.0), 2.0);
 
             // A documented tag partner is two bodies, both a little smaller so
-            // the pair still occupies one seat.
+            // the pair still occupies one seat, each on its own seed so they
+            // are never in step with one another.
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            float dFig = sdWrestler((f + vec2(dx, 0.0)) / s) * s;
-            if (pair > 0.5) dFig = min(dFig, sdWrestler((f - vec2(dx, 0.0)) / s) * s);
+            vec2 b0 = arenaBody(f + vec2(dx, 0.0), vSeed, uTime);
+            float dFig = sdWrestler(b0 / s) * s;
+            if (pair > 0.5) {
+              vec2 b1 = arenaBody(f - vec2(dx, 0.0), vSeed + 37.0, uTime);
+              dFig = min(dFig, sdWrestler(b1 / s) * s);
+            }
 
-            // Worn, both of them, and on the LEFT body in a pair: these are
+            // Worn, both of them, and by the LEFT body in a pair: these are
             // this card's person's reigns, and hanging them between two figures
             // would attribute them to a partnership the corpus records against
-            // one name.
-            vec2 bo = vec2(-dx, 0.0);
+            // one name. Read in that body's frame so they lean with the waist
+            // they are strapped to.
             float dBelt = 1e9;
             float k = ${BELT_SCALE.toFixed(3)} * s;
             if (belt > 0.5) {
-              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, ${BELT_Y_SINGLES.toFixed(3)} * s)) / k, 0.0) * k);
+              dBelt = min(dBelt, sdBelt((b0 - vec2(0.0, ${BELT_Y_SINGLES.toFixed(3)} * s)) / k, 0.0) * k);
             }
             if (tagBelt > 0.5) {
-              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, ${BELT_Y_TAG.toFixed(3)} * s)) / k, 1.0) * k);
+              dBelt = min(dBelt, sdBelt((b0 - vec2(0.0, ${BELT_Y_TAG.toFixed(3)} * s)) / k, 1.0) * k);
             }
 
             float aa = max(fwidth(f.x), 0.0006) * 1.15;
@@ -449,16 +470,19 @@ export class ArenaCards {
         uniform float uTime;
         ${SEAT_VERTEX_GLSL}
         varying float vId; varying float vState; varying float vGlyph; varying vec2 vUv;
+        varying float vSeed;
         void main() {
-          vId = aId; vState = aState; vGlyph = aGlyph; vUv = uv;
-          vec3 seat = arenaSeat(position, aGlyph, aId, uTime);
+          vId = aId; vState = aState; vGlyph = aGlyph; vUv = uv; vSeed = aId;
+          vec3 seat = arenaSeat(position, aGlyph);
           gl_Position = arenaSeatClip(
             seat, max(aBillboard, aGlyph > 0.5 ? 1.0 : 0.0),
             instanceMatrix, modelViewMatrix, projectionMatrix);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
+        uniform float uTime;
         varying float vId; varying float vState; varying float vGlyph; varying vec2 vUv;
+        varying float vSeed;
         ${GLYPH_GLSL}
         ${FIGURE_GLSL}
         void main() {
@@ -469,8 +493,10 @@ export class ArenaCards {
             float pair = mod(floor(m / 2.0), 2.0);
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            float d = sdWrestler((f + vec2(dx, 0.0)) / s) * s;
-            if (pair > 0.5) d = min(d, sdWrestler((f - vec2(dx, 0.0)) / s) * s);
+            float d = sdWrestler(arenaBody(f + vec2(dx, 0.0), vSeed, uTime) / s) * s;
+            if (pair > 0.5) {
+              d = min(d, sdWrestler(arenaBody(f - vec2(dx, 0.0), vSeed + 37.0, uTime) / s) * s);
+            }
             // Forgiveness: a 20 px-tall body in the back row is not a target a
             // reader can hit on its exact outline.
             if (d > 0.035) discard;
