@@ -70,6 +70,18 @@ export const PAIR_SCALE = 0.72;
 export const PAIR_DX = 0.15;
 
 /**
+ * Where a belt is worn, in figure units. Shared with the legend for the same
+ * reason the pair spacing is.
+ *
+ * Both sit at the waist, the tag belt below the singles one, close enough that
+ * someone carrying two reads as carrying two rather than as wearing a thick
+ * band. They are the only gold on a body, so they survive being small.
+ */
+export const BELT_SCALE = 0.85;
+export const BELT_Y_SINGLES = 0.455;
+export const BELT_Y_TAG = 0.36;
+
+/**
  * The seat's local vertex position.
  *
  * Shared verbatim by the visible material and the pick material. They MUST
@@ -173,16 +185,18 @@ export const GLYPH_GLSL = /* glsl */ `
  * when the reader walks up to a card. A sprite atlas would have needed a
  * resolution chosen for one of those and wrong for the other.
  *
- * The pose carries the championship, which is why the belt marks and the arms
- * are decided together:
+ * Everyone stands the same way. An earlier version raised a champion's arms —
+ * the sport's own gesture, and it read badly: a crowd where most people held a
+ * belt (a promotion's roster is mostly champions) turned into a field of
+ * identical raised arms, and in a tag pair the two sets of raised arms tangled.
+ * The championship is carried entirely by the BELT now, which is the part that
+ * was legible anyway:
  *
- *   arms up      the corpus documents at least one reign. This is the pose the
- *                sport itself uses, so it needs no key.
- *   raised belt  reigns held ALONE — held overhead, in the hands.
- *   waist belt   reigns held WITH A PARTNER — worn, not raised.
+ *   one plate    reigns held ALONE
+ *   two plates   reigns held WITH A PARTNER, worn below the first
  *
- * Both can be true at once and both are drawn, because a person who held a
- * singles belt and a tag belt held two different things.
+ * Both can be true at once and both are drawn, stacked at the waist, because a
+ * person who held a singles belt and a tag belt held two different things.
  *
  * A documented tag PARTNER of the subject is two figures rather than one. They
  * are one card and one person: the second figure says what the relationship is,
@@ -195,7 +209,7 @@ const FIGURE_GLSL = /* glsl */ `
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return length(pa - ba * h) - r;
   }
-  float sdWrestler(vec2 q, float champ) {
+  float sdWrestler(vec2 q) {
     float d = length(q - vec2(0.0, 0.795)) - 0.076;
     // A neck, because the head and the torso do not otherwise meet: the gap is
     // invisible at back-row size and unmistakable the moment a reader walks up
@@ -205,11 +219,9 @@ const FIGURE_GLSL = /* glsl */ `
     d = min(d, sdSeg(q, vec2(-0.036, 0.410), vec2(-0.062, 0.036), 0.030));
     d = min(d, sdSeg(q, vec2( 0.036, 0.410), vec2( 0.062, 0.036), 0.030));
     // Arms hang clear of the torso rather than out of it, or the silhouette
-    // reads as one wide slab with no shoulders.
-    float armY = champ > 0.5 ? 0.905 : 0.425;
-    float armX = champ > 0.5 ? 0.150 : 0.165;
-    d = min(d, sdSeg(q, vec2(-0.094, 0.665), vec2(-armX, armY), 0.027));
-    d = min(d, sdSeg(q, vec2( 0.094, 0.665), vec2( armX, armY), 0.027));
+    // reads as one wide slab with no shoulders. PAIR_DX is set from this reach.
+    d = min(d, sdSeg(q, vec2(-0.094, 0.665), vec2(-0.165, 0.425), 0.027));
+    d = min(d, sdSeg(q, vec2( 0.094, 0.665), vec2( 0.165, 0.425), 0.027));
     return d;
   }
 `;
@@ -312,27 +324,26 @@ export class ArenaCards {
             float pair = mod(floor(m / 2.0), 2.0);
             float belt = mod(floor(m / 4.0), 2.0);
             float tagBelt = mod(floor(m / 8.0), 2.0);
-            float champ = max(belt, tagBelt);
 
             // A documented tag partner is two bodies, both a little smaller so
             // the pair still occupies one seat.
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            float dFig = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
-            if (pair > 0.5) dFig = min(dFig, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
+            float dFig = sdWrestler((f + vec2(dx, 0.0)) / s) * s;
+            if (pair > 0.5) dFig = min(dFig, sdWrestler((f - vec2(dx, 0.0)) / s) * s);
 
-            // Belts ride the LEFT body in a pair: they are this card's person's
-            // reigns, and hanging them between two figures would attribute them
-            // to a partnership the corpus records against one name.
+            // Worn, both of them, and on the LEFT body in a pair: these are
+            // this card's person's reigns, and hanging them between two figures
+            // would attribute them to a partnership the corpus records against
+            // one name.
             vec2 bo = vec2(-dx, 0.0);
             float dBelt = 1e9;
-            float kRaise = 1.15 * s;
-            float kWaist = 0.80 * s;
+            float k = ${BELT_SCALE.toFixed(3)} * s;
             if (belt > 0.5) {
-              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, 0.945 * s)) / kRaise, 0.0) * kRaise);
+              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, ${BELT_Y_SINGLES.toFixed(3)} * s)) / k, 0.0) * k);
             }
             if (tagBelt > 0.5) {
-              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, 0.445 * s)) / kWaist, 1.0) * kWaist);
+              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, ${BELT_Y_TAG.toFixed(3)} * s)) / k, 1.0) * k);
             }
 
             float aa = max(fwidth(f.x), 0.0006) * 1.15;
@@ -456,11 +467,10 @@ export class ArenaCards {
             vec2 f = vec2((vUv.x - 0.5) * ${FIGURE_ASPECT.toFixed(4)}, vUv.y);
             float m = vGlyph;
             float pair = mod(floor(m / 2.0), 2.0);
-            float champ = mod(floor(m / 4.0), 2.0) + mod(floor(m / 8.0), 2.0);
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            float d = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
-            if (pair > 0.5) d = min(d, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
+            float d = sdWrestler((f + vec2(dx, 0.0)) / s) * s;
+            if (pair > 0.5) d = min(d, sdWrestler((f - vec2(dx, 0.0)) / s) * s);
             // Forgiveness: a 20 px-tall body in the back row is not a target a
             // reader can hit on its exact outline.
             if (d > 0.035) discard;

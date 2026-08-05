@@ -12,7 +12,9 @@
  * nothing to compare itself against.
  */
 import type { JSX } from "react";
-import { PAIR_DX, PAIR_SCALE } from "@kayfabe/arena-renderer";
+import {
+  BELT_SCALE, BELT_Y_SINGLES, BELT_Y_TAG, PAIR_DX, PAIR_SCALE,
+} from "@kayfabe/arena-renderer";
 
 const INK = "#c7d1e6";
 const GOLD = "#ffcc61";
@@ -20,9 +22,9 @@ const GOLD = "#ffcc61";
 /** Figure-frame (y up from the feet) into the SVG viewBox (y down). */
 const P = (x: number, y: number): string => `${x * 100} ${(1 - y) * 100}`;
 
-function Body({ champ, x, s }: { champ: boolean; x: number; s: number }): JSX.Element {
-  const armY = champ ? 0.905 : 0.425;
-  const armX = champ ? 0.15 : 0.165;
+function Body({ x, s }: { x: number; s: number }): JSX.Element {
+  const armY = 0.425;
+  const armX = 0.165;
   return (
     <g transform={`translate(${x * 100} ${100 - s * 100}) scale(${s})`}>
       <circle cx={0} cy={(1 - 0.795) * 100} r={7.6} />
@@ -60,17 +62,16 @@ type Pose = "solo" | "pair" | "belt" | "tagBelt";
 
 function Seat({ pose }: { pose: Pose }): JSX.Element {
   const pair = pose === "pair";
-  const champ = pose === "belt" || pose === "tagBelt";
   const s = pair ? PAIR_SCALE : 1;
   const dx = pair ? PAIR_DX : 0;
   return (
     <svg className="arena-key-glyph" viewBox="-30 -4 60 108" aria-hidden="true">
       <g fill={INK} stroke="none">
-        <Body champ={champ} x={-dx} s={s} />
-        {pair && <Body champ={champ} x={dx} s={s} />}
+        <Body x={-dx} s={s} />
+        {pair && <Body x={dx} s={s} />}
       </g>
-      {pose === "belt" && <Belt tag={false} x={0} y={0.945} k={1.15} />}
-      {pose === "tagBelt" && <Belt tag x={0} y={0.445} k={0.8} />}
+      {pose === "belt" && <Belt tag={false} x={0} y={BELT_Y_SINGLES} k={BELT_SCALE} />}
+      {pose === "tagBelt" && <Belt tag x={0} y={BELT_Y_TAG} k={BELT_SCALE} />}
     </svg>
   );
 }
