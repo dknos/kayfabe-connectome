@@ -57,6 +57,19 @@ const FIGURE_Y = 1.65;
 const FIGURE_ASPECT = (CARD_W * FIGURE_X) / (CARD_H * FIGURE_Y);
 
 /**
+ * A tag pair's two bodies: how far apart, and how much smaller.
+ *
+ * These are shared by three places — the visible shader, the pick shader and
+ * the legend — and they must agree, so they live here rather than as literals
+ * in each. The separation is set by the ARMS, not the torsos: at the first
+ * spacing the inner arms reached past the midline and crossed into an X
+ * between the two bodies, which reads as a rendering fault rather than as two
+ * people. An arm reaches PAIR_SCALE * 0.165, so the gap has to clear that.
+ */
+export const PAIR_SCALE = 0.72;
+export const PAIR_DX = 0.15;
+
+/**
  * The seat's local vertex position.
  *
  * Shared verbatim by the visible material and the pick material. They MUST
@@ -65,19 +78,32 @@ const FIGURE_ASPECT = (CARD_W * FIGURE_X) / (CARD_H * FIGURE_Y);
  * can see and cannot click. That failure is silent and intermittent, which is
  * the worst kind, so there is one copy of this and both materials include it.
  *
- * The sway is the whole crowd idea in four lines: two detuned sines on a
- * per-instance phase, so no two people in the arena are ever in step, plus a
- * rectified bob that reads as weight shifting rather than as floating.
+ * The sway is a LEAN, not a slide. Offsetting the whole quad moved the feet
+ * with the head and read as skating; scaling the offset by height above the
+ * floor plants the feet and lets the body shift its weight over them, which is
+ * what a person standing in a crowd actually does.
+ *
+ * Nothing in here may have a corner in it. The first version bobbed on
+ * `abs(sin(t))`, whose derivative flips sign at every zero crossing — a hard
+ * kick twice a cycle, which is exactly what "sudden" looks like on screen. The
+ * vertical term is `0.5 - 0.5*cos`, the same shape without the corner, and the
+ * horizontal terms are plain sines. Per-instance PHASE alone still left the
+ * whole arena moving at one rate, so the rate is jittered per instance too.
  */
 const SEAT_VERTEX_GLSL = /* glsl */ `
   vec3 arenaSeat(vec3 pos, float glyph, float id, float time) {
     if (glyph < 0.5) return pos;
     float ph = id * 1.61803;
-    float sway = sin(time * 1.05 + ph) * 0.050 + sin(time * 0.41 + ph * 1.7) * 0.024;
-    float bob = abs(sin(time * 0.86 + ph)) * 0.030;
+    float rate = 0.78 + fract(id * 0.61803) * 0.44;
+    float t = time * rate;
+    // 0 at the floor, 1 at the top of the figure: the lean scales with it, so
+    // the feet stay where the layout put them.
+    float up = pos.y + 0.5;
+    float lean = (sin(t * 0.62 + ph) * 0.052 + sin(t * 0.27 + ph * 1.7) * 0.020) * up;
+    float bob = (0.5 - 0.5 * cos(t * 0.62 + ph * 1.3)) * 0.016;
     return vec3(
-      pos.x * ${FIGURE_X.toFixed(3)} + sway,
-      (pos.y + 0.5) * ${FIGURE_Y.toFixed(3)} - 0.5 + bob,
+      pos.x * ${FIGURE_X.toFixed(3)} + lean,
+      up * ${FIGURE_Y.toFixed(3)} - 0.5 + bob,
       pos.z);
   }
   /**
@@ -290,8 +316,8 @@ export class ArenaCards {
 
             // A documented tag partner is two bodies, both a little smaller so
             // the pair still occupies one seat.
-            float s = pair > 0.5 ? 0.78 : 1.0;
-            float dx = pair > 0.5 ? 0.112 : 0.0;
+            float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
+            float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
             float dFig = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
             if (pair > 0.5) dFig = min(dFig, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
 
@@ -431,8 +457,8 @@ export class ArenaCards {
             float m = vGlyph;
             float pair = mod(floor(m / 2.0), 2.0);
             float champ = mod(floor(m / 4.0), 2.0) + mod(floor(m / 8.0), 2.0);
-            float s = pair > 0.5 ? 0.78 : 1.0;
-            float dx = pair > 0.5 ? 0.112 : 0.0;
+            float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
+            float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
             float d = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
             if (pair > 0.5) d = min(d, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
             // Forgiveness: a 20 px-tall body in the back row is not a target a

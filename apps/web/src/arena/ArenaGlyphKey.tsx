@@ -12,6 +12,7 @@
  * nothing to compare itself against.
  */
 import type { JSX } from "react";
+import { PAIR_DX, PAIR_SCALE } from "@kayfabe/arena-renderer";
 
 const INK = "#c7d1e6";
 const GOLD = "#ffcc61";
@@ -60,8 +61,8 @@ type Pose = "solo" | "pair" | "belt" | "tagBelt";
 function Seat({ pose }: { pose: Pose }): JSX.Element {
   const pair = pose === "pair";
   const champ = pose === "belt" || pose === "tagBelt";
-  const s = pair ? 0.78 : 1;
-  const dx = pair ? 0.112 : 0;
+  const s = pair ? PAIR_SCALE : 1;
+  const dx = pair ? PAIR_DX : 0;
   return (
     <svg className="arena-key-glyph" viewBox="-30 -4 60 108" aria-hidden="true">
       <g fill={INK} stroke="none">

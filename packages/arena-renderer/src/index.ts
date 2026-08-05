@@ -1,6 +1,6 @@
 export { ArenaRenderer, type ArenaScope } from "./ArenaRenderer";
 export { ArenaTransition, SlotPool, slerpInto, type ArenaTransitionStats } from "./ArenaTransition";
-export { ArenaCards } from "./ArenaCards";
+export { ArenaCards, PAIR_SCALE, PAIR_DX } from "./ArenaCards";
 export { ArenaLabels, type ArenaLabelReport, type ArenaLabelInput } from "./ArenaLabels";
 export { ArenaPicking } from "./ArenaPicking";
 export { ArenaRoutes } from "./ArenaRoutes";
