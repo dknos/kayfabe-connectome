@@ -1,0 +1,34 @@
+{
+  "stadium": {
+    "seatInnerX": 17.09,
+    "seatInnerZ": 26.41,
+    "seatOuterX": 29.16,
+    "seatOuterZ": 39.72,
+    "seatYLow": 1.52,
+    "seatYHigh": 11.03,
+    "bboxMin": [
+      -34.42,
+      -40.95,
+      -1.23
+    ],
+    "bboxMax": [
+      34.73,
+      40.65,
+      14.02
+    ],
+    "tris": 224773
+  },
+  "ring": {
+    "width": 6.2,
+    "height": 2.13,
+    "matTopY": 0.82
+  },
+  "chair": {
+    "dims": [
+      0.512,
+      0.664,
+      0.894
+    ]
+  },
+  "note": "Composed from user-supplied assets by stadium-assets/compose scripts, 2026-08-04. Units: 1 ~ 1m, field surface y=0, ring centered on origin."
+}
