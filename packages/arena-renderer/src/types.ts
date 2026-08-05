@@ -82,6 +82,26 @@ export const CARD_W = 1.55;
 export const CARD_H = 0.92;
 
 /**
+ * The seating geometry, shared by the layout that seats cards and the shell
+ * that is built around them.
+ *
+ * These were literals inside `layoutArena`. They are here because the stadium
+ * derives its terraces, aisles, barricades and signage arcs from exactly the
+ * same numbers: duplicated, the shell drifts off the seating the moment either
+ * is tuned, and a terrace that no longer lines up with its row reads as a
+ * rendering fault rather than as a tuning one.
+ */
+/** Radius of the innermost seated row, measured from centre stage. */
+export const SEAT_INNER_RADIUS = 6.4;
+/** How much further out each successive row sits. */
+export const SEAT_TIER_STEP = 1.85;
+/** Height of the innermost row, and the rise per row behind it. */
+export const SEAT_BASE_Y = -0.4;
+export const SEAT_TIER_RISE = 1.02;
+/** The floor plane. Everything structural is measured down to this. */
+export const FLOOR_Y = -2.05;
+
+/**
  * Bounded prominence. An unbounded map from match count to size lets one
  * 170-match card dwarf the field and destroys the reading.
  */
@@ -129,8 +149,33 @@ export interface ArenaLayoutResult {
    *  more tiers than a 31-card one and a constant camera lets the wide side
    *  run off the viewport. */
   extent: number;
-  sections: { key: string; label: string; count: number }[];
+  sections: ArenaSectionReport[];
   notes: string[];
+}
+
+/**
+ * What a section turned out to be, once seated.
+ *
+ * `arc` is present only for the Arena formation, because only there does a
+ * section occupy an angular span. Signage is placed from these MEASURED values
+ * rather than re-deriving them from the section definition: the row count and
+ * therefore the outer radius depend on how many cards actually fit, so a sign
+ * positioned from the definition alone floats away from its own seating
+ * exactly when a bank is crowded.
+ */
+export interface ArenaSectionReport {
+  key: string;
+  label: string;
+  count: number;
+  arc?: {
+    /** angular span, radians, measured from centre stage */
+    from: number;
+    to: number;
+    /** radius of the outermost seated row in this section */
+    outerRadius: number;
+    /** how many rows deep the section ended up */
+    rows: number;
+  };
 }
 
 export interface ArenaTierBudget {

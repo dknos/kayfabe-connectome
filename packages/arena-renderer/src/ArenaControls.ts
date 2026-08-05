@@ -90,6 +90,34 @@ export class ArenaControls {
   engaged = false;
   enabled = true;
 
+  /**
+   * Bumped on every deliberate reader input, and never by a directed move.
+   *
+   * "Manual input immediately cancels automated direction" needs a signal the
+   * director can sample without racing the input handlers: it records the
+   * counter when it starts a move and abandons the move the moment the counter
+   * differs. A boolean would be ambiguous — the director cannot tell its own
+   * `engaged = true` from the reader's.
+   */
+  userInputSeq = 0;
+
+  /**
+   * Keys that are not travel — framing and preset actions.
+   *
+   * Routed out rather than handled here so ArenaControls keeps owning the
+   * guards (a reader typing `1` in the search box must not move the camera)
+   * while the meaning of an action stays with whoever can honour it. The
+   * receiver ignores what it cannot do, so a key is only ever bound to
+   * something real.
+   */
+  onAction: ((key: string) => void) | null = null;
+
+  /** Reader input: take the camera, and let the director know it was taken. */
+  private markUserInput(): void {
+    this.engaged = true;
+    this.userInputSeq++;
+  }
+
   constructor(private readonly camera: PerspectiveCamera, private readonly dom: HTMLElement) {
     dom.addEventListener("pointerdown", this.onPointerDown);
     dom.addEventListener("pointermove", this.onPointerMove);
@@ -117,12 +145,18 @@ export class ArenaControls {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "Shift") { this.boost = true; return; }
     const k = e.key.toLowerCase();
-    if (!(k in WALK_KEYS)) return;
+    if (!(k in WALK_KEYS)) {
+      // Everything else is an action. The same typing and modifier guards above
+      // apply, which is the whole reason this routes through here rather than
+      // the lens adding its own window listener.
+      this.onAction?.(k);
+      return;
+    }
     e.preventDefault();
-    this.held.add(k);
     // Walking is the reader taking hold of the camera. Without this the next
     // formation frame() would put them straight back where they started.
-    this.engaged = true;
+    this.held.add(k);
+    this.markUserInput();
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
@@ -281,19 +315,19 @@ export class ArenaControls {
 
     if (this.pointers.size === 2) {
       const pinch = this.pinchDistance();
-      if (this.lastPinch > 0) this.dolly(this.lastPinch / Math.max(1e-3, pinch));
+      if (this.lastPinch > 0) { this.markUserInput(); this.dolly(this.lastPinch / Math.max(1e-3, pinch)); }
       this.lastPinch = pinch;
       return;
     }
     if (this.mode === "orbit") {
-      this.engaged = true;
+      this.markUserInput();
       const w = this.dom.clientWidth || 1;
       const h = this.dom.clientHeight || 1;
       this.sphericalGoal.theta -= (dx / w) * Math.PI * 2;
       this.sphericalGoal.phi -= (dy / h) * Math.PI;
       this.clampGoal();
     } else if (this.mode === "pan") {
-      this.engaged = true;
+      this.markUserInput();
       this.pan(dx, dy);
     }
   };
@@ -307,7 +341,7 @@ export class ArenaControls {
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled) return;
     e.preventDefault();
-    this.engaged = true;
+    this.markUserInput();
     this.dolly(e.deltaY > 0 ? 1.09 : 1 / 1.09);
   };
 
@@ -342,6 +376,43 @@ export class ArenaControls {
     this.formationTarget.copy(target);
     this.composeTarget();
     this.clampGoal();
+  }
+
+  /**
+   * Move to a directed pose, on the damping the reader already feels.
+   *
+   * Only the GOALS are written — never `spherical` or `target` — so the
+   * existing damped approach carries the move and a preset can never be an
+   * instant cut. SPIKE 1 measured what a cut costs: a tracked card jumps
+   * 0.786 NDC in one frame against a 0.0003 ordinary step.
+   *
+   * The look-at is stored as an offset from the formation's own target rather
+   * than written into it, because `updateCamera` re-proposes that target
+   * through `retarget()` on every engaged frame and would copy over it on the
+   * next one. That is the same trap recorded against pan, and it is why
+   * `userOffset` exists at all.
+   *
+   * Deliberately does NOT bump `userInputSeq`: this IS the automated
+   * direction, and cancelling itself would make every preset a one-frame move.
+   */
+  moveTo(position: Vector3, target: Vector3, extent: number): void {
+    this.fitDistance = position.distanceTo(target);
+    this.applyBounds(extent);
+    // A directed pose owns the camera until the reader takes it back, so the
+    // formation may no longer re-frame the angle out from under it.
+    this.engaged = true;
+    this.userOffset.copy(target).sub(this.formationTarget);
+    this.clampTravel();
+    this.composeTarget();
+    this.offset.copy(position).sub(target);
+    const goal = new Spherical().setFromVector3(this.offset);
+    this.sphericalGoal.set(goal.radius, goal.phi, goal.theta);
+    this.clampGoal();
+  }
+
+  /** Where the camera is heading, for a director deciding whether it arrived. */
+  get goalDistance(): number {
+    return this.sphericalGoal.radius;
   }
 
   /** Give the framing back to the formation. */

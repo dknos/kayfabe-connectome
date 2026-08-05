@@ -20,6 +20,7 @@ import { ArenaBloom } from "./ArenaBloom";
 import { ArenaPulses } from "./ArenaPulses";
 import { ArenaRail } from "./ArenaRail";
 import { ArenaControls } from "./ArenaControls";
+import { ArenaEnvironment } from "./ArenaEnvironment";
 import { ArenaTransition, SlotPool } from "./ArenaTransition";
 import { eraSections, layoutArena, layoutEcho, layoutIndex, personSections } from "./ArenaLayouts";
 import { railSegmentsFromYears } from "./ArenaRail";
@@ -75,6 +76,7 @@ export class ArenaRenderer {
   readonly pulses: ArenaPulses;
   readonly rail: ArenaRail;
   readonly controls: ArenaControls;
+  readonly environment: ArenaEnvironment;
 
   private readonly renderer: WebGLRenderer;
   private readonly camFrom = new Vector3();
@@ -112,6 +114,13 @@ export class ArenaRenderer {
 
   constructor(readonly canvas: HTMLCanvasElement, labelLayer: HTMLElement) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    // three resets its counters inside EVERY render() call (WebGLRenderer, the
+    // `info.autoReset` branch). With bloom on, the last render of a frame is
+    // the OutputPass fullscreen quad, so `info.render.calls` reported 1 — and
+    // any environment draw-call budget measured against it would have been
+    // fiction. Reset once per frame instead and read the accumulated total,
+    // which is what the frame actually costs.
+    this.renderer.info.autoReset = false;
     this.cards = new ArenaCards(CAPACITY);
     this.scene.add(this.cards.mesh);
     this.labels = new ArenaLabels(labelLayer, 192, CAPACITY);
@@ -122,6 +131,7 @@ export class ArenaRenderer {
     this.pulses = new ArenaPulses(this.scene, ARENA_TIERS.high.pulses);
     this.rail = new ArenaRail(this.scene, 96);
     this.controls = new ArenaControls(this.camera, canvas);
+    this.environment = new ArenaEnvironment(this.scene);
     this.applyTier(this.tier);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
@@ -136,6 +146,10 @@ export class ArenaRenderer {
   };
   private onContextRestored = (): void => {
     this.resize();
+    // three re-uploads its own GPU resources, but the shell's signature would
+    // otherwise report itself already correct and skip the rebuild, leaving an
+    // arena with no stadium in it after a context loss.
+    this.environment.invalidate();
     if (this.scope) this.setFormation(this.formationName, true);
   };
 
@@ -236,6 +250,15 @@ export class ArenaRenderer {
     // The fibre set is new, so nothing is pointed at on it yet.
     this.applyPulseFocus();
     this.buildRail();
+    // The shell is reconciled AFTER the layout, because it is derived from the
+    // layout's measured sections and extent. Cheap when nothing it depends on
+    // changed: a signature compare and, at most, a visibility flip.
+    this.environment.sync({
+      formation: name,
+      tier: this.tier,
+      extent: this.lastLayout?.extent ?? 12,
+      sections: this.lastLayout?.sections ?? [],
+    });
     // Routes resolve AFTER the cards settle, per the brief's ordering: they are
     // evidence about a formation, not part of its assembly.
     this.routes.setReveal(immediate ? 1 : 0);
@@ -472,6 +495,9 @@ export class ArenaRenderer {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(tick);
       const t0 = performance.now();
+      // Counters accumulate across every pass this frame issues; see the
+      // autoReset note in the constructor.
+      this.renderer.info.reset();
       this.transition.tick(now);
       this.cards.sync(this.transition);
       // Seconds since the last frame. Read before the camera, because keyboard
@@ -625,6 +651,7 @@ export class ArenaRenderer {
     this.pulses.dispose();
     this.rail.dispose();
     this.controls.dispose();
+    this.environment.dispose();
     this.bloom.dispose();
     this.labels.dispose();
     this.renderer.dispose();

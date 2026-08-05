@@ -36,7 +36,9 @@
     "arena:spike34": "node tests/arena-spikes/spike34-routes-post.mjs",
     "arena:spike5": "node tests/arena-spikes/spike5-labels.mjs",
     "arena:qa": "node tests/arena-spikes/arena-lens-qa.mjs",
-    "arena:nav": "node tests/arena-spikes/arena-navigation-qa.mjs"
+    "arena:nav": "node tests/arena-spikes/arena-navigation-qa.mjs",
+    "arena:stadium": "node tests/arena-spikes/arena-stadium-qa.mjs",
+    "arena:shots": "node tests/arena-spikes/arena-visual-capture.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"

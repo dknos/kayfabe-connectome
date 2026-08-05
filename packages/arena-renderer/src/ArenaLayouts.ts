@@ -11,9 +11,11 @@
  *   INDEX   what the complete set is, precisely and readably
  */
 import type { ArenaTransition, SlotPool } from "./ArenaTransition";
+import { SEAT_Z_SQUASH } from "./ArenaStadiumKit";
 import {
-  AB, BAND, CARD_H, CARD_W, bandDelay, prominence,
-  type ArenaCard, type ArenaLayoutResult, type ArenaSection,
+  AB, BAND, CARD_H, CARD_W, SEAT_BASE_Y, SEAT_INNER_RADIUS, SEAT_TIER_RISE,
+  SEAT_TIER_STEP, bandDelay, prominence,
+  type ArenaCard, type ArenaLayoutResult, type ArenaSection, type ArenaSectionReport,
 } from "./types";
 
 function writeQuat(t: ArenaTransition, slot: number, yaw: number, pitch: number): void {
@@ -105,7 +107,7 @@ export function layoutArena(
   const t0 = performance.now();
   t.present.fill(0);
   const notes: string[] = [];
-  const sectionCounts: { key: string; label: string; count: number }[] = [];
+  const sectionCounts: ArenaSectionReport[] = [];
   let dropped = 0;
   let seated = 0;
 
@@ -134,7 +136,7 @@ export function layoutArena(
       const inTier = Math.min(perTier, count - tier * perTier);
       const f = inTier === 1 ? 0.5 : seat / (inTier - 1);
       const angle = section.from + (section.to - section.from) * f;
-      const radius = 6.4 + tier * 1.85;
+      const radius = SEAT_INNER_RADIUS + tier * SEAT_TIER_STEP;
       if (radius > extent) extent = radius;
       // Size the card to the seat it actually has. A fixed card width against a
       // crowded bank makes neighbours overlap — 197 opponents across this arc
@@ -145,7 +147,7 @@ export function layoutArena(
       const fit = Math.min(1, (pitch * 0.82) / CARD_W);
       writeCard(
         t, slot,
-        Math.sin(angle) * radius, -0.4 + tier * 1.02, Math.cos(angle) * radius * 0.82,
+        Math.sin(angle) * radius, SEAT_BASE_Y + tier * SEAT_TIER_RISE, Math.cos(angle) * radius * SEAT_Z_SQUASH,
         angle + Math.PI, -0.13,
         prominence(card.strength, maxStrength) * fit,
         card.bank === AB.AGGREGATE ? BAND.AGGREGATE : BAND.DIRECT,
@@ -154,7 +156,16 @@ export function layoutArena(
       seated++;
       i++;
     }
-    sectionCounts.push({ key: section.key, label: section.label, count });
+    // Measured, not predicted: rows follow from how many cards actually fit,
+    // so signage placed from the section DEFINITION drifts off a crowded bank.
+    const rows = Math.ceil(count / perTier);
+    sectionCounts.push({
+      key: section.key, label: section.label, count,
+      arc: {
+        from: section.from, to: section.to, rows,
+        outerRadius: SEAT_INNER_RADIUS + (rows - 1) * SEAT_TIER_STEP,
+      },
+    });
   }
   if (dropped > 0) notes.push(`${dropped} cards exceeded the instance budget and were not seated`);
   return { seated, dropped, layoutMs: performance.now() - t0, sections: sectionCounts, extent, notes };
@@ -201,7 +212,7 @@ export function layoutIndex(
     8,
     Math.min(48, Math.round(Math.sqrt(Math.max(1, population) * viewportAspect * (ROW_H / COL_W)))),
   );
-  const sections: { key: string; label: string; count: number }[] = [];
+  const sections: ArenaSectionReport[] = [];
   let row = 0;
   for (const key of keys) {
     const members = groups.get(key)!;
