@@ -176,10 +176,11 @@ export class ArenaStadium {
   }
 
   private buildLights(): void {
-    // A night bowl: cool sky bounce, near-black ground, and four hard white
-    // key spots on the ring. decay 0 keeps the physical falloff out of it —
-    // these are theatrical lights, tuned by eye against the seat texture.
-    const hemi = new HemisphereLight(0x33415e, 0x05070c, 0.85);
+    // A night bowl: neutral fill (not cool blue — that washed the shell into
+    // the sky), near-black ground, and four hard white key spots on the ring.
+    // decay 0 keeps the physical falloff out of it — theatrical lights, tuned
+    // by eye against the seat texture.
+    const hemi = new HemisphereLight(0x3a3d45, 0x080a0e, 1.05);
     this.root.add(hemi);
     for (const [x, y, z] of LIGHT_HEADS) {
       const spot = new SpotLight(0xf4f8ff, 2.6, 0, 0.5, 0.55, 0);
@@ -442,60 +443,52 @@ export class ArenaStadium {
   private async loadEnvironment(url: string): Promise<void> {
     try {
       const gltf = await this.loader.loadAsync(url);
-      // The bowl is a SketchUp shell lit only by a cool hemi + four ring spots.
-      // MeshStandard on that setup paints every under-lit face the sky colour,
-      // so the stands and upper tiers read as translucent blue glass even when
-      // opacity is 1. Swap the env to MeshBasic (unlit, fully opaque) so the
-      // seat atlas and structure flats keep their own colour and write depth.
-      //
-      // Materials are SHARED across many primitives (Seat alone on 9). Build
-      // one replacement per source material, then rebind every mesh.
-      const replace = new Map<Material, Material>();
-      const take = (mat: Material): Material => {
-        const hit = replace.get(mat);
-        if (hit) return hit;
-        const std = mat as MeshStandardMaterial;
-        const name = mat.name || "";
-        const isGlass = /glass|transparent/i.test(name);
-        const isSeat = /^Seat$/i.test(name);
-        const isGrass = /^Grass/i.test(name);
-
-        if (std.map) {
-          std.map.colorSpace = SRGBColorSpace;
-          std.map.needsUpdate = true;
-        }
-
-        // Night flats: pull daylight greys down. Seats keep full map strength.
-        let color = std.color ? std.color.clone() : undefined;
-        if (color && !isSeat) color.multiplyScalar(std.map ? 0.7 : 0.45);
-        if (color && isSeat) color.setRGB(1, 1, 1);
-        // Grass stays recognisable green under the unlit path.
-        if (color && isGrass) color.multiplyScalar(1.15);
-
-        const next = new MeshBasicMaterial({
-          name: mat.name,
-          map: std.map ?? null,
-          color: color ?? 0x888888,
-          side: DoubleSide,
-          transparent: isGlass,
-          opacity: isGlass ? 0.28 : 1,
-          depthWrite: !isGlass,
-          alphaTest: 0,
-          // Still pass through ACES so the bowl matches the lit ring/rig.
-          toneMapped: true,
-        });
-        replace.set(mat, next);
-        this.disposables.push(next);
-        return next;
-      };
-
+      // Materials are SHARED across many SketchUp meshes (Seat alone is on 9
+      // primitives). Dim once per material identity — multiplyScalar per mesh
+      // was 0.55^9 ≈ black. Keep MeshStandard (the original lit path): the
+      // MeshBasic swap painted pure-black structure as unlit #000 against a
+      // black sky, which erased the shell and read as a transparent stadium.
+      const tuned = new Set<Material>();
       gltf.scene.traverse((obj) => {
         if (!(obj as Mesh).isMesh) return;
         const mesh = obj as Mesh;
-        if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((m) => take(m));
-        } else if (mesh.material) {
-          mesh.material = take(mesh.material);
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of materials) {
+          if (!mat || tuned.has(mat)) continue;
+          tuned.add(mat);
+          // SketchUp-lineage geometry has no reliable winding; from inside the
+          // bowl a single-sided shell is full of holes.
+          mat.side = DoubleSide;
+          mat.transparent = false;
+          mat.opacity = 1;
+          mat.depthWrite = true;
+          mat.alphaTest = 0;
+
+          const std = mat as MeshStandardMaterial;
+          if (std.map) {
+            std.map.colorSpace = SRGBColorSpace;
+            std.map.needsUpdate = true;
+          }
+
+          if (/^Seat$/i.test(mat.name)) {
+            // Baked atlas is fully opaque; full tint so plastic colours read.
+            if (std.color) std.color.setRGB(1, 1, 1);
+          } else if (std.color) {
+            // Night register for daylight flats.
+            std.color.multiplyScalar(0.55);
+            // Pure black source materials (Aliminuim, Material.001) vanish
+            // against a black sky once unlit or crushed — lift them to a dark
+            // structure grey so the shell stays solid.
+            if (std.color.r + std.color.g + std.color.b < 0.05) {
+              std.color.setRGB(0.12, 0.13, 0.15);
+            }
+          }
+
+          if (/glass|transparent/i.test(mat.name)) {
+            mat.transparent = true;
+            mat.opacity = 0.28;
+            mat.depthWrite = false;
+          }
         }
       });
       this.root.add(gltf.scene);
