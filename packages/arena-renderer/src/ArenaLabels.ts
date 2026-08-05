@@ -111,6 +111,9 @@ export class ArenaLabels {
     widthPx: number, heightPx: number, budget: number,
     idOfSlot: (slot: number) => string | null,
     inputOf: (id: string) => ArenaLabelInput | undefined,
+    /** World-space height to raise this slot's anchor by — the top of the
+     *  figure standing in it, or 0 for a slot that draws a flat plaque. */
+    nameplateLift?: (slot: number) => number,
   ): void {
     const t0 = performance.now();
     let count = 0;
@@ -121,7 +124,17 @@ export class ArenaLabels {
       const input = inputOf(id);
       if (!input) continue;
       const i3 = slot * 3;
-      this.proj.set(transition.posCur[i3]!, transition.posCur[i3 + 1]!, transition.posCur[i3 + 2]!);
+      // Anchored over the head, not at the seat's centre.
+      //
+      // A seat's centre is mid-torso once a person is standing in it, and the
+      // row in front is close enough to cover it: a probe at four of fourteen
+      // label anchors returned the id of the body standing in front, so the
+      // name pointed at someone the reader could not click there. It also
+      // simply reads better — a nameplate above a figure rather than across it.
+      const lift = nameplateLift ? nameplateLift(slot) : 0;
+      this.proj.set(
+        transition.posCur[i3]!, transition.posCur[i3 + 1]! + lift, transition.posCur[i3 + 2]!,
+      );
       this.proj.project(camera);
       if (this.proj.z < -1 || this.proj.z > 1) continue;
       const x = (this.proj.x * 0.5 + 0.5) * widthPx;

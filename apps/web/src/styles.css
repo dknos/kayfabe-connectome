@@ -1323,7 +1323,7 @@ body:has(.mlabel:focus-within) .morph-hover-card { display: none; }
   color: #9fb4c8; font-size: 11px;
 }
 .arena-key-item { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
-.arena-key-glyph { width: 17px; height: 16px; display: block; }
+.arena-key-glyph { width: 15px; height: 27px; display: block; }
 
 /* Where the reader has been, directly under the controls; the drill-down
    crumbs sit below it because a drill-down happens INSIDE a subject. */

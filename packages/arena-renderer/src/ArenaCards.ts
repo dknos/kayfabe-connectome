@@ -35,6 +35,68 @@ const VERTEX_HEAD = /* glsl */ `
   attribute float aState;
   attribute float aBillboard;
   attribute float aGlyph;
+  attribute float aId;
+  uniform float uTime;
+`;
+
+/**
+ * How much taller and narrower a seated PERSON is than the plaque whose slot
+ * they occupy.
+ *
+ * The layout allots every seat the same footprint, and a standing figure has
+ * to live inside it without the layout knowing anything changed — so the quad
+ * is reshaped in the vertex shader and anchored at the seat's bottom edge
+ * rather than resized in `ArenaLayouts`. Seat pitch, tier spacing and the
+ * camera fit all keep working off the original footprint, and figures rise out
+ * of their row and overlap the row behind exactly as a crowd does.
+ */
+const FIGURE_X = 0.55;
+const FIGURE_Y = 1.65;
+/** The figure's own frame: x in ±ASPECT/2, y from 0 at the feet to 1 at the
+ *  top of a raised belt. Every number in FIGURE_GLSL is in these units. */
+const FIGURE_ASPECT = (CARD_W * FIGURE_X) / (CARD_H * FIGURE_Y);
+
+/**
+ * The seat's local vertex position.
+ *
+ * Shared verbatim by the visible material and the pick material. They MUST
+ * agree: the pick pass reads an id out of a colour buffer, so a figure that
+ * sways one way while its pick silhouette sways the other is a card the reader
+ * can see and cannot click. That failure is silent and intermittent, which is
+ * the worst kind, so there is one copy of this and both materials include it.
+ *
+ * The sway is the whole crowd idea in four lines: two detuned sines on a
+ * per-instance phase, so no two people in the arena are ever in step, plus a
+ * rectified bob that reads as weight shifting rather than as floating.
+ */
+const SEAT_VERTEX_GLSL = /* glsl */ `
+  vec3 arenaSeat(vec3 pos, float glyph, float id, float time) {
+    if (glyph < 0.5) return pos;
+    float ph = id * 1.61803;
+    float sway = sin(time * 1.05 + ph) * 0.050 + sin(time * 0.41 + ph * 1.7) * 0.024;
+    float bob = abs(sin(time * 0.86 + ph)) * 0.030;
+    return vec3(
+      pos.x * ${FIGURE_X.toFixed(3)} + sway,
+      (pos.y + 0.5) * ${FIGURE_Y.toFixed(3)} - 0.5 + bob,
+      pos.z);
+  }
+  /**
+   * A plaque is a SIGN and is yawed to face centre stage; a person is not.
+   * Left on the sign's orientation, everyone on the far side of the horseshoe
+   * was viewed edge-on and drew as a vertical streak — a body squashed to
+   * nothing with its legs trailing off. Figures always face the reader, which
+   * is also just what a crowd does.
+   */
+  vec4 arenaSeatClip(vec3 seat, float billboard, mat4 im, mat4 mv, mat4 pm) {
+    if (billboard > 0.5) {
+      // Face the viewer: take the instance's translation into view space and
+      // offset in screen-aligned axes, keeping its own scale.
+      vec4 c = mv * im * vec4(0.0, 0.0, 0.0, 1.0);
+      c.xy += vec2(seat.x * length(im[0].xyz), seat.y * length(im[1].xyz));
+      return pm * c;
+    }
+    return pm * mv * im * vec4(seat, 1.0);
+  }
 `;
 
 /**
@@ -62,20 +124,6 @@ export const GLYPH_GLSL = /* glsl */ `
     vec2 d = abs(q) - b;
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
   }
-  /** A wrestler: head over shoulders. \`pair\` draws two, for a documented
-   *  tag partner. */
-  float sdFigure(vec2 q, float pair) {
-    float dx = pair > 0.5 ? 0.062 : 0.0;
-    float scale = pair > 0.5 ? 0.80 : 1.0;
-    float d = 1e9;
-    for (int i = 0; i < 2; i++) {
-      if (i == 1 && pair < 0.5) break;
-      vec2 c = vec2(q.x + (i == 0 ? -dx : dx), q.y);
-      d = min(d, length(c - vec2(0.0, 0.052 * scale)) - 0.038 * scale);
-      d = min(d, sdBox(c - vec2(0.0, -0.045 * scale), vec2(0.052, 0.050) * scale) - 0.016 * scale);
-    }
-    return d;
-  }
   /** A belt: strap with a centre plate, or with two plates for a reign the
    *  corpus records as held by a team. */
   float sdBelt(vec2 q, float tag) {
@@ -86,6 +134,56 @@ export const GLYPH_GLSL = /* glsl */ `
     } else {
       d = min(d, length(q) - 0.056);
     }
+    return d;
+  }
+`;
+
+/**
+ * The person in the seat.
+ *
+ * A wrestler, not a pictogram of one: head, torso, arms and legs as one
+ * union of distance fields, so the silhouette stays clean at every size the
+ * arena is read at — 20 px in the back row of a promotion, half the viewport
+ * when the reader walks up to a card. A sprite atlas would have needed a
+ * resolution chosen for one of those and wrong for the other.
+ *
+ * The pose carries the championship, which is why the belt marks and the arms
+ * are decided together:
+ *
+ *   arms up      the corpus documents at least one reign. This is the pose the
+ *                sport itself uses, so it needs no key.
+ *   raised belt  reigns held ALONE — held overhead, in the hands.
+ *   waist belt   reigns held WITH A PARTNER — worn, not raised.
+ *
+ * Both can be true at once and both are drawn, because a person who held a
+ * singles belt and a tag belt held two different things.
+ *
+ * A documented tag PARTNER of the subject is two figures rather than one. They
+ * are one card and one person: the second figure says what the relationship is,
+ * so the belts stay centred on the pair and are drawn once. Two sets would
+ * claim reigns the corpus attributes to one of them.
+ */
+const FIGURE_GLSL = /* glsl */ `
+  float sdSeg(vec2 p, vec2 a, vec2 b, float r) {
+    vec2 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+  }
+  float sdWrestler(vec2 q, float champ) {
+    float d = length(q - vec2(0.0, 0.795)) - 0.076;
+    // A neck, because the head and the torso do not otherwise meet: the gap is
+    // invisible at back-row size and unmistakable the moment a reader walks up
+    // to the subject, who is drawn half a viewport tall.
+    d = min(d, sdSeg(q, vec2(0.0, 0.660), vec2(0.0, 0.745), 0.026));
+    d = min(d, sdBox(q - vec2(0.0, 0.545), vec2(0.058, 0.100)) - 0.030);
+    d = min(d, sdSeg(q, vec2(-0.036, 0.410), vec2(-0.062, 0.036), 0.030));
+    d = min(d, sdSeg(q, vec2( 0.036, 0.410), vec2( 0.062, 0.036), 0.030));
+    // Arms hang clear of the torso rather than out of it, or the silhouette
+    // reads as one wide slab with no shoulders.
+    float armY = champ > 0.5 ? 0.905 : 0.425;
+    float armX = champ > 0.5 ? 0.150 : 0.165;
+    d = min(d, sdSeg(q, vec2(-0.094, 0.665), vec2(-armX, armY), 0.027));
+    d = min(d, sdSeg(q, vec2( 0.094, 0.665), vec2( armX, armY), 0.027));
     return d;
   }
 `;
@@ -140,6 +238,7 @@ export class ArenaCards {
       side: DoubleSide,
       vertexShader: /* glsl */ `
         ${VERTEX_HEAD}
+        ${SEAT_VERTEX_GLSL}
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
         varying float vGlyph;
@@ -152,29 +251,23 @@ export class ArenaCards {
                 : aState < 1.5 ? aProgress
                 : aState < 2.5 ? 1.0
                 : 1.0 - aProgress;
-          if (aBillboard > 0.5) {
-            // Face the viewer: take the instance's translation into view space
-            // and offset in screen-aligned axes, keeping its own scale.
-            vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-            float sx = length(instanceMatrix[0].xyz);
-            float sy = length(instanceMatrix[1].xyz);
-            mv.xy += vec2(position.x * sx, position.y * sy);
-            gl_Position = projectionMatrix * mv;
-          } else {
-            gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-          }
+          vec3 seat = arenaSeat(position, aGlyph, aId, uTime);
+          gl_Position = arenaSeatClip(
+            seat, max(aBillboard, aGlyph > 0.5 ? 1.0 : 0.0),
+            instanceMatrix, modelViewMatrix, projectionMatrix);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
         uniform vec3 uOpposed; uniform vec3 uSame; uniform vec3 uMixed; uniform vec3 uCenter;
         uniform vec3 uAggregate;
         uniform float uLift;
-        uniform vec3 uGold; uniform vec3 uInk;
+        uniform vec3 uGold;
         varying vec2 vUv; varying float vBank; varying float vEmphasis;
         varying float vStrength; varying float vFade; varying float vBillboard;
         varying float vGlyph;
 
         ${GLYPH_GLSL}
+        ${FIGURE_GLSL}
 
         void main() {
           if (vFade <= 0.003) discard;
@@ -182,6 +275,60 @@ export class ArenaCards {
                       : vBank < 1.5 ? uOpposed
                       : vBank < 2.5 ? uSame
                       : vBank < 3.5 ? uMixed : uAggregate;
+
+          // A person gets a body. The plaque is kept only for the cards that
+          // are NOT people — era aggregates and a promotion anchor — because a
+          // figure standing for "+971 more" would be a person the corpus never
+          // named, and a promotion is not someone who can sit down.
+          if (vGlyph > 0.5) {
+            vec2 f = vec2((vUv.x - 0.5) * ${FIGURE_ASPECT.toFixed(4)}, vUv.y);
+            float m = vGlyph;
+            float pair = mod(floor(m / 2.0), 2.0);
+            float belt = mod(floor(m / 4.0), 2.0);
+            float tagBelt = mod(floor(m / 8.0), 2.0);
+            float champ = max(belt, tagBelt);
+
+            // A documented tag partner is two bodies, both a little smaller so
+            // the pair still occupies one seat.
+            float s = pair > 0.5 ? 0.78 : 1.0;
+            float dx = pair > 0.5 ? 0.112 : 0.0;
+            float dFig = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
+            if (pair > 0.5) dFig = min(dFig, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
+
+            // Belts ride the LEFT body in a pair: they are this card's person's
+            // reigns, and hanging them between two figures would attribute them
+            // to a partnership the corpus records against one name.
+            vec2 bo = vec2(-dx, 0.0);
+            float dBelt = 1e9;
+            float kRaise = 1.15 * s;
+            float kWaist = 0.80 * s;
+            if (belt > 0.5) {
+              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, 0.945 * s)) / kRaise, 0.0) * kRaise);
+            }
+            if (tagBelt > 0.5) {
+              dBelt = min(dBelt, sdBelt((f - bo - vec2(0.0, 0.445 * s)) / kWaist, 1.0) * kWaist);
+            }
+
+            float aa = max(fwidth(f.x), 0.0006) * 1.15;
+            float mFig = smoothstep(aa, -aa, dFig);
+            float mBelt = smoothstep(aa, -aa, dBelt);
+            float a = max(mFig, mBelt);
+            if (a <= 0.004) discard;
+
+            // Lit from above, and darkened along its own edge. The edge is the
+            // load-bearing part: cards do not write depth, so without it two
+            // people standing in front of each other blend into one shape.
+            vec3 body = accent * (0.50 + 0.60 * smoothstep(0.0, 0.95, f.y));
+            body *= 0.58 + 0.42 * smoothstep(0.0, 0.020, -dFig);
+            body += accent * vEmphasis * 0.45;
+            body += (accent * 0.22 + vec3(0.05, 0.06, 0.08)) * uLift;
+            vec3 lit = mix(body, uGold, mBelt);
+            // Echo is a SOURCE, not a reading: its crowd stays quiet so the
+            // arena that peels out of it is what the eye follows.
+            float quiet = vBillboard > 0.5 ? 0.55 : 1.0;
+            gl_FragColor = vec4(lit * quiet, vFade * a * (0.86 + vEmphasis * 0.14) * quiet);
+            return;
+          }
 
           vec2 p = vUv;
           vec2 d = abs(p - 0.5) * 2.0;
@@ -222,38 +369,6 @@ export class ArenaCards {
           // every other formation, which keeps them rendering untouched.
           col += (accent * 0.20 + vec3(0.05, 0.06, 0.08)) * uLift;
 
-          // The glyph strip. Echo is skipped deliberately: its chips are a
-          // compressed source topology drawn subdued, and printing marks on
-          // them puts detail where the reading is density.
-          if (vGlyph > 0.5 && vBillboard < 0.5) {
-            // Height-units, origin at the card's top-right corner.
-            vec2 g = vec2((p.x - 1.0) * ${(CARD_W / CARD_H).toFixed(4)}, p.y - 1.0);
-            float m = vGlyph;
-            float solo = mod(m, 2.0);
-            float pair = mod(floor(m / 2.0), 2.0);
-            float belt = mod(floor(m / 4.0), 2.0);
-            float tagBelt = mod(floor(m / 8.0), 2.0);
-
-            // Right-aligned, belts outermost so the championship marks sit at
-            // the card's corner where they survive the smallest on-screen size.
-            float x = -0.20;
-            float cy = -0.21;
-            float dBelt = 1e9;
-            if (tagBelt > 0.5) { dBelt = min(dBelt, sdBelt(g - vec2(x, cy), 1.0)); x -= 0.30; }
-            if (belt > 0.5) { dBelt = min(dBelt, sdBelt(g - vec2(x, cy), 0.0)); x -= 0.30; }
-            float dFig = 1e9;
-            if (pair > 0.5) dFig = sdFigure(g - vec2(x, cy), 1.0);
-            else if (solo > 0.5) dFig = sdFigure(g - vec2(x, cy), 0.0);
-
-            float aa = max(fwidth(g.x), 0.0015) * 1.1;
-            float mFig = smoothstep(aa, -aa, dFig);
-            float mBelt = smoothstep(aa, -aa, dBelt);
-            // Marks are printed, not lit: they replace the face rather than
-            // adding to it, so a card never brightens by being decorated.
-            col = mix(col, uInk, mFig * (0.55 + vEmphasis * 0.45));
-            col = mix(col, uGold, mBelt * (0.70 + vEmphasis * 0.30));
-          }
-
           // Echo is a SOURCE, not a reading: its chips stay quiet so the arena
           // that peels out of them is what the eye follows.
           float subdued = vBillboard > 0.5 ? 0.45 : 1.0;
@@ -268,41 +383,93 @@ export class ArenaCards {
         uMixed: { value: [0.91, 0.87, 0.81] },
         uAggregate: { value: [0.62, 0.66, 0.74] },
         uLift: { value: 0 },
-        // Championship marks are the only gold on a card face, so a belt reads
-        // as a belt across the whole arena without a legend lookup.
+        // Belts are the only gold in the crowd, so a champion reads as a
+        // champion across the whole arena without a legend lookup.
         uGold: { value: [1.0, 0.80, 0.38] },
-        uInk: { value: [0.78, 0.82, 0.90] },
+        uTime: { value: 0 },
       },
     });
 
     /** Mirrors the visible vertex path exactly, so the picked pixel is the
-     *  pixel the card draws. Id comes from an attribute because one draw call
-     *  has to distinguish every instance. */
+     *  pixel the card draws — INCLUDING the seat reshape and the sway, which
+     *  move a figure by most of its own width. A pick pass that skipped them
+     *  would return the id of whoever used to be under the cursor.
+     *
+     *  It mirrors the figure SILHOUETTE too, dilated by a forgiving margin.
+     *  A person's quad is 1.65x taller than the seat it stands in, so the
+     *  transparent air above their head covers the row behind: on the full
+     *  footprint, a probe at a body's own label anchor returned the id of a
+     *  taller neighbour standing in front of it. Bodies are clickable, gaps
+     *  fall through to whoever is actually behind them.
+     *
+     *  Id comes from an attribute because one draw call has to distinguish
+     *  every instance. */
     this.pickMaterial = new ShaderMaterial({
       side: DoubleSide,
       vertexShader: /* glsl */ `
-        attribute float aId; attribute float aState;
-        varying float vId; varying float vState;
+        attribute float aId; attribute float aState; attribute float aGlyph;
+        attribute float aBillboard;
+        uniform float uTime;
+        ${SEAT_VERTEX_GLSL}
+        varying float vId; varying float vState; varying float vGlyph; varying vec2 vUv;
         void main() {
-          vId = aId; vState = aState;
-          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          vId = aId; vState = aState; vGlyph = aGlyph; vUv = uv;
+          vec3 seat = arenaSeat(position, aGlyph, aId, uTime);
+          gl_Position = arenaSeatClip(
+            seat, max(aBillboard, aGlyph > 0.5 ? 1.0 : 0.0),
+            instanceMatrix, modelViewMatrix, projectionMatrix);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        varying float vId; varying float vState;
+        varying float vId; varying float vState; varying float vGlyph; varying vec2 vUv;
+        ${GLYPH_GLSL}
+        ${FIGURE_GLSL}
         void main() {
           if (vState < 0.5) discard;
+          if (vGlyph > 0.5) {
+            vec2 f = vec2((vUv.x - 0.5) * ${FIGURE_ASPECT.toFixed(4)}, vUv.y);
+            float m = vGlyph;
+            float pair = mod(floor(m / 2.0), 2.0);
+            float champ = mod(floor(m / 4.0), 2.0) + mod(floor(m / 8.0), 2.0);
+            float s = pair > 0.5 ? 0.78 : 1.0;
+            float dx = pair > 0.5 ? 0.112 : 0.0;
+            float d = sdWrestler((f + vec2(dx, 0.0)) / s, champ) * s;
+            if (pair > 0.5) d = min(d, sdWrestler((f - vec2(dx, 0.0)) / s, champ) * s);
+            // Forgiveness: a 20 px-tall body in the back row is not a target a
+            // reader can hit on its exact outline.
+            if (d > 0.035) discard;
+          }
           gl_FragColor = vec4(
             mod(vId, 256.0) / 255.0,
             mod(floor(vId / 256.0), 256.0) / 255.0,
             mod(floor(vId / 65536.0), 256.0) / 255.0, 1.0);
         }`,
+      uniforms: { uTime: { value: 0 } },
     });
 
     this.mesh = new InstancedMesh(this.geometry, this.material, capacity);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.matrices = this.mesh.instanceMatrix.array as Float32Array;
+  }
+
+  /**
+   * How far above a seat's centre this slot's nameplate belongs.
+   *
+   * A figure is anchored at the bottom of its seat and reaches FIGURE_Y seat
+   * heights up, so the top of the head sits (FIGURE_Y - 0.5) * height above the
+   * centre the layout placed. A plaque slot lifts by nothing — it IS its seat.
+   */
+  nameplateLift(slot: number, worldHeight: number): number {
+    if ((this.aGlyph.array as Float32Array)[slot]! < 0.5) return 0;
+    return worldHeight * (FIGURE_Y - 0.5) * 0.94;
+  }
+
+  /** The crowd's clock, in seconds. Both materials read it: the visible one to
+   *  sway a body, the pick one to sway its hit area with it. */
+  setTime(seconds: number): void {
+    this.material.uniforms.uTime!.value = seconds;
+    this.pickMaterial.uniforms.uTime!.value = seconds;
   }
 
   /** Compose transforms and push the per-frame dynamic attributes. */

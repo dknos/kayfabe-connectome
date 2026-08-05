@@ -572,6 +572,10 @@ export class ArenaRenderer {
       const t0 = performance.now();
       this.transition.tick(now);
       this.cards.sync(this.transition);
+      // The crowd keeps its own clock. It runs off wall time rather than the
+      // formation clock on purpose: the arena becomes STILL when a formation
+      // settles, and people in seats do not.
+      this.cards.setTime(now / 1000);
       // Seconds since the last frame. Read before the camera, because keyboard
       // travel is per-second and a per-frame step would walk twice as fast on a
       // 120 Hz display as on a 60 Hz one.
@@ -610,6 +614,7 @@ export class ArenaRenderer {
           ARENA_TIERS[this.tier].labels,
           (slot) => this.pool.idOf(slot),
           (id) => this.labelInput(id),
+          (slot) => this.cards.nameplateLift(slot, this.transition.scaleCur[slot * 3 + 1] ?? 0),
         );
       }
       this.syncHalo();
