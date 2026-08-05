@@ -362,7 +362,20 @@ export class ArenaCards {
           // named, and a promotion is not someone who can sit down.
           if (vGlyph > 0.5) {
             vec2 f = vec2((vUv.x - 0.5) * ${FIGURE_ASPECT.toFixed(4)}, vUv.y);
-            float m = vGlyph;
+            // ROUND the mask before reading bits out of it.
+            //
+            // vGlyph and vSeed are per-instance constants, but they arrive as
+            // INTERPOLATED varyings, so a fragment can see 1.9999996 where the
+            // instance holds 2. Every bit test is a floor(), and the pair bit
+            // is the one whose test lands exactly on an integer: floor(2/2) is
+            // 1 and floor(1.9999996/2) is 0. Masks 2, 6, 10 and 14 — every one
+            // that carries a tag partner — flip, while no solo mask can, which
+            // is why a PAIR would flicker between one body and two as the
+            // camera moved and a lone figure never did. Measured through the
+            // pick buffer: nudging the camera 14 times, one pair's second body
+            // answered 5 times and another 0.
+            float m = floor(vGlyph + 0.5);
+            float seed = floor(vSeed + 0.5);
             float pair = mod(floor(m / 2.0), 2.0);
             float belt = mod(floor(m / 4.0), 2.0);
             float tagBelt = mod(floor(m / 8.0), 2.0);
@@ -372,10 +385,10 @@ export class ArenaCards {
             // are never in step with one another.
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            vec2 b0 = arenaBody(f + vec2(dx, 0.0), vSeed, uTime);
+            vec2 b0 = arenaBody(f + vec2(dx, 0.0), seed, uTime);
             float dFig = sdWrestler(b0 / s) * s;
             if (pair > 0.5) {
-              vec2 b1 = arenaBody(f - vec2(dx, 0.0), vSeed + 37.0, uTime);
+              vec2 b1 = arenaBody(f - vec2(dx, 0.0), seed + 37.0, uTime);
               dFig = min(dFig, sdWrestler(b1 / s) * s);
             }
 
@@ -515,13 +528,26 @@ export class ArenaCards {
           if (vState < 0.5) discard;
           if (vGlyph > 0.5) {
             vec2 f = vec2((vUv.x - 0.5) * ${FIGURE_ASPECT.toFixed(4)}, vUv.y);
-            float m = vGlyph;
+            // ROUND the mask before reading bits out of it.
+            //
+            // vGlyph and vSeed are per-instance constants, but they arrive as
+            // INTERPOLATED varyings, so a fragment can see 1.9999996 where the
+            // instance holds 2. Every bit test is a floor(), and the pair bit
+            // is the one whose test lands exactly on an integer: floor(2/2) is
+            // 1 and floor(1.9999996/2) is 0. Masks 2, 6, 10 and 14 — every one
+            // that carries a tag partner — flip, while no solo mask can, which
+            // is why a PAIR would flicker between one body and two as the
+            // camera moved and a lone figure never did. Measured through the
+            // pick buffer: nudging the camera 14 times, one pair's second body
+            // answered 5 times and another 0.
+            float m = floor(vGlyph + 0.5);
+            float seed = floor(vSeed + 0.5);
             float pair = mod(floor(m / 2.0), 2.0);
             float s = pair > 0.5 ? ${PAIR_SCALE.toFixed(3)} : 1.0;
             float dx = pair > 0.5 ? ${PAIR_DX.toFixed(3)} : 0.0;
-            float d = sdWrestler(arenaBody(f + vec2(dx, 0.0), vSeed, uTime) / s) * s;
+            float d = sdWrestler(arenaBody(f + vec2(dx, 0.0), seed, uTime) / s) * s;
             if (pair > 0.5) {
-              d = min(d, sdWrestler(arenaBody(f - vec2(dx, 0.0), vSeed + 37.0, uTime) / s) * s);
+              d = min(d, sdWrestler(arenaBody(f - vec2(dx, 0.0), seed + 37.0, uTime) / s) * s);
             }
             // Forgiveness: a 20 px-tall body in the back row is not a target a
             // reader can hit on its exact outline.
