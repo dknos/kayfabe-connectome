@@ -450,11 +450,18 @@ export class ArenaStadium {
   private async loadEnvironment(url: string): Promise<void> {
     try {
       const gltf = await this.loader.loadAsync(url);
+      // Materials are SHARED across many SketchUp meshes (Seat alone is on 9
+      // primitives). Dim once per material identity — multiplyScalar per mesh
+      // was 0.55^9 ≈ black, and under the cool hemi the crushed bowl read as
+      // translucent blue glass instead of solid plastic seating.
+      const tuned = new Set<Material>();
       gltf.scene.traverse((obj) => {
         if (!(obj as Mesh).isMesh) return;
         const mesh = obj as Mesh;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         for (const mat of materials) {
+          if (!mat || tuned.has(mat)) continue;
+          tuned.add(mat);
           // SketchUp-lineage geometry has no reliable winding; from inside the
           // bowl a single-sided shell is full of holes.
           mat.side = DoubleSide;
@@ -463,6 +470,15 @@ export class ArenaStadium {
           // the concourse read as loud banding until dimmed under it.
           const std = mat as MeshStandardMaterial;
           if (std.color) std.color.multiplyScalar(0.55);
+          // Seat texture is an atlas with transparent gaps between chair
+          // pixels. OPAQUE mode still samples those texels' RGB (pale blue),
+          // which filled the bowl with a milky wash. Cut them out cleanly.
+          if (/^Seat$/i.test(mat.name)) {
+            mat.transparent = false;
+            mat.opacity = 1;
+            mat.depthWrite = true;
+            mat.alphaTest = 0.5;
+          }
           if (/glass|transparent/i.test(mat.name)) {
             mat.transparent = true;
             mat.opacity = 0.28;
