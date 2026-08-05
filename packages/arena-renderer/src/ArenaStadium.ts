@@ -162,17 +162,9 @@ export class ArenaStadium {
           precision highp float;
           varying float vUp;
           void main() {
-            // Horizon haze fading to near-black overhead: the bowl rim sits at
-            // y 10.6, so the reader mostly sees the bottom of this range.
-            //
-            // These are DISPLAY values, not linear ones. This renderer writes
-            // its buffer without an sRGB encode, so a colour here lands on
-            // screen at roughly value x 255 — the first pass used 0.02 and
-            // rendered (5,8,14), which is why the sky read as a black void
-            // rather than as night.
-            vec3 horizon = vec3(0.165, 0.215, 0.300);
-            vec3 zenith = vec3(0.055, 0.075, 0.120);
-            gl_FragColor = vec4(mix(horizon, zenith, smoothstep(-0.05, 0.55, vUp)), 1.0);
+            // Flat black: a blue horizon haze washed the open bowl and made the
+            // stands read as glass against the sky. Night show, no haze.
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
           }`,
       }),
     );
