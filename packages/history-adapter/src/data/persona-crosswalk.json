@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "canonical": "p:116704",
+      "displayName": "Matt Sydal",
+      "members": [
+        { "id": "p:116704", "persona": "Matt Sydal" },
+        { "id": "p:35621", "persona": "Evan Bourne" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:118301",
+      "displayName": "Mick Foley",
+      "members": [
+        { "id": "p:118301", "persona": "Mick Foley" },
+        { "id": "p:8045", "persona": "Cactus Jack" },
+        { "id": "p:5961", "persona": "Mankind" },
+        { "id": "p:151406", "persona": "Dude Love" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:36590",
+      "displayName": "Dustin Rhodes",
+      "members": [
+        { "id": "p:36590", "persona": "Dustin Rhodes" },
+        { "id": "p:75326", "persona": "Goldust" },
+        { "id": "p:151530", "persona": "The Artist Formerly Known As Goldust" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:36774",
+      "displayName": "Kevin Nash",
+      "members": [
+        { "id": "p:36774", "persona": "Kevin Nash" },
+        { "id": "p:153877", "persona": "Diesel" },
+        { "id": "p:52474", "persona": "Vinnie Vegas" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:114",
+      "displayName": "Scott Hall",
+      "members": [
+        { "id": "p:114", "persona": "Scott Hall" },
+        { "id": "p:155094", "persona": "Razor Ramon" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:38203",
+      "displayName": "Hulk Hogan",
+      "members": [
+        { "id": "p:38203", "persona": "Hulk Hogan" },
+        { "id": "p:42874", "persona": "Hollywood Hogan" },
+        { "id": "p:c8f60aa0c", "persona": "Terry Boulder" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:8338",
+      "displayName": "Steve Austin",
+      "members": [
+        { "id": "p:8338", "persona": "Steve Austin" },
+        { "id": "p:155453", "persona": "The Ringmaster" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:68720",
+      "displayName": "Triple H",
+      "members": [
+        { "id": "p:68720", "persona": "Triple H" },
+        { "id": "p:150997", "persona": "Hunter Hearst Helmsley" },
+        { "id": "p:51728", "persona": "Jean-Paul Levesque" },
+        { "id": "p:52042", "persona": "Terra Ryzing" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:84271",
+      "displayName": "The Rock",
+      "members": [
+        { "id": "p:84271", "persona": "The Rock" },
+        { "id": "p:150413", "persona": "Rocky Maivia" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:38592",
+      "displayName": "Curt Hennig",
+      "members": [
+        { "id": "p:38592", "persona": "Curt Hennig" },
+        { "id": "p:133860", "persona": "Mr. Perfect" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:8721",
+      "displayName": "Ron Simmons",
+      "members": [
+        { "id": "p:8721", "persona": "Ron Simmons" },
+        { "id": "p:128631", "persona": "Faarooq" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:133631",
+      "displayName": "The Godfather",
+      "members": [
+        { "id": "p:133631", "persona": "The Godfather" },
+        { "id": "p:160787", "persona": "Papa Shango" },
+        { "id": "p:151910", "persona": "Kama" },
+        { "id": "p:151580", "persona": "Kama Mustafa" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:32938",
+      "displayName": "The Big Show",
+      "members": [
+        { "id": "p:32938", "persona": "The Big Show" },
+        { "id": "p:43890", "persona": "The Giant" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:51637",
+      "displayName": "Vader",
+      "members": [
+        { "id": "p:51637", "persona": "Vader" },
+        { "id": "p:52049", "persona": "Big Van Vader" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:54385",
+      "displayName": "Rey Mysterio",
+      "members": [
+        { "id": "p:54385", "persona": "Rey Mysterio" },
+        { "id": "p:36808", "persona": "Rey Mysterio Jr." },
+        { "id": "p:caa3b2949", "persona": "Rey Misterio Jr." }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:36467",
+      "displayName": "Kane",
+      "members": [
+        { "id": "p:36467", "persona": "Kane" },
+        { "id": "p:d83aa8b2f", "persona": "Isaac Yankem" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:150180",
+      "displayName": "Marc Mero",
+      "members": [
+        { "id": "p:150180", "persona": "Marc Mero" },
+        { "id": "p:51030", "persona": "Johnny B. Badd" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:133526",
+      "displayName": "X-Pac",
+      "members": [
+        { "id": "p:133526", "persona": "X-Pac" },
+        { "id": "p:155216", "persona": "The 1-2-3 Kid" },
+        { "id": "p:47777", "persona": "Syxx" },
+        { "id": "p:ca9597314", "persona": "Syxx-Pac" },
+        { "id": "p:cb56eb86e", "persona": "Sean Waltman" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:34824",
+      "displayName": "William Regal",
+      "members": [
+        { "id": "p:34824", "persona": "William Regal" },
+        { "id": "p:39368", "persona": "Steven Regal" },
+        { "id": "p:41134", "persona": "Lord Steven Regal" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:37027",
+      "displayName": "Goldberg",
+      "members": [
+        { "id": "p:37027", "persona": "Goldberg" },
+        { "id": "p:46491", "persona": "Bill Goldberg" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:3185",
+      "displayName": "Sid Vicious",
+      "members": [
+        { "id": "p:3185", "persona": "Sid Vicious" },
+        { "id": "p:163437", "persona": "Sid Justice" },
+        { "id": "p:104201", "persona": "Sycho Sid" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:103969",
+      "displayName": "Rikishi",
+      "members": [
+        { "id": "p:103969", "persona": "Rikishi" },
+        { "id": "p:10105", "persona": "Fatu" },
+        { "id": "p:152278", "persona": "The Sultan" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:114924",
+      "displayName": "John Bradshaw Layfield",
+      "members": [
+        { "id": "p:114924", "persona": "John Bradshaw Layfield" },
+        { "id": "p:127932", "persona": "Bradshaw" },
+        { "id": "p:153413", "persona": "Blackjack Bradshaw" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:4738",
+      "displayName": "Al Snow",
+      "members": [
+        { "id": "p:4738", "persona": "Al Snow" },
+        { "id": "p:152812", "persona": "Leif Cassidy" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:9991",
+      "displayName": "Davey Boy Smith",
+      "members": [
+        { "id": "p:9991", "persona": "Davey Boy Smith" },
+        { "id": "p:46493", "persona": "The British Bulldog" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:51154",
+      "displayName": "Brian Pillman",
+      "members": [
+        { "id": "p:51154", "persona": "Brian Pillman" },
+        { "id": "p:51951", "persona": "Flyin' Brian" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:133746",
+      "displayName": "Big Boss Man",
+      "members": [
+        { "id": "p:133746", "persona": "Big Boss Man" },
+        { "id": "p:49379", "persona": "Big Bubba Rogers" },
+        { "id": "p:51781", "persona": "The Guardian Angel" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:7108",
+      "displayName": "Perry Saturn",
+      "members": [
+        { "id": "p:7108", "persona": "Perry Saturn" },
+        { "id": "p:43197", "persona": "Saturn" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:37717",
+      "displayName": "Madusa",
+      "members": [
+        { "id": "p:37717", "persona": "Madusa" },
+        { "id": "p:72095", "persona": "Alundra Blayze" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:650",
+      "displayName": "Raven",
+      "members": [
+        { "id": "p:650", "persona": "Raven" },
+        { "id": "p:159142", "persona": "Johnny Polo" },
+        { "id": "p:52510", "persona": "Scotty Flamingo" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:3379",
+      "displayName": "Shane Douglas",
+      "members": [
+        { "id": "p:3379", "persona": "Shane Douglas" },
+        { "id": "p:155919", "persona": "Dean Douglas" },
+        { "id": "p:37170", "persona": "The Franchise" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:990",
+      "displayName": "Taz",
+      "members": [
+        { "id": "p:990", "persona": "Taz" },
+        { "id": "p:121937", "persona": "Tazz" },
+        { "id": "p:8723", "persona": "The Tazmaniac" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:83494",
+      "displayName": "Bubba Ray Dudley",
+      "members": [
+        { "id": "p:83494", "persona": "Bubba Ray Dudley" },
+        { "id": "p:2486", "persona": "Buh Buh Ray Dudley" },
+        { "id": "p:ce13456c1", "persona": "Brother Ray" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:8979",
+      "displayName": "Chris Benoit",
+      "members": [
+        { "id": "p:8979", "persona": "Chris Benoit" },
+        { "id": "p:c2e17d309", "persona": "Wild Pegasus" },
+        { "id": "p:ca92f4bff", "persona": "Pegasus Kid" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:8522",
+      "displayName": "Eddie Guerrero",
+      "members": [
+        { "id": "p:8522", "persona": "Eddie Guerrero" },
+        { "id": "p:8771", "persona": "Eddy Guerrero" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:137832",
+      "displayName": "Haku",
+      "members": [
+        { "id": "p:137832", "persona": "Haku" },
+        { "id": "p:36921", "persona": "Meng" },
+        { "id": "p:169236", "persona": "King Haku" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:36747",
+      "displayName": "Buff Bagwell",
+      "members": [
+        { "id": "p:36747", "persona": "Buff Bagwell" },
+        { "id": "p:49855", "persona": "Marcus Alexander Bagwell" },
+        { "id": "p:49699", "persona": "Marcus Bagwell" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:328",
+      "displayName": "Psicosis",
+      "members": [
+        { "id": "p:328", "persona": "Psicosis" },
+        { "id": "p:39043", "persona": "Psychosis" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:34763",
+      "displayName": "Billy Gunn",
+      "members": [
+        { "id": "p:34763", "persona": "Billy Gunn" },
+        { "id": "p:152734", "persona": "Rockabilly" }
+      ],
+      "note": "curated"
+    },
+    {
+      "canonical": "p:95644",
+      "displayName": "Road Dogg",
+      "members": [
+        { "id": "p:95644", "persona": "Road Dogg" },
+        { "id": "p:152803", "persona": "Jesse James" },
+        { "id": "p:156523", "persona": "The Roadie" },
+        { "id": "p:51988", "persona": "Brian Armstrong" }
+      ],
+      "note": "curated"
+    }
+  ]
+}

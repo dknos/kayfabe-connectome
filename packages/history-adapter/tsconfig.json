@@ -9,8 +9,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "paths": {
-      "@kayfabe/sim-contract": ["../sim-contract/src/index.ts"]
+      "@kayfabe/sim-contract": ["../sim-contract/src/index.ts"],
+      "@kayfabe/graph-contract": ["../graph-contract/src/index.ts"]
     }
   },
   "include": ["src", "test"]

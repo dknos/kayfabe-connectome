@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "note": "Static curated metadata for flagship-era companies, keyed by canonical company id (lineage-resolved). homeMarketId present only for North American companies; it gates playability. DNA values are 0-100 design estimates for the mid-1990s scene.",
+  "companies": {
+    "pr:4140": {
+      "shortName": "WWF",
+      "homeMarketId": "mkt:nyc",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 55,
+        "characterSpectacle": 85,
+        "serializedStory": 80,
+        "violence": 35,
+        "comedy": 55,
+        "starDriven": 80,
+        "nationalAmbition": 95
+      }
+    },
+    "pr:2715": {
+      "shortName": "WCW",
+      "homeMarketId": "mkt:atlanta",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 75,
+        "characterSpectacle": 70,
+        "serializedStory": 65,
+        "violence": 40,
+        "comedy": 40,
+        "starDriven": 85,
+        "nationalAmbition": 90
+      }
+    },
+    "pr:1": {
+      "shortName": "ECW",
+      "homeMarketId": "mkt:philadelphia",
+      "sizeTier": "regional",
+      "productDna": {
+        "athleticCompetition": 70,
+        "characterSpectacle": 60,
+        "serializedStory": 70,
+        "violence": 90,
+        "comedy": 30,
+        "starDriven": 55,
+        "nationalAmbition": 40
+      }
+    },
+    "pr:c290": {
+      "shortName": "TNA",
+      "homeMarketId": "mkt:atlanta",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 70,
+        "characterSpectacle": 65,
+        "serializedStory": 70,
+        "violence": 45,
+        "comedy": 40,
+        "starDriven": 70,
+        "nationalAmbition": 80
+      }
+    },
+    "pr:c361": {
+      "shortName": "NJPW",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 90,
+        "characterSpectacle": 40,
+        "serializedStory": 50,
+        "violence": 35,
+        "comedy": 15,
+        "starDriven": 70,
+        "nationalAmbition": 70
+      }
+    },
+    "pr:c32": {
+      "shortName": "AJPW",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 92,
+        "characterSpectacle": 35,
+        "serializedStory": 55,
+        "violence": 40,
+        "comedy": 10,
+        "starDriven": 75,
+        "nationalAmbition": 65
+      }
+    },
+    "pr:c101": {
+      "shortName": "CMLL",
+      "sizeTier": "national",
+      "productDna": {
+        "athleticCompetition": 80,
+        "characterSpectacle": 75,
+        "serializedStory": 55,
+        "violence": 30,
+        "comedy": 35,
+        "starDriven": 60,
+        "nationalAmbition": 60
+      }
+    },
+    "pr:c276": {
+      "shortName": "IWA Japan",
+      "sizeTier": "regional",
+      "productDna": {
+        "athleticCompetition": 55,
+        "characterSpectacle": 45,
+        "serializedStory": 40,
+        "violence": 95,
+        "comedy": 15,
+        "starDriven": 45,
+        "nationalAmbition": 35
+      }
+    },
+    "pr:c496": {
+      "shortName": "WAR",
+      "sizeTier": "regional",
+      "productDna": {
+        "athleticCompetition": 80,
+        "characterSpectacle": 45,
+        "serializedStory": 45,
+        "violence": 45,
+        "comedy": 15,
+        "starDriven": 60,
+        "nationalAmbition": 45
+      }
+    },
+    "pr:c443": {
+      "shortName": "SMW",
+      "homeMarketId": "mkt:carolinas",
+      "sizeTier": "regional",
+      "productDna": {
+        "athleticCompetition": 65,
+        "characterSpectacle": 55,
+        "serializedStory": 75,
+        "violence": 45,
+        "comedy": 30,
+        "starDriven": 55,
+        "nationalAmbition": 30
+      }
+    }
+  }
+}

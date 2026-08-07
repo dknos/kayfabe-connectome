@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "lineages": [
+    {
+      "canonical": "pr:4140",
+      "note": "WWWF -> WWF -> WWE; boundary dates approximate rename dates",
+      "members": [
+        { "promotionId": "pr:11561", "name": "WWWF", "from": "1963-01-25", "to": "1979-03-01" },
+        { "promotionId": "pr:11791", "name": "WWF", "from": "1979-03-01", "to": "2002-05-06" },
+        { "promotionId": "pr:4140", "name": "WWE", "from": "2002-05-06", "to": null }
+      ]
+    },
+    {
+      "canonical": "pr:692",
+      "childOf": "pr:4140",
+      "note": "NXT as a WWE child brand from the 2010 relaunch",
+      "members": [
+        { "promotionId": "pr:692", "name": "NXT", "from": "2010-02-23", "to": null }
+      ]
+    },
+    {
+      "canonical": "pr:c290",
+      "note": "NWA TNA -> TNA -> Impact Wrestling; boundary dates approximate rebrand dates",
+      "members": [
+        { "promotionId": "pr:c377", "name": "NWA TNA", "from": "2002-06-19", "to": "2007-05-13" },
+        { "promotionId": "pr:c462", "name": "TNA", "from": "2007-05-13", "to": "2017-03-16" },
+        { "promotionId": "pr:c290", "name": "Impact Wrestling", "from": "2017-03-16", "to": null }
+      ]
+    },
+    {
+      "canonical": "pr:c101",
+      "note": "EMLL -> CMLL; boundary is the approximate 1991 rename",
+      "members": [
+        { "promotionId": "pr:c168", "name": "EMLL", "from": "1933-09-21", "to": "1991-01-01" },
+        { "promotionId": "pr:c101", "name": "CMLL", "from": "1991-01-01", "to": null }
+      ]
+    }
+  ]
+}
