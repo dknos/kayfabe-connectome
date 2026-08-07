@@ -12,7 +12,11 @@ export function CalendarScreen(): JSX.Element {
   const [name, setName] = useState(`THE BOOK Live ${state.currentDate}`);
   const [date, setDate] = useState(state.currentDate);
   const venues = Object.keys(state.venues).sort();
-  const [venueId, setVenueId] = useState(venues[0] ?? "");
+  // Default to a building in your own market — startups can't afford the Garden.
+  const homeMarket = state.companies[state.meta.options.playerCompanyId]!.homeMarketId;
+  const [venueId, setVenueId] = useState(
+    venues.find((vid) => state.venues[vid]!.marketId === homeMarket) ?? venues[0] ?? "",
+  );
   const [showType, setShowType] = useState<ShowType>("ppv");
   const [price, setPrice] = useState(String(era.ticketPriceTypicalCents / 100));
 

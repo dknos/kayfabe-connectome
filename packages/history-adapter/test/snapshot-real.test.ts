@@ -76,7 +76,13 @@ describe.skipIf(!hasCorpus)("buildUniverseSnapshot (real corpus, 1997-01-06)", (
 
       // Every worker on a roster exists and every roster member is a worker.
       for (const id of rosterIds) expect(workerById.has(id)).toBe(true);
-      expect(snap.workers.length).toBe(rosterIds.size);
+      // Beyond the rosters: a hireable free-agent pool (free-agent-pool@1)
+      // for player-founded startups, noted in data health.
+      const freeAgents = snap.workers.filter((w) => !rosterIds.has(w.personId));
+      expect(snap.workers.length).toBe(rosterIds.size + freeAgents.length);
+      expect(freeAgents.length).toBeGreaterThanOrEqual(20);
+      expect(freeAgents.length).toBeLessThanOrEqual(120);
+      expect(snap.dataHealth.notes.join("\n")).toContain("free-agent-pool@1");
 
       // Every title holder is on some roster, or noted in data health.
       const notesText = snap.dataHealth.notes.join("\n");

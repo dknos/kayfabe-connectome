@@ -1,5 +1,25 @@
 # Changelog — THE BOOK
 
+## 0.2.0 — 2026-08-07 · found your own promotion
+
+- **Founder mode** in the New Universe wizard: name your promotion, pick a home market,
+  choose backing ($75K / $250K / $1M) and a Product DNA identity preset; start with an
+  empty roster, a modest home venue, and no television.
+- **`free-agent-pool@1`**: the snapshot now includes up to 120 window-active but
+  unrostered workers as hireable free agents (January 1997 yields Bam Bam Bigelow,
+  Bob Backlund, Scott Steiner and 117 more).
+- **Talent Market screen**: unattached workers with market-price estimates, plus a
+  watchlist of rival contracts expiring within 30 days (exclusive vs approachable).
+- **CREATE_TITLE command + Championships UI**: unveil your own belts (low prestige until
+  defended); inaugural champions crowned through booked title matches on vacant titles.
+- **`company-growth@1`**: earned tier progression for player AND AI companies —
+  indie → regional → national with TV deals and PPV slots arriving on promotion, and
+  overheads scaling up to match. An indie can genuinely rise to rival the giants.
+- Calendar now defaults new shows to a home-market venue.
+- Tests: +4 founder-mode engine tests, adapter free-agent assertions, and a second
+  Playwright journey (found → hire ×2 → create title → run night one). 118 unit tests +
+  2 E2E journeys green.
+
 ## 0.1.0 — 2026-08-07 · the playable vertical slice
 
 First playable build, on branch `agent/simulator`.

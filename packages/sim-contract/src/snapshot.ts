@@ -84,6 +84,8 @@ export interface SnapshotCompany {
   prestige: number;
   productDna: ProductDna;
   playable: boolean;
+  /** Founding capital override (player-founded startups); tier default otherwise. */
+  startCashCents?: number;
 }
 
 export interface SnapshotReign {

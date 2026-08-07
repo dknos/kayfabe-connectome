@@ -47,6 +47,17 @@ a screenshot, or a command you can rerun. Last updated: 2026-08-07 (branch
 | 21 | Automated E2E passes | ✅ |
 | 22 | Production desktop package | ⚠️ **not done** — production *web* build exists; Electron packaging is Phase 6. This is the one acceptance item honestly unmet. |
 
+## Beyond the slice: founder mode (0.2.0)
+
+Added after the slice acceptance: **found your own promotion** — empty roster, chosen
+backing and Product DNA, a home athletic club, and the real free-agent pool
+(`free-agent-pool@1`, up to 120 window-active unrostered workers) to hire from via the
+Talent Market screen. Custom championships (`CREATE_TITLE`, inaugural champions crowned
+in the ring on vacant belts) and earned tier progression (`company-growth@1`:
+indie → regional → national, TV/PPV arriving on promotion, overheads scaling to match —
+for AI companies too). Verified by 4 founder engine tests and a second Playwright
+journey (found → hire two free agents → create title → run night one).
+
 ## Implemented systems (with their rules docs)
 
 - Deterministic core: seeded serializable RNG streams, canonical hashing, pure calendar,

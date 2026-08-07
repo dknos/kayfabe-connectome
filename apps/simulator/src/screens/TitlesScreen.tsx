@@ -25,11 +25,44 @@ export function TitlesScreen(): JSX.Element {
     .filter((c) => c.companyId === playerId && c.status === "active")
     .map((c) => c.personId);
 
+  const [newName, setNewName] = useState("");
+  const [newTier, setNewTier] = useState<"world" | "secondary" | "tag" | "other">("world");
+
   return (
     <div className="page">
       <div className="page-title">
         <h1>Championships</h1>
         <span className="sub">{titles.length} active belts across the industry</span>
+      </div>
+      <div className="panel" style={{ marginBottom: 14 }}>
+        <div className="panel-head">Create a championship</div>
+        <div className="panel-body" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            data-testid="title-name"
+            placeholder="Championship name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            style={{ width: 300 }}
+          />
+          <select data-testid="title-tier" value={newTier} onChange={(e) => setNewTier(e.target.value as never)}>
+            <option value="world">world</option>
+            <option value="secondary">secondary</option>
+            <option value="tag">tag</option>
+            <option value="other">other</option>
+          </select>
+          <button
+            className="primary"
+            data-testid="title-create"
+            disabled={newName.trim().length < 3}
+            onClick={() => {
+              const res = dispatch({ type: "CREATE_TITLE", name: newName.trim(), tier: newTier });
+              if (res.errors.length === 0) setNewName("");
+            }}
+          >
+            Unveil it
+          </button>
+          <span className="confidence">New belts start with little prestige — defenses earn it.</span>
+        </div>
       </div>
       {titles.map((t) => {
         const current = t.lineage[t.lineage.length - 1];

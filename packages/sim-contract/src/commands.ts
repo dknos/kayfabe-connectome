@@ -64,6 +64,11 @@ export type Command =
       holderIds: PersonId[];
       reason: string;
     }
+  | {
+      type: "CREATE_TITLE";
+      name: string;
+      tier: "world" | "secondary" | "tag" | "other";
+    }
   | { type: "RESOLVE_INBOX"; inboxId: InboxId };
 
 export interface OfferOutcome {

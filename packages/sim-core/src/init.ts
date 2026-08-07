@@ -152,7 +152,8 @@ export function createUniverse(snapshot: UniverseSnapshot, options: SimOptions):
   for (const sc of companies) {
     const isPlayer = sc.companyId === options.playerCompanyId;
     const startCash =
-      sc.sizeTier === "national" ? 500_000_000 : sc.sizeTier === "regional" ? 75_000_000 : 12_000_000;
+      sc.startCashCents ??
+      (sc.sizeTier === "national" ? 500_000_000 : sc.sizeTier === "regional" ? 75_000_000 : 12_000_000);
     const company: CompanyState = {
       id: sc.companyId,
       name: sc.name,

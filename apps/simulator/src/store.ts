@@ -13,6 +13,7 @@ import { getSave, listSaves, putSave } from "./saves";
 export type ScreenId =
   | "control"
   | "roster"
+  | "market"
   | "person"
   | "booker"
   | "live"

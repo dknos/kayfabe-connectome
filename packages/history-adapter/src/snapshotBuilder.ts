@@ -38,6 +38,9 @@ const ACTIVE_MIN_WINDOW_MATCHES = 40;
 const NATIONAL_MIN_WINDOW_MATCHES = 400;
 const REGIONAL_MIN_WINDOW_MATCHES = 120;
 const ROSTER_CAP = 80;
+export const FREE_AGENT_MIN_APPEARANCES = 4;
+export const FREE_AGENT_MAX_DAYS_SINCE_LAST = 240;
+export const FREE_AGENT_CAP = 120;
 const CSV_TITLE_MIN_WINDOW_MATCHES = 50;
 const VENUES_PER_COMPANY = 12;
 /** Default home market when nothing about a company places it — noted. */
@@ -334,6 +337,39 @@ export async function buildUniverseSnapshot(
     for (const person of roster) companyOf.set(person, companyId);
   }
 
+  // ---- free agents (free-agent-pool@1) ----
+  // Window-active people who cleared a looser bar but no company's roster
+  // inference: the talent pool a player-founded startup hires from. Same
+  // anti-look-ahead boundary; capped by total window appearances.
+  const faTotals = new Map<string, RosterSeat>();
+  for (const companyId of [...seats.keys()].sort(cmp)) {
+    for (const [person, seat] of seats.get(companyId)!) {
+      let t = faTotals.get(person);
+      if (!t) faTotals.set(person, (t = { appearances: 0, lastDay: -1 }));
+      t.appearances += seat.appearances;
+      if (seat.lastDay > t.lastDay) t.lastDay = seat.lastDay;
+    }
+  }
+  const rosteredEarly = new Set(rosteredPersons);
+  const freeAgentPersons = [...faTotals.keys()]
+    .sort(cmp)
+    .filter((p) => !rosteredEarly.has(p))
+    .filter((p) => {
+      const t = faTotals.get(p)!;
+      return (
+        t.appearances >= FREE_AGENT_MIN_APPEARANCES &&
+        t.lastDay >= startDay - FREE_AGENT_MAX_DAYS_SINCE_LAST
+      );
+    })
+    .sort((a, b) => faTotals.get(b)!.appearances - faTotals.get(a)!.appearances || cmp(a, b))
+    .slice(0, FREE_AGENT_CAP)
+    .sort(cmp);
+  if (freeAgentPersons.length > 0) {
+    notes.push(
+      `free-agent-pool@1: ${freeAgentPersons.length} window-active people (>= ${FREE_AGENT_MIN_APPEARANCES} appearances, last within ${FREE_AGENT_MAX_DAYS_SINCE_LAST} days, cap ${FREE_AGENT_CAP}) start unattached and hireable.`,
+    );
+  }
+
   // ---- pre-start reign counts per canonical person (for history notes) ----
   const reignCounts = new Map<string, number>();
   for (const titleId of sortedKeys(championships)) {
@@ -364,7 +400,8 @@ export async function buildUniverseSnapshot(
   const workers: SnapshotWorker[] = [];
   let sawEvidenceMeltzer = false;
   let seederMethod = "unknown";
-  for (const personId of rosteredPersons) {
+  const allWorkerPersons = [...new Set([...rosteredPersons, ...freeAgentPersons])].sort(cmp);
+  for (const personId of allWorkerPersons) {
     const group: CrosswalkGroup | undefined = crosswalk.byCanonical.get(personId);
     const memberIds = group ? group.members.map((m) => m.id) : [personId];
     const rowsPerMember: PersonMatchRow[][] = [];

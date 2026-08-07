@@ -395,6 +395,73 @@ function applyAiActions(state: SimState, company: CompanyState, rng: RngHub): vo
   if (state.aiLedger.length > 400) state.aiLedger.splice(0, state.aiLedger.length - 400);
 }
 
+/**
+ * Weekly growth check (company-growth@1): a company that draws, banks, and
+ * keeps running shows earns its next size tier — and the broadcast deal that
+ * comes with it. Applies to player and AI companies alike; overheads scale
+ * automatically with the new tier (finance reads sizeTier).
+ */
+function evaluateCompanyGrowth(state: SimState): void {
+  const era = resolveEra(state.currentDate);
+  const completedByCompany = new Map<string, number>();
+  for (const sid of sortedKeys(state.shows)) {
+    const show = state.shows[sid]!;
+    if (show.status === "completed") {
+      completedByCompany.set(show.companyId, (completedByCompany.get(show.companyId) ?? 0) + 1);
+    }
+  }
+  for (const cid of sortedKeys(state.companies)) {
+    const company = state.companies[cid]!;
+    if (!company.active) continue;
+    const shows = completedByCompany.get(cid) ?? 0;
+    const aw = company.standing.awarenessNational;
+    let promoted: string | null = null;
+    if (company.sizeTier === "indie" && aw >= 35 && company.cashCents >= 25_000_000 && shows >= 10) {
+      company.sizeTier = "regional";
+      promoted = "regional";
+    } else if (
+      company.sizeTier === "regional" &&
+      aw >= 55 &&
+      company.cashCents >= 200_000_000 &&
+      shows >= 30
+    ) {
+      company.sizeTier = "national";
+      promoted = "national";
+    }
+    if (!promoted) continue;
+    if (era.tvAvailable && company.tvDeal === null) {
+      company.tvDeal = {
+        programName: `${company.shortName} Prime`,
+        dayOfWeek: promoted === "national" ? 0 : 5,
+        weeklyRightsCents: era.weeklyTvRightsCents[company.sizeTier],
+        reach: promoted === "national" ? 70 : 30,
+      };
+    } else if (company.tvDeal) {
+      company.tvDeal.weeklyRightsCents = era.weeklyTvRightsCents[company.sizeTier];
+      company.tvDeal.reach = promoted === "national" ? 70 : company.tvDeal.reach;
+    }
+    if (promoted === "national" && era.ppvAvailable) company.ppvWeek = 3;
+    company.prestige = Math.min(100, company.prestige + 5);
+    state.news.push({
+      id: nextId(state, "news"),
+      date: state.currentDate,
+      kind: "business",
+      headline:
+        promoted === "regional"
+          ? `${company.name} outgrows the armories`
+          : `${company.name} goes national`,
+      body:
+        promoted === "regional"
+          ? `${company.name} has broken through as a regional force${company.tvDeal ? `; ${company.tvDeal.programName} lands a weekly television slot` : ""}. Bigger buildings, bigger payrolls, bigger targets.`
+          : `${company.name} is now a national promotion${company.ppvWeek ? " with a monthly pay-per-view slot" : ""}. The war has a new front.`,
+      companyId: cid,
+      personIds: [],
+      rumor: false,
+    });
+    emit(state, "company_tier_change", { companyId: cid, tier: company.sizeTier });
+  }
+}
+
 function advanceDay(state: SimState, rng: RngHub): void {
   state.currentDate = addDays(state.currentDate, 1);
   const date = state.currentDate;
@@ -416,6 +483,7 @@ function advanceDay(state: SimState, rng: RngHub): void {
       state.ledger.push(...txs);
       applyTransactions(company, txs);
     }
+    evaluateCompanyGrowth(state);
   }
 
   for (const cid of sortedKeys(state.companies)) {
@@ -734,6 +802,41 @@ export function applyCommand(prev: SimState, command: Command): EngineResult {
       }
       title.defensesSinceChange = 0;
       emit(state, "title_admin_change", { titleId: title.id, reason: command.reason });
+      break;
+    }
+    case "CREATE_TITLE": {
+      const name = command.name.trim();
+      if (name.length < 3) return fail("A championship needs a real name.");
+      const clash = sortedKeys(state.titles).some(
+        (tid) => state.titles[tid]!.name.toLowerCase() === name.toLowerCase(),
+      );
+      if (clash) return fail(`A championship named "${name}" already exists.`);
+      const company = state.companies[playerId]!;
+      const id = nextId(state, "title");
+      state.titles[id] = {
+        id,
+        name,
+        companyId: playerId,
+        tier: command.tier,
+        holderIds: [],
+        // A brand-new belt has no aura yet; it earns prestige through defenses.
+        prestige: command.tier === "world" ? 40 : 25,
+        defensesSinceChange: 0,
+        lineage: [],
+        active: true,
+      };
+      company.titleIds.push(id);
+      state.news.push({
+        id: nextId(state, "news"),
+        date: state.currentDate,
+        kind: "business",
+        headline: `${company.shortName} unveils the ${name}`,
+        body: `${company.name} has introduced a new championship: the ${name}. Vacant until someone earns it.`,
+        companyId: playerId,
+        personIds: [],
+        rumor: false,
+      });
+      emit(state, "title_created", { titleId: id, name, tier: command.tier });
       break;
     }
     case "RESOLVE_INBOX": {

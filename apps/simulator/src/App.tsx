@@ -4,6 +4,7 @@ import { MainMenu } from "./screens/MainMenu";
 import { NewUniverseWizard } from "./screens/NewUniverseWizard";
 import { ControlCenter } from "./screens/ControlCenter";
 import { RosterScreen } from "./screens/RosterScreen";
+import { TalentMarketScreen } from "./screens/TalentMarketScreen";
 import { PersonScreen } from "./screens/PersonScreen";
 import { BookerScreen } from "./screens/BookerScreen";
 import { LiveShowScreen } from "./screens/LiveShowScreen";
@@ -21,6 +22,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 const SCREENS: Record<ScreenId, () => JSX.Element> = {
   control: ControlCenter,
   roster: RosterScreen,
+  market: TalentMarketScreen,
   person: PersonScreen,
   booker: BookerScreen,
   live: LiveShowScreen,
@@ -58,6 +60,7 @@ const NAV: { section: string; items: { id: ScreenId; label: string }[] }[] = [
     section: "Business",
     items: [
       { id: "roster", label: "Roster" },
+      { id: "market", label: "Talent Market" },
       { id: "contracts", label: "Contracts" },
       { id: "finance", label: "Finance" },
       { id: "titles", label: "Championships" },
