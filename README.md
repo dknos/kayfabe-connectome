@@ -69,3 +69,11 @@ node tests/qa-capture.mjs Headless screenshot sweep (dev server must be running)
 
 Copy `.env.example` to `.env` and fill in values. Secrets never enter Git,
 logs, screenshots, or browser bundles.
+
+## THE BOOK — wrestling promoter simulator (sibling app)
+
+The same canonical corpus also powers **THE BOOK**, a playable wrestling business
+simulator: fork a mutable alternate-history universe from any supported start date
+while the Connectome stays the read-only historical lens.
+`pnpm --filter @kayfabe/simulator dev` → http://127.0.0.1:9465.
+Start with `docs/simulator-audit.md` and `apps/simulator/README.md`.

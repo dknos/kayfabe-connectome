@@ -26,3 +26,14 @@ export {
   buildUniverseSnapshot,
   type BuildSnapshotOptions,
 } from "./snapshotBuilder";
+
+import crosswalkJson from "./data/persona-crosswalk.json";
+import { loadCrosswalk as _loadCrosswalk, type CrosswalkIndex as _XwIndex } from "./crosswalk";
+
+let _defaultXw: _XwIndex | null = null;
+
+/** The shipped persona-crosswalk@1 overlay, validated and indexed once. */
+export function defaultCrosswalk(): _XwIndex {
+  if (!_defaultXw) _defaultXw = _loadCrosswalk(crosswalkJson);
+  return _defaultXw;
+}

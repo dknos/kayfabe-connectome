@@ -63,6 +63,9 @@ test("create → search → negotiate → schedule → book → run → review �
   // 9. Create a storyline with a future milestone.
   await page.getByRole("button", { name: "Creative Room" }).click();
   await page.getByTestId("story-name").fill("The Crown Dispute");
+  const picks = page.locator('[data-testid^="story-pick-"]');
+  await picks.nth(0).check();
+  await picks.nth(1).check();
   await page.getByTestId("story-create").click();
   await expect(page.getByTestId("storyline-row").first()).toBeVisible();
 
@@ -73,10 +76,12 @@ test("create → search → negotiate → schedule → book → run → review �
   await page.getByTestId("add-match").click();
   await page.getByTestId("add-match").click();
   await page.getByTestId("add-angle").click();
-  // Click-to-assign: fill each segment with available roster names.
-  await page.getByTestId("auto-fill-segment").first().click();
   const segments = page.getByTestId("segment-row");
   expect(await segments.count()).toBe(3);
+  // Explicit auto-fill, one segment at a time (never automatic).
+  for (let i = 0; i < 3; i++) {
+    await page.getByTestId("auto-fill-segment").nth(i).click();
+  }
   await expect(page.getByTestId("card-valid")).toBeVisible();
 
   // 11-13. Run the show, watch the crowd, get explainable feedback.

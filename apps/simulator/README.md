@@ -29,8 +29,11 @@ npx playwright test -c apps/simulator/playwright.config.ts   # vertical-slice E2
 - `docs/simulator/ARCHITECTURE.md` — three-layer data architecture, packages
 - `docs/simulator/DATA_CONTRACT.md` — corpus consumption + owned formats
 - `docs/simulator/SIMULATION_RULES.md` — every formula, versioned, tested
-- `docs/simulator/SAVE_FORMAT.md`, `docs/simulator/HISTORICAL_SNAPSHOTS.md`
-- `PROGRESS.md` (repo root `docs/simulator/PROGRESS.md`) — honest implementation status
+- `docs/simulator/SAVE_FORMAT.md`, `docs/simulator/HISTORICAL_SNAPSHOTS.md`,
+  `docs/simulator/AI_BOOKING.md`, `docs/simulator/MODDING.md`,
+  `docs/simulator/PERFORMANCE.md`, `docs/simulator/ACCESSIBILITY.md`
+- `docs/simulator/PROGRESS.md` — honest implementation status, acceptance table, gaps
+- `docs/simulator/CHANGELOG.md`, `docs/simulator/RELEASE_CHECKLIST.md`
 
 ## Principles
 
