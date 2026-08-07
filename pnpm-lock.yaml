@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@kayfabe/arena-renderer':
+        specifier: workspace:*
+        version: link:../../packages/arena-renderer
       '@kayfabe/geo-renderer':
         specifier: workspace:*
         version: link:../../packages/geo-renderer
@@ -73,6 +76,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/arena-renderer:
+    dependencies:
+      '@kayfabe/graph-contract':
+        specifier: workspace:*
+        version: link:../graph-contract
+      three:
+        specifier: ^0.182.0
+        version: 0.182.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.182.0
+        version: 0.182.0
+
   packages/geo-renderer:
     dependencies:
       cesium:
@@ -80,6 +96,22 @@ importers:
         version: 1.143.0
 
   packages/graph-contract: {}
+
+  packages/history-adapter:
+    dependencies:
+      '@kayfabe/sim-contract':
+        specifier: workspace:*
+        version: link:../sim-contract
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
 
   packages/morph-renderer:
     dependencies:
@@ -119,6 +151,32 @@ importers:
       '@types/three':
         specifier: ^0.182.0
         version: 0.182.0
+
+  packages/sim-contract:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/sim-core:
+    dependencies:
+      '@kayfabe/sim-contract':
+        specifier: workspace:*
+        version: link:../sim-contract
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
 
 packages:
 

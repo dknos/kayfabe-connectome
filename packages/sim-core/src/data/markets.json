@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "note": "Original market dataset for THE BOOK. Populations are rough potential-audience figures (persons), not census data; wrestlingInterest and economicStrength are 0-100 design values tuned for the mid-1990s North American scene.",
+  "markets": [
+    { "id": "mkt:nyc", "name": "New York Tri-State", "region": "Northeast", "population": 18000000, "wrestlingInterest": 72, "economicStrength": 82 },
+    { "id": "mkt:philadelphia", "name": "Philadelphia", "region": "Northeast", "population": 6000000, "wrestlingInterest": 78, "economicStrength": 66 },
+    { "id": "mkt:boston", "name": "Boston / New England", "region": "Northeast", "population": 7000000, "wrestlingInterest": 64, "economicStrength": 76 },
+    { "id": "mkt:atlanta", "name": "Atlanta / Georgia", "region": "Southeast", "population": 5000000, "wrestlingInterest": 74, "economicStrength": 70 },
+    { "id": "mkt:carolinas", "name": "The Carolinas", "region": "Southeast", "population": 9000000, "wrestlingInterest": 80, "economicStrength": 58 },
+    { "id": "mkt:florida", "name": "Florida", "region": "Southeast", "population": 13000000, "wrestlingInterest": 70, "economicStrength": 62 },
+    { "id": "mkt:chicago", "name": "Chicago / Great Lakes", "region": "Midwest", "population": 10000000, "wrestlingInterest": 68, "economicStrength": 72 },
+    { "id": "mkt:stlouis", "name": "St. Louis / Heartland", "region": "Midwest", "population": 5000000, "wrestlingInterest": 71, "economicStrength": 60 },
+    { "id": "mkt:texas", "name": "Texas", "region": "South", "population": 17000000, "wrestlingInterest": 75, "economicStrength": 64 },
+    { "id": "mkt:losangeles", "name": "Los Angeles / SoCal", "region": "West", "population": 15000000, "wrestlingInterest": 58, "economicStrength": 80 },
+    { "id": "mkt:pacificnw", "name": "Pacific Northwest", "region": "West", "population": 6000000, "wrestlingInterest": 55, "economicStrength": 68 },
+    { "id": "mkt:toronto", "name": "Toronto / Ontario", "region": "Canada", "population": 8000000, "wrestlingInterest": 69, "economicStrength": 70 }
+  ]
+}
