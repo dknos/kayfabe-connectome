@@ -158,13 +158,18 @@ function byWinScore(a: WorkerState, b: WorkerState): number {
  * every person to a single segment (stricter than validateCard, which
  * would allow angle repeats).
  */
-export function planCards(ctx: AiTickContext, programs: Program[]): CardResult {
-  const decisions: AiDecisionRecord[] = [];
-  const show = nextUncardedShow(ctx);
-  if (!show) return { updates: [], decisions };
-
+/**
+ * Build a full card for one specific show. The seam shared by the AI
+ * (planCards) and the player's Auto-book button — both produce cards the
+ * same way, through the same booking philosophy.
+ */
+export function buildCardForShow(
+  ctx: AiTickContext,
+  show: ShowPlan,
+  programs: Program[],
+): { segments: Segment[]; advertised: PersonId[] } | null {
   const roster = availableRoster(ctx, show.date);
-  if (roster.length < 2) return { updates: [], decisions };
+  if (roster.length < 2) return null;
 
   const program = worldProgram(ctx, programs);
   const booked = new Set<PersonId>();
@@ -178,9 +183,19 @@ export function planCards(ctx: AiTickContext, programs: Program[]): CardResult {
       ? buildPpvCard(ctx, show, program, take, free)
       : buildTvCard(ctx, show, program, take, free);
 
-  if (segments.length === 0) return { updates: [], decisions };
+  if (segments.length === 0) return null;
+  return { segments, advertised: [...booked].sort() };
+}
 
-  const advertised = [...booked].sort();
+export function planCards(ctx: AiTickContext, programs: Program[]): CardResult {
+  const decisions: AiDecisionRecord[] = [];
+  const show = nextUncardedShow(ctx);
+  if (!show) return { updates: [], decisions };
+
+  const built = buildCardForShow(ctx, show, programs);
+  if (!built) return { updates: [], decisions };
+  const { segments, advertised } = built;
+  const roster = availableRoster(ctx, show.date);
   const meConsidered = roster
     .slice()
     .sort(byWinScore)

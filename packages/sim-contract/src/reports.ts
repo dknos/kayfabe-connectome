@@ -37,6 +37,29 @@ export interface ParticipantEffect {
   injury: InjuryLite | null;
 }
 
+/**
+ * One beat of an in-ring story (match-engine@1). `side` indexes the match
+ * plan's sides (null for neutral beats); `heat` is crowd temperature 0–100
+ * at that moment, driving the live visual.
+ */
+export interface MatchMoment {
+  /** Minutes into the match, one decimal. */
+  t: number;
+  kind:
+    | "entrance"
+    | "lockup"
+    | "control"
+    | "comeback"
+    | "highspot"
+    | "nearfall"
+    | "cutoff"
+    | "finish";
+  side: number | null;
+  actorId: PersonId | null;
+  description: string;
+  heat: number;
+}
+
 export interface SegmentReport {
   segmentId: SegmentId;
   kind: "match" | "angle";
@@ -52,6 +75,8 @@ export interface SegmentReport {
   crowdAfter: CrowdState;
   /** Plain-language findings: what worked, what failed, whose fault. */
   notes: string[];
+  /** Beat-by-beat in-ring story (matches only; null for angles). */
+  matchLog: MatchMoment[] | null;
 }
 
 export interface RevenueLine {

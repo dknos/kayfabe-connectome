@@ -13,6 +13,8 @@ file, written alongside the code that implements it:
 | AI booking | `ai-booker@1` | [rules/ai.md](rules/ai.md) | `sim-core/src/ai/` | `test/ai.test.ts` |
 | Snapshot & rosters | `snapshot-builder@1`, `roster-infer@1`, `free-agent-pool@1` | [HISTORICAL_SNAPSHOTS.md](HISTORICAL_SNAPSHOTS.md) | `history-adapter/src/` | adapter tests |
 | Company growth | `company-growth@1` | this file, below | `sim-core/src/engine.ts` | `test/founder.test.ts` |
+| Match beats | `match-engine@1` | this file, below | `sim-core/src/show/matchEngine.ts` | `test/matchEngine.test.ts` |
+| Auto-booking | `autobook@1` | this file, below | `sim-core/src/autobook.ts` | `test/matchEngine.test.ts` |
 
 ## Cross-cutting principles
 
@@ -46,6 +48,35 @@ Promotion is earned, never free: the moment the tier changes, weekly office over
 per-show production costs bill at the new tier's rates (`era.weeklyOverheadCents` /
 `era.showOverheadCents`), so growing before the gate receipts support it is a real way
 to die. There is no demotion in the slice; failure expresses itself through cash.
+
+## match-engine@1
+
+Every match segment carries a beat-by-beat in-ring story (`SegmentReport.matchLog`):
+entrances (bigger star last), an opening flavored by the participants' styles, 2–6
+alternating control phases connected by cutoffs and comebacks (the winner takes the final
+stretch on decisive finishes; on DQ/count-out the *loser* is rolling when it goes wrong —
+protection the crowd can read), high spots scaled by planned risk and high-flyers
+present, near-falls confined to the final third and earned by reception (better matches
+get more credible ones), and a finish call that matches the booked result exactly,
+including title-change announcements. Each beat carries a crowd-heat value interpolating
+from the entrance temperature toward the match's reception, spiked by beat kind.
+
+**Strictly presentational**: the log dramatizes the already-computed execution/reception,
+never alters them. It draws from its own RNG stream derived from `(showId, segmentId)`,
+so it consumes nothing from the show's draw schedule (existing determinism and injury
+draws are untouched) and replays identically from a save. The Live Show screen animates
+it in the ring visual, whose crowd density is the night's real attendance against venue
+capacity.
+
+## autobook@1
+
+`autoBookCard(state, showId)` fills one card through the exact same
+`buildCardForShow` path the AI uses — programs respected, roster rotated by least-recent
+use, injuries avoided, no double-booking, title matches placed by show type. Pure and
+deterministic per show (its RNG derives from the show id): it never mutates state or the
+engine's streams, and proposing the same show twice yields the identical card. The
+proposal lands in the booker fully editable and passes the same `validateCard` gate as a
+hand-built card.
 
 ## free-agent-pool@1 (adapter)
 

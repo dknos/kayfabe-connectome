@@ -73,20 +73,21 @@ test("create → search → negotiate → schedule → book → run → review �
   await page.getByRole("button", { name: "Control Center" }).click();
   await page.getByTestId(/book-show-/).first().click();
   await expect(page.getByTestId("booker-board")).toBeVisible();
-  await page.getByTestId("add-match").click();
-  await page.getByTestId("add-match").click();
-  await page.getByTestId("add-angle").click();
+  // Auto-book proposes a full card through the AI's booking philosophy…
+  await page.getByTestId("auto-book-card").click();
   const segments = page.getByTestId("segment-row");
-  expect(await segments.count()).toBe(3);
-  // Explicit auto-fill, one segment at a time (never automatic).
-  for (let i = 0; i < 3; i++) {
-    await page.getByTestId("auto-fill-segment").nth(i).click();
-  }
+  expect(await segments.count()).toBeGreaterThanOrEqual(4);
+  await expect(page.getByTestId("card-valid")).toBeVisible();
+  // …and everything stays hand-editable: add one more match manually.
+  await page.getByTestId("add-match").click();
+  await page.getByTestId("auto-fill-segment").last().click();
   await expect(page.getByTestId("card-valid")).toBeVisible();
 
-  // 11-13. Run the show, watch the crowd, get explainable feedback.
+  // 11-13. Run the show, watch the ring, get explainable feedback.
   await page.getByTestId("run-show").click();
   await expect(page.getByTestId("live-show")).toBeVisible();
+  await page.getByTestId("live-next").click(); // ring the bell
+  await expect(page.getByTestId("ring-scene")).toBeVisible();
   await page.getByTestId("live-finish").click();
   await expect(page.getByTestId("postshow")).toBeVisible();
   await expect(page.getByTestId("show-grade")).toBeVisible();

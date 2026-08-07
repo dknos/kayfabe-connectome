@@ -1,5 +1,24 @@
 # Changelog — THE BOOK
 
+## 0.3.0 — 2026-08-07 · the hard camera
+
+- **`match-engine@1`**: every match now generates a beat-by-beat in-ring story —
+  entrances, style-flavored openings, control/cutoff/comeback structure, risk-scaled
+  high spots, reception-earned near-falls, and a finish call matching the booked result
+  (with title-change announcements). Presentational only; its RNG derives from
+  (show, segment) so existing determinism is bit-for-bit untouched.
+- **Ring visual**: the Live Show screen renders the arena on canvas — crowd bowl density
+  is the night's real attendance vs venue capacity, seats pop with beat heat, wrestler
+  tokens act out each beat (control, high spots, near-fall counts, the finish), with the
+  play-by-play call beneath. Honors reduced motion; sized to the building.
+- **`autobook@1` + Auto-book button**: fill any card through the same booking philosophy
+  the AI uses (programs, rotation, no double-booking) — deterministic per show, fully
+  editable afterward, same validation gate as hand-booking.
+- Post-Show Review gains the collapsible "call, beat by beat" sheet per match.
+- Tests: +6 (match-engine structure/determinism/title calls, autobook validity/purity);
+  both E2E journeys now exercise auto-book and assert the ring scene renders. 124 unit
+  tests + 2 E2E journeys green.
+
 ## 0.2.0 — 2026-08-07 · found your own promotion
 
 - **Founder mode** in the New Universe wizard: name your promotion, pick a home market,

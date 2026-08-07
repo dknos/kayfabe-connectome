@@ -47,6 +47,16 @@ a screenshot, or a command you can rerun. Last updated: 2026-08-07 (branch
 | 21 | Automated E2E passes | ✅ |
 | 22 | Production desktop package | ⚠️ **not done** — production *web* build exists; Electron packaging is Phase 6. This is the one acceptance item honestly unmet. |
 
+## Beyond the slice: the hard camera (0.3.0)
+
+`match-engine@1` gives every match a beat-by-beat in-ring story (presentational over the
+computed result, own RNG stream, deterministic), animated in the Live Show's canvas ring
+visual — crowd bowl density = real attendance vs venue capacity, seats pop with beat
+heat, tokens act out control/high spots/near-falls/the finish, play-by-play call
+beneath, full beat sheet in the Post-Show Review. `autobook@1` puts the AI's card
+builder behind an Auto-book button: deterministic proposals, fully editable, same
+validation gate. 124 unit tests + both E2E journeys (which now assert the ring renders).
+
 ## Beyond the slice: founder mode (0.2.0)
 
 Added after the slice acceptance: **found your own promotion** — empty roster, chosen

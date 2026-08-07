@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../store";
 import type { AngleBeat, BeatRole, FinishKind, Segment, SimState, WorkerState } from "@kayfabe/sim-contract";
-import { forecastShow, formatUSD, resolveEra, validateCard } from "@kayfabe/sim-core";
+import { autoBookCard, forecastShow, formatUSD, resolveEra, validateCard } from "@kayfabe/sim-core";
 
 const FINISHES: FinishKind[] = ["pin", "submission", "dq", "countout", "ko", "no_contest", "time_limit_draw"];
 const PURPOSES = ["promo", "interview", "attack", "save", "betrayal", "challenge", "reveal", "contract_signing", "celebration", "video_package"] as const;
@@ -162,6 +162,20 @@ export function BookerScreen(): JSX.Element {
           {show.date} · {venue.name} · {show.showType.toUpperCase()} · {totalMin} min booked
         </span>
         <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button
+            data-testid="auto-book-card"
+            title="Fill the whole card the way your booking office would — programs respected, roster rotated. Everything stays editable."
+            onClick={() => {
+              const built = autoBookCard(state, show.id);
+              if (built) {
+                setSegments(built.segments);
+                setSelSeg(0);
+                setSelSide(0);
+              }
+            }}
+          >
+            Auto-book
+          </button>
           <button data-testid="add-match" onClick={() => mutate((s) => { s.push({ id: nextSegId(s), kind: "match", durationMin: 12, match: { sides: [{ members: [] }, { members: [] }], titleId: null, winnerSide: 0, finish: "pin", stipulation: null, intensity: 55, risk: 35, mainEvent: false }, angle: null, storylineId: null }); setSelSeg(s.length - 1); })}>
             + Match
           </button>

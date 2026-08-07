@@ -13,3 +13,4 @@ export * from "./show";
 export * from "./finance";
 export * from "./market";
 export * from "./ai";
+export * from "./autobook";

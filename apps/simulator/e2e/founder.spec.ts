@@ -69,6 +69,10 @@ test("found an indy, hire the market, crown a champion, run night one", async ({
   await expect(page.getByTestId("card-valid")).toBeVisible();
   await page.getByTestId("run-show").click();
   await expect(page.getByTestId("live-show")).toBeVisible();
+  // Ring the bell: the match engine plays out in the ring visual.
+  await page.getByTestId("live-next").click();
+  await expect(page.getByTestId("ring-scene")).toBeVisible();
+  await expect(page.getByTestId("ring-call")).not.toBeEmpty();
   await page.getByTestId("live-finish").click();
   await expect(page.getByTestId("postshow")).toBeVisible();
   await expect(page.getByTestId("show-grade")).toBeVisible();

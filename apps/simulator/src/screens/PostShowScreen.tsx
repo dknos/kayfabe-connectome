@@ -189,6 +189,25 @@ export function PostShowScreen(): JSX.Element {
                 ))}
               </ul>
             )}
+            {seg.matchLog && seg.matchLog.length > 0 && (
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--ink-soft)" }}>
+                  The call, beat by beat ({seg.matchLog.length})
+                </summary>
+                <table className="data" style={{ marginTop: 4 }}>
+                  <tbody>
+                    {seg.matchLog.map((m, k) => (
+                      <tr key={k}>
+                        <td className="num" style={{ width: 46 }}>{m.t.toFixed(1)}′</td>
+                        <td style={{ width: 80 }}><span className="pill">{m.kind}</span></td>
+                        <td>{m.description}</td>
+                        <td className="num" style={{ width: 40 }} title="crowd heat">{m.heat}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
           </div>
         </div>
       ))}

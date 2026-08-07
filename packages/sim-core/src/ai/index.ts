@@ -12,6 +12,7 @@ import { planCards } from "./cards";
 import { upkeepRoster } from "./roster";
 
 export type { AiActions, AiContractOffer, AiTickContext, NewShow } from "./types";
+export { buildCardForShow } from "./cards";
 
 export function aiDailyTick(ctx: AiTickContext): AiActions {
   // Fixed subsystem order keeps the rng draw sequence stable:

@@ -27,6 +27,7 @@ import type {
 } from "@kayfabe/sim-contract";
 import type { RngStream } from "../rng";
 import { CROWD_FLOW_VERSION, initCrowd, updateCrowd } from "./crowd";
+import { generateMatchLog } from "./matchEngine";
 import {
   SEGMENT_EVAL_VERSION,
   evaluateAngleExecution,
@@ -201,10 +202,12 @@ export function simulateShowPerformance(ctx: ShowSimContext): ShowSimOutcome {
       });
 
       // THE PLAN decides the winner; the sim only settles title consequences.
+      let titleChangedHere = false;
       if (title !== null && plan.winnerSide !== null) {
         const winners = plan.sides[plan.winnerSide]!.members;
         if (DECISIVE.has(plan.finish)) {
           if (!sameMembers(title.holderIds, winners)) {
+            titleChangedHere = true;
             titleChanges.push({ titleId: title.id, newHolderIds: [...winners] });
             const names = winners.map((id) => getWorker(workers, id).name).join(" & ");
             notes.push(`Title change: ${names} captured the ${title.name}.`);
@@ -254,6 +257,20 @@ export function simulateShowPerformance(ctx: ShowSimContext): ShowSimOutcome {
         );
       }
 
+      // The in-ring story is written against the crowd that watched it live.
+      const matchLog = generateMatchLog({
+        showId: show.id,
+        segmentId: seg.id,
+        plan,
+        durationMin: seg.durationMin,
+        workers,
+        execution: exec.execution,
+        reception: rec.reception,
+        title,
+        titleChanged: titleChangedHere,
+        crowdStartHeat: (crowd.energy + crowd.investment + crowd.anticipation) / 3,
+      });
+
       crowd = updateCrowd(crowd, {
         reception: rec.reception,
         kind: "match",
@@ -277,6 +294,7 @@ export function simulateShowPerformance(ctx: ShowSimContext): ShowSimOutcome {
         participantEffects: effects,
         crowdAfter: crowd,
         notes,
+        matchLog,
       };
     } else {
       const beats = seg.angle!.beats;
@@ -353,6 +371,7 @@ export function simulateShowPerformance(ctx: ShowSimContext): ShowSimOutcome {
         participantEffects: effects,
         crowdAfter: crowd,
         notes,
+        matchLog: null,
       };
     }
     reports.push(report);
